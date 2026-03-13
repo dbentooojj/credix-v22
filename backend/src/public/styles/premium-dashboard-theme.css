@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --fx-ease: cubic-bezier(.2,.8,.2,1);
   --fx-fast: 140ms;
   --fx-base: 170ms;
@@ -54,6 +54,20 @@
   --modal-width-md: 640px;
   --modal-width-lg: 980px;
   --modal-max-height: min(92vh, calc(100dvh - 32px));
+
+  /* Typography scale (opt-in via body.typography-v1) */
+  --type-page-title: clamp(1.72rem, 0.72vw + 1.3rem, 2.08rem);
+  --type-page-subtitle: 0.9rem;
+  --type-section-title: 0.98rem;
+  --type-card-kicker: 0.76rem;
+  --type-card-value: clamp(1.56rem, 0.58vw + 1.24rem, 1.86rem);
+  --type-card-note: 0.88rem;
+  --type-card-meta: 0.78rem;
+  --type-stat-value: clamp(1.08rem, 0.36vw + 0.96rem, 1.28rem);
+  --type-table-title: 0.94rem;
+  --type-table-subtitle: 0.8rem;
+  --type-table-amount: 0.94rem;
+  --type-pagination: 0.78rem;
 }
 
 body.dashboard-premium {
@@ -64,6 +78,121 @@ body.dashboard-premium {
     linear-gradient(165deg, var(--bg-0) 0%, var(--bg-1) 50%, var(--bg-2) 100%);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Rollout control: compact typography only where body has `typography-v1` */
+body.dashboard-premium.typography-v1 .page-title {
+  font-size: var(--type-page-title);
+  line-height: 1.08;
+  letter-spacing: -0.028em;
+}
+
+body.dashboard-premium.typography-v1 .page-subtitle {
+  font-size: var(--type-page-subtitle);
+  line-height: 1.55;
+}
+
+body.dashboard-premium.typography-v1 .section-title {
+  font-size: var(--type-section-title);
+  line-height: 1.24;
+}
+
+body.dashboard-premium.typography-v1 .overview-top-label,
+body.dashboard-premium.typography-v1 .flow-stat-label,
+body.dashboard-premium.typography-v1 .recent-movements-head th {
+  font-size: var(--type-card-kicker);
+}
+
+body.dashboard-premium.typography-v1 .overview-top-value,
+body.dashboard-premium.typography-v1 .daily-summary-value {
+  font-size: var(--type-card-value);
+  line-height: 1.08;
+}
+
+body.dashboard-premium.typography-v1 .overview-top-note,
+body.dashboard-premium.typography-v1 .daily-summary-label,
+body.dashboard-premium.typography-v1 .flow-stat-note {
+  font-size: var(--type-card-note);
+}
+
+body.dashboard-premium.typography-v1 .overview-top-meta,
+body.dashboard-premium.typography-v1 .daily-summary-meta,
+body.dashboard-premium.typography-v1 .movement-pagination-info {
+  font-size: var(--type-card-meta);
+}
+
+body.dashboard-premium.typography-v1 .flow-stat-value {
+  font-size: var(--type-stat-value);
+  line-height: 1.12;
+}
+
+body.dashboard-premium.typography-v1 .recent-movements-mobile-title,
+body.dashboard-premium.typography-v1 .recent-movements-description-title,
+body.dashboard-premium.typography-v1 .recent-movements-date {
+  font-size: var(--type-table-title);
+}
+
+body.dashboard-premium.typography-v1 .recent-movements-mobile-subtitle,
+body.dashboard-premium.typography-v1 .recent-movements-mobile-date,
+body.dashboard-premium.typography-v1 .recent-movements-description-subtitle {
+  font-size: var(--type-table-subtitle);
+}
+
+body.dashboard-premium.typography-v1 .recent-movements-mobile-amount,
+body.dashboard-premium.typography-v1 .recent-movements-amount {
+  font-size: var(--type-table-amount);
+}
+
+body.dashboard-premium.typography-v1 .movement-pagination-btn,
+body.dashboard-premium.typography-v1 .movement-pagination-ellipsis {
+  font-size: var(--type-pagination);
+}
+
+body.dashboard-premium.typography-v1 .app-section-title {
+  font-size: var(--type-page-title) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.028em !important;
+}
+
+body.dashboard-premium.typography-v1 .app-section-subtitle {
+  font-size: var(--type-page-subtitle) !important;
+  line-height: 1.55 !important;
+}
+
+body.dashboard-premium.dashboard-loans.typography-v1 .kpi-label,
+body.dashboard-premium.dashboard-installments.typography-v1 .kpi-label {
+  font-size: var(--type-card-kicker) !important;
+}
+
+body.dashboard-premium.dashboard-loans.typography-v1 .kpi-value,
+body.dashboard-premium.dashboard-installments.typography-v1 .kpi-value {
+  font-size: var(--type-stat-value) !important;
+  line-height: 1.12 !important;
+}
+
+body.dashboard-premium.dashboard-loans.typography-v1 .kpi-note,
+body.dashboard-premium.dashboard-loans.typography-v1 .kpi-insight,
+body.dashboard-premium.dashboard-installments.typography-v1 .kpi-note,
+body.dashboard-premium.dashboard-installments.typography-v1 .kpi-insight {
+  font-size: var(--type-card-meta) !important;
+  line-height: 1.4 !important;
+}
+
+body.dashboard-premium.dashboard-loans.typography-v1 .table-shell th,
+body.dashboard-premium.dashboard-installments.typography-v1 .table-shell th {
+  font-size: 11px !important;
+}
+
+body.dashboard-premium.dashboard-loans.typography-v1 .table-shell td,
+body.dashboard-premium.dashboard-installments.typography-v1 .table-shell td {
+  font-size: 0.88rem !important;
+}
+
+body.dashboard-premium.dashboard-loans.typography-v1 p.text-sm.text-gray-600,
+body.dashboard-premium.dashboard-loans.typography-v1 span.text-sm.text-gray-600,
+body.dashboard-premium.dashboard-installments.typography-v1 p.text-sm.text-gray-600,
+body.dashboard-premium.dashboard-installments.typography-v1 span.text-sm.text-gray-600 {
+  font-size: var(--type-card-meta) !important;
 }
 
 .dashboard-premium .primary-gradient {
@@ -1614,7 +1743,8 @@ html:not(.dark) body.dashboard-premium main .hover\:bg-blue-50:hover {
 /* Unified table visual standard: Clientes, Empréstimos e Parcelas */
 body.dashboard-premium.dashboard-loans .table-shell,
 body.dashboard-premium.dashboard-installments .table-shell,
-body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell {
+body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell,
+body.dashboard-premium.dashboard-payables .table-shell {
   border-radius: 14px !important;
   border: 1px solid rgba(148, 163, 184, 0.22) !important;
   background: rgba(27, 32, 42, 0.86) !important;
@@ -1623,7 +1753,8 @@ body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell {
 
 body.dashboard-premium.dashboard-loans .table-shell th,
 body.dashboard-premium.dashboard-installments .table-shell th,
-body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell th {
+body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell th,
+body.dashboard-premium.dashboard-payables .table-shell th {
   background: rgba(41, 48, 61, 0.95) !important;
   color: #94a3b8 !important;
   border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
@@ -1632,15 +1763,18 @@ body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell th {
 body.dashboard-premium.dashboard-loans .table-shell th.sortable-th:hover,
 body.dashboard-premium.dashboard-installments .table-shell th.sortable-th:hover,
 body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell th.sortable-th:hover,
+body.dashboard-premium.dashboard-payables .table-shell th.sortable-th:hover,
 body.dashboard-premium.dashboard-loans .table-shell th.sortable-th[data-sort-active="true"],
 body.dashboard-premium.dashboard-installments .table-shell th.sortable-th[data-sort-active="true"],
-body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell th.sortable-th[data-sort-active="true"] {
+body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell th.sortable-th[data-sort-active="true"],
+body.dashboard-premium.dashboard-payables .table-shell th.sortable-th[data-sort-active="true"] {
   background: rgba(59, 68, 84, 0.95) !important;
 }
 
 body.dashboard-premium.dashboard-loans .table-shell td,
 body.dashboard-premium.dashboard-installments .table-shell td,
-body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell td {
+body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell td,
+body.dashboard-premium.dashboard-payables .table-shell td {
   border-top: 1px solid rgba(148, 163, 184, 0.14) !important;
   background: rgba(27, 32, 42, 0.9) !important;
   color: #e2e8f0 !important;
@@ -1649,8 +1783,10 @@ body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell td {
 body.dashboard-premium.dashboard-loans .table-shell tbody tr:hover td,
 body.dashboard-premium.dashboard-installments .table-shell tbody tr:hover td,
 body.dashboard-premium.dashboard-debtors .clients-data-panel .table-shell tbody tr:hover td,
+body.dashboard-premium.dashboard-payables .table-shell tbody tr:hover td,
 body.dashboard-premium.dashboard-loans .table-row:hover td,
 body.dashboard-premium.dashboard-installments .table-row:hover td,
+body.dashboard-premium.dashboard-payables .table-row:hover td,
 body.dashboard-premium.dashboard-debtors .clients-data-panel .debtor-table-row:hover td,
 body.dashboard-premium.dashboard-debtors .clients-data-panel .debtor-expanded-row:hover td,
 body.dashboard-premium.dashboard-debtors .clients-data-panel .debtor-overdue-row:hover td {

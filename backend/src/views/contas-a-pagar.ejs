@@ -84,7 +84,7 @@
             modalSaveEditLabel: 'Salvar alteracoes',
             completedOptionLabel: 'Paga',
             statusFilterPaidLabel: 'Pagas',
-            actionCompleteLabel: 'Baixar',
+            actionCompleteLabel: 'Pagar',
             emptyTitle: 'Nenhuma conta encontrada.',
             emptyNote: 'Ajuste os filtros ou cadastre uma nova conta para preencher esta lista.',
             loadError: 'Falha ao carregar as contas a pagar.',
@@ -146,8 +146,8 @@
         .icon-btn:hover { color:#fff; background:rgba(59,130,246,.16); box-shadow: inset 0 0 0 1px rgba(96,165,250,.24); }
         .modern-sidebar { transform: translateX(0); transition: transform .12s ease-out; }
 
-        .page-title { font-size:clamp(2rem, 1.3vw + 1.2rem, 2.85rem); line-height:1.04; font-weight:800; letter-spacing:-.04em; color:#f8fafc; }
-        .page-subtitle { color:#94a3b8; font-size:1rem; line-height:1.6; }
+        .page-title { font-size: clamp(2rem, 1.2vw + 1.2rem, 2.45rem); line-height: 1.04; font-weight: 700; letter-spacing: -.035em; color:#f8fafc; }
+        .page-subtitle { max-width:54rem; color:#cbd5e1; font-size:.96rem; line-height:1.6; }
         .toolbar-search {
             position:relative; display:flex; align-items:center; min-height:56px; padding:0 1.1rem 0 3.15rem;
             border:1px solid rgba(59,130,246,.18); border-radius:16px;
@@ -201,11 +201,11 @@
         .payables-table-wrap::-webkit-scrollbar-thumb { background:rgba(71,85,105,.8); border-radius:999px; }
         .payables-table { width:100%; min-width:1120px; border-collapse:collapse; }
         .payables-table th {
-            padding:1rem 1.1rem; text-align:left; color:#8ea4c5; font-size:.82rem; line-height:1.2; font-weight:800;
+            padding:12px 14px; text-align:left; color:#8ea4c5; font-size:12px; line-height:1.2; font-weight:800;
             letter-spacing:.08em; text-transform:uppercase; border-bottom:1px solid rgba(51,65,85,.72);
         }
         .payables-table th:last-child { text-align:right; }
-        .payables-table td { padding:1rem 1.1rem; border-top:1px solid rgba(30,41,59,.72); vertical-align:middle; }
+        .payables-table td { padding:16px 14px; border-top:1px solid rgba(30,41,59,.72); vertical-align:middle; }
         .payables-row { position:relative; transition:background-color 160ms ease; }
         .payables-row:hover { background:rgba(15,23,42,.48); }
         .payables-row--overdue { box-shadow:inset 4px 0 0 #ef4444; }
@@ -233,21 +233,120 @@
         .status-pill--today { border-color:rgba(245,158,11,.34); background:rgba(245,158,11,.14); color:#fcd34d; }
         .status-pill--pending { border-color:rgba(100,116,139,.36); background:rgba(51,65,85,.44); color:#cbd5e1; }
         .status-pill--scheduled { border-color:rgba(59,130,246,.32); background:rgba(37,99,235,.14); color:#93c5fd; }
-        .row-actions { display:flex; align-items:center; justify-content:flex-end; gap:.65rem; position:relative; }
-        .row-complete-btn {
-            display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:0 .95rem; border-radius:10px;
-            border:1px solid rgba(96,165,250,.44); background:linear-gradient(135deg, rgba(37,99,235,.94), rgba(59,130,246,.9));
-            color:#eff6ff; font-size:.86rem; font-weight:800; transition:transform 160ms ease, box-shadow 160ms ease;
+        .bulk-actions-bar {
+            display:flex;
+            flex-wrap:wrap;
+            align-items:center;
+            justify-content:space-between;
+            gap:.75rem;
+            padding:.85rem 1.25rem;
+            border-bottom:1px solid rgba(51,65,85,.72);
+            background:rgba(2,8,23,.34);
         }
-        .row-complete-btn:hover { transform:translateY(-1px); box-shadow:0 14px 26px rgba(37,99,235,.22); }
-        .row-menu-toggle { width:2.15rem; height:2.15rem; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; color:#94a3b8; transition:background-color 160ms ease, color 160ms ease; }
-        .row-menu-toggle:hover { background:rgba(30,41,59,.72); color:#f8fafc; }
-        .row-menu { position:absolute; top:calc(100% + .45rem); right:0; z-index:20; min-width:11rem; padding:.45rem; border:1px solid rgba(71,85,105,.72); border-radius:14px; background:linear-gradient(180deg, rgba(10,18,34,.98), rgba(9,16,30,.96)); box-shadow:0 20px 40px rgba(2,6,23,.36); }
-        .row-menu.hidden { display:none; }
-        .row-menu-btn { width:100%; display:flex; align-items:center; gap:.65rem; min-height:40px; padding:0 .8rem; border-radius:10px; color:#cbd5e1; font-size:.88rem; font-weight:700; text-align:left; transition:background-color 160ms ease, color 160ms ease; }
-        .row-menu-btn:hover { background:rgba(30,41,59,.74); color:#fff; }
-        .row-menu-btn--danger { color:#fda4af; }
-        .row-menu-btn--danger:hover { background:rgba(127,29,29,.36); color:#fecaca; }
+        .bulk-select-control { display:inline-flex; align-items:center; gap:.55rem; color:#cbd5e1; font-size:.84rem; font-weight:700; }
+        .bulk-info { color:#94a3b8; font-size:.84rem; line-height:1.4; }
+        .bulk-complete-btn {
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-height:34px;
+            padding:0 .9rem;
+            border-radius:10px;
+            border:1px solid rgba(96,165,250,.42);
+            background:linear-gradient(135deg, rgba(37,99,235,.94), rgba(59,130,246,.9));
+            color:#eff6ff;
+            font-size:.8rem;
+            font-weight:800;
+            letter-spacing:.04em;
+            text-transform:uppercase;
+            transition:transform 120ms ease-out, box-shadow 120ms ease-out, opacity 120ms ease-out;
+        }
+        .bulk-complete-btn:hover { transform:translateY(-1px); box-shadow:0 10px 20px rgba(37,99,235,.24); }
+        .bulk-complete-btn[disabled] { opacity:.45; cursor:not-allowed; box-shadow:none; transform:none; }
+        .payable-select-cell { width:44px; text-align:center; }
+        .payables-table th.payable-select-cell { text-align:center; }
+        .payable-select-checkbox {
+            width:17px;
+            height:17px;
+            accent-color:#3b82f6;
+            cursor:pointer;
+        }
+        .row-actions { display:flex; align-items:center; justify-content:flex-end; gap:.45rem; }
+        .row-complete-mini-btn {
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-height:30px;
+            padding:0 .72rem;
+            border-radius:8px;
+            border:1px solid rgba(96,165,250,.42);
+            background:linear-gradient(135deg, rgba(37,99,235,.94), rgba(59,130,246,.9));
+            color:#eff6ff;
+            font-size:.76rem;
+            font-weight:800;
+            letter-spacing:.04em;
+            text-transform:uppercase;
+            transition:transform 120ms ease-out, box-shadow 120ms ease-out;
+        }
+        .row-complete-mini-btn:hover {
+            transform:translateY(-1px);
+            box-shadow:0 10px 20px rgba(37,99,235,.24);
+        }
+        .action-btn {
+            width:30px;
+            height:30px;
+            border-radius:8px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            font-size:.86rem;
+            border:1px solid transparent;
+            transition:background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+        }
+        body.dashboard-premium.dashboard-payables .table-shell .action-btn,
+        body.dashboard-premium.dashboard-payables .mobile-card-actions .action-btn {
+            border-radius:8px !important;
+            border:1px solid rgba(148,163,184,.26) !important;
+            background:transparent !important;
+            color:#cbd5e1 !important;
+            box-shadow:none !important;
+        }
+        body.dashboard-premium.dashboard-payables .table-shell .action-btn.action-btn-view,
+        body.dashboard-premium.dashboard-payables .mobile-card-actions .action-btn.action-btn-view {
+            color:#93c5fd !important;
+            border-color:rgba(96,165,250,.4) !important;
+            background:rgba(15,23,42,.48) !important;
+        }
+        body.dashboard-premium.dashboard-payables .table-shell .action-btn.action-btn-edit,
+        body.dashboard-premium.dashboard-payables .mobile-card-actions .action-btn.action-btn-edit {
+            color:#6ee7b7 !important;
+            border-color:rgba(16,185,129,.35) !important;
+            background:rgba(6,95,70,.2) !important;
+        }
+        body.dashboard-premium.dashboard-payables .table-shell .action-btn.action-btn-delete,
+        body.dashboard-premium.dashboard-payables .mobile-card-actions .action-btn.action-btn-delete {
+            color:#fca5a5 !important;
+            border-color:rgba(244,63,94,.32) !important;
+            background:rgba(127,29,29,.22) !important;
+        }
+        body.dashboard-premium.dashboard-payables .table-shell .action-btn.action-btn-view:hover,
+        body.dashboard-premium.dashboard-payables .mobile-card-actions .action-btn.action-btn-view:hover {
+            color:#dbeafe !important;
+            border-color:rgba(147,197,253,.6) !important;
+            background:rgba(30,41,59,.82) !important;
+        }
+        body.dashboard-premium.dashboard-payables .table-shell .action-btn.action-btn-edit:hover,
+        body.dashboard-premium.dashboard-payables .mobile-card-actions .action-btn.action-btn-edit:hover {
+            color:#a7f3d0 !important;
+            border-color:rgba(110,231,183,.58) !important;
+            background:rgba(6,95,70,.34) !important;
+        }
+        body.dashboard-premium.dashboard-payables .table-shell .action-btn.action-btn-delete:hover,
+        body.dashboard-premium.dashboard-payables .mobile-card-actions .action-btn.action-btn-delete:hover {
+            color:#fecdd3 !important;
+            border-color:rgba(244,63,94,.34) !important;
+            background:rgba(244,63,94,.12) !important;
+        }
         .table-empty { padding:3.4rem 1.2rem; text-align:center; color:#94a3b8; }
         .table-empty-icon { width:3.25rem; height:3.25rem; margin:0 auto; display:flex; align-items:center; justify-content:center; border-radius:1rem; border:1px solid rgba(51,65,85,.76); background:rgba(2,8,23,.48); color:#64748b; font-size:1.1rem; }
         .table-empty-title { margin-top:1rem; color:#f8fafc; font-size:1.04rem; font-weight:800; }
@@ -274,9 +373,34 @@
         .mobile-card-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:.85rem; margin-top:1rem; }
         .mobile-card-label { color:#64748b; font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
         .mobile-card-value { margin-top:.3rem; color:#e2e8f0; font-size:.92rem; line-height:1.45; font-weight:700; }
-        .mobile-card-actions { display:flex; align-items:center; justify-content:flex-end; gap:.65rem; margin-top:1rem; position:relative; }
+        .mobile-card-actions { display:flex; align-items:center; justify-content:flex-end; gap:.45rem; margin-top:1rem; }
+        .mobile-card-select { display:inline-flex; align-items:center; gap:.45rem; color:#cbd5e1; font-size:.78rem; font-weight:700; }
+        .payable-view-hero { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:.8rem; padding:1rem; border:1px solid rgba(51,65,85,.72); border-radius:14px; background:rgba(2,8,23,.42); }
+        .payable-view-title { color:#f8fafc; font-size:1.02rem; line-height:1.35; font-weight:700; }
+        .payable-view-grid { display:grid; gap:.8rem; grid-template-columns:repeat(2, minmax(0,1fr)); }
+        .payable-view-card { border:1px solid rgba(51,65,85,.72); border-radius:14px; background:rgba(2,8,23,.42); padding:.9rem 1rem; }
+        .payable-view-card--full { grid-column:1 / -1; }
+        .payable-view-label { color:#64748b; font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+        .payable-view-value { margin-top:.42rem; color:#e2e8f0; font-size:.96rem; line-height:1.45; font-weight:700; word-break:break-word; }
+        .payable-view-value--note { color:#cbd5e1; font-weight:600; }
         .error-banner { border:1px solid rgba(248,113,113,.3); border-radius:16px; background:rgba(127,29,29,.18); color:#fecaca; padding:.95rem 1rem; font-size:.92rem; line-height:1.55; }
         .screen-loading .page-panel, .screen-loading .toolbar-search, .screen-loading .month-switcher, .screen-loading .filter-chip-row { opacity:.72; pointer-events:none; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payables-table th { font-size:11px; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payables-table td { font-size:.9rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payable-title { font-size:1rem; font-weight:700; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payable-subtitle { font-size:.82rem; line-height:1.45; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payable-amount { font-size:.96rem; font-weight:700; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payable-due { font-size:.96rem; font-weight:700; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payable-note { font-size:.84rem; line-height:1.45; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .status-pill { min-height:26px; font-size:.68rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .panel-summary { font-size:.8rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .filter-chip { font-size:.88rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .row-complete-mini-btn { font-size:.72rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .bulk-info { font-size:.8rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .bulk-select-control { font-size:.8rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .bulk-complete-btn { font-size:.74rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payable-view-title { font-size:.98rem; }
+        body.dashboard-premium.dashboard-payables.typography-v1 .payable-view-value { font-size:.9rem; }
         body.sidebar-collapsed .modern-sidebar { transform: translateX(-100%); }
         body.sidebar-collapsed main { margin-left: 0 !important; width: 100% !important; flex: 1 1 100% !important; }
         @media (max-width: 1279px) { .month-switcher-btn { min-width:96px; } }
@@ -291,10 +415,11 @@
             .panel-footer { flex-direction:row; align-items:center; justify-content:space-between; }
             .panel-footer-pagination { justify-content:flex-end; }
         }
+        @media (max-width: 640px) { .payable-view-grid { grid-template-columns:1fr; } }
     </style>
     <link rel="stylesheet" href="/styles/premium-dashboard-theme.css?v=20260303f">
 </head>
-<body class="dashboard-premium dashboard-financial min-h-screen">
+<body class="dashboard-premium typography-v1 dashboard-financial dashboard-payables primary-gradient min-h-screen">
     <header class="premium-header fixed w-full top-0 z-50">
         <div class="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
             <div class="flex items-center">
@@ -360,10 +485,20 @@
                         <span id="summaryPending" class="panel-summary--pending">0 pendentes</span>
                     </div>
 
-                    <div class="payables-table-wrap">
+                    <div class="bulk-actions-bar">
+                        <label class="bulk-select-control" for="payablesSelectAllCheckbox">
+                            <input id="payablesSelectAllCheckbox" class="payable-select-checkbox" type="checkbox">
+                            <span>Selecionar visiveis</span>
+                        </label>
+                        <p id="bulkSelectionInfo" class="bulk-info">Nenhuma conta selecionada.</p>
+                        <button id="bulkCompleteBtn" type="button" class="bulk-complete-btn" disabled><%= financePage.actionCompleteLabel %> selecionadas</button>
+                    </div>
+
+                    <div class="payables-table-wrap table-shell">
                         <table class="payables-table">
                             <thead>
                                 <tr>
+                                    <th class="payable-select-cell"></th>
                                     <th><%= financePage.tablePrimaryHeader %></th>
                                     <th>Valor (R$)</th>
                                     <th><%= financePage.tableDateHeader %></th>
@@ -413,8 +548,44 @@
                                 <input id="payableCategoryInput" class="filter-control" type="text" maxlength="120" placeholder="<%= financePage.modalCategoryPlaceholder %>" required>
                             </div>
                             <div class="modal-base__field">
-                                <label for="payableAmountInput" class="modal-base__field-label">Valor (R$)</label>
+                                <label id="payableAmountLabel" for="payableAmountInput" class="modal-base__field-label">Valor (R$)</label>
                                 <input id="payableAmountInput" class="filter-control" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00" required>
+                            </div>
+                            <div class="modal-base__field modal-base__field--full">
+                                <label for="payableEntryTypeInput" class="modal-base__field-label">Tipo de lancamento</label>
+                                <select id="payableEntryTypeInput" class="filter-control">
+                                    <option value="single">Unico</option>
+                                    <option value="installments">Parcelado</option>
+                                    <option value="recurring_monthly">Recorrente mensal</option>
+                                </select>
+                                <p class="modal-base__field-helper">Use parcelado para dividir uma conta em parcelas ou recorrente para gerar lancamentos mensais.</p>
+                            </div>
+                            <div id="payableInstallmentFields" class="modal-base__field modal-base__field--full hidden">
+                                <div class="modal-base__grid-2">
+                                    <div class="modal-base__field">
+                                        <label for="payableInstallmentCountInput" class="modal-base__field-label">Quantidade de parcelas</label>
+                                        <input id="payableInstallmentCountInput" class="filter-control" type="number" min="2" max="60" step="1" value="4">
+                                    </div>
+                                    <div class="modal-base__field">
+                                        <label for="payableInstallmentAmountModeInput" class="modal-base__field-label">Valor informado</label>
+                                        <select id="payableInstallmentAmountModeInput" class="filter-control">
+                                            <option value="total">Valor total</option>
+                                            <option value="per_installment">Valor por parcela</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="payableRecurringFields" class="modal-base__field modal-base__field--full hidden">
+                                <div class="modal-base__grid-2">
+                                    <div class="modal-base__field">
+                                        <label for="payableRecurringMonthsInput" class="modal-base__field-label">Quantidade de meses</label>
+                                        <input id="payableRecurringMonthsInput" class="filter-control" type="number" min="2" max="120" step="1" value="12">
+                                    </div>
+                                    <div class="modal-base__field">
+                                        <p class="modal-base__field-label">Frequencia</p>
+                                        <p class="modal-base__field-helper">Mensal, com mesmo dia de vencimento da data informada.</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -447,6 +618,91 @@
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="payableViewModal" class="modal-base fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-4" data-modal-base="true" role="dialog" aria-modal="true" aria-labelledby="payableViewTitle">
+        <div class="modal-base__panel modal-base__panel--md">
+            <div class="flex min-h-0 flex-1 flex-col">
+                <div class="modal-base__header">
+                    <div class="modal-base__title-wrap">
+                        <h3 id="payableViewTitle" class="modal-base__title">Detalhes da conta</h3>
+                        <p id="payableViewSubtitle" class="modal-base__description">Visualize as informacoes desta conta.</p>
+                    </div>
+                    <button id="closePayableViewModalBtn" class="modal-base__close" type="button" aria-label="Fechar detalhes">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="modal-base__body">
+                    <section class="modal-base__section">
+                        <h4 class="modal-base__section-title">Resumo</h4>
+                        <div class="payable-view-hero">
+                            <p id="payableViewDescription" class="payable-view-title">--</p>
+                            <span id="payableViewStatusBadge" class="status-pill status-pill--pending">--</span>
+                        </div>
+                    </section>
+
+                    <section class="modal-base__section">
+                        <h4 class="modal-base__section-title">Detalhes financeiros</h4>
+                        <div class="payable-view-grid">
+                            <article class="payable-view-card">
+                                <p class="payable-view-label">Categoria</p>
+                                <p id="payableViewCategory" class="payable-view-value">--</p>
+                            </article>
+                            <article class="payable-view-card">
+                                <p class="payable-view-label">Valor (R$)</p>
+                                <p id="payableViewAmount" class="payable-view-value">--</p>
+                            </article>
+                            <article class="payable-view-card">
+                                <p class="payable-view-label">Vencimento</p>
+                                <p id="payableViewDate" class="payable-view-value">--</p>
+                            </article>
+                            <article class="payable-view-card">
+                                <p class="payable-view-label">Situacao</p>
+                                <p id="payableViewStatusText" class="payable-view-value">--</p>
+                            </article>
+                            <article class="payable-view-card payable-view-card--full">
+                                <p class="payable-view-label">Observacoes</p>
+                                <p id="payableViewObservation" class="payable-view-value payable-view-value--note">--</p>
+                            </article>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="modal-base__footer">
+                    <div class="modal-base__footer-secondary">
+                        <button type="button" id="closePayableViewFooterBtn" class="modal-btn modal-btn--ghost">Fechar</button>
+                    </div>
+                    <div class="modal-base__footer-actions">
+                        <button type="button" id="openPayableEditFromViewBtn" class="modal-btn modal-btn--primary">Editar conta</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="payableDeleteModal" class="modal-base fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-4" data-modal-base="true" role="dialog" aria-modal="true" aria-labelledby="payableDeleteTitle">
+        <div class="modal-base__panel modal-base__panel--md">
+            <div class="flex min-h-0 flex-1 flex-col">
+                <div class="modal-base__header">
+                    <div class="modal-base__title-wrap">
+                        <h3 id="payableDeleteTitle" class="modal-base__title">Confirmar exclusao</h3>
+                        <p id="payableDeleteMessage" class="modal-base__description">Deseja excluir esta conta?</p>
+                    </div>
+                    <button id="closePayableDeleteModalBtn" class="modal-base__close" type="button" aria-label="Fechar confirmacao de exclusao">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-base__footer">
+                    <div class="modal-base__footer-secondary">
+                        <button type="button" id="cancelPayableDeleteBtn" class="modal-btn modal-btn--ghost">Cancelar</button>
+                    </div>
+                    <div class="modal-base__footer-actions">
+                        <button type="button" id="confirmPayableDeleteBtn" class="modal-btn modal-btn--danger">Excluir conta</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -485,6 +741,9 @@
         const payablesMobileList = document.getElementById('payablesMobileList');
         const paginationInfo = document.getElementById('paginationInfo');
         const paginationControls = document.getElementById('paginationControls');
+        const payablesSelectAllCheckbox = document.getElementById('payablesSelectAllCheckbox');
+        const bulkSelectionInfo = document.getElementById('bulkSelectionInfo');
+        const bulkCompleteBtn = document.getElementById('bulkCompleteBtn');
 
         const payableModal = document.getElementById('payableModal');
         const payableForm = document.getElementById('payableForm');
@@ -492,13 +751,39 @@
         const payableModalSubtitle = document.getElementById('payableModalSubtitle');
         const payableDescriptionInput = document.getElementById('payableDescriptionInput');
         const payableCategoryInput = document.getElementById('payableCategoryInput');
+        const payableAmountLabel = document.getElementById('payableAmountLabel');
         const payableAmountInput = document.getElementById('payableAmountInput');
+        const payableEntryTypeInput = document.getElementById('payableEntryTypeInput');
+        const payableInstallmentFields = document.getElementById('payableInstallmentFields');
+        const payableInstallmentCountInput = document.getElementById('payableInstallmentCountInput');
+        const payableInstallmentAmountModeInput = document.getElementById('payableInstallmentAmountModeInput');
+        const payableRecurringFields = document.getElementById('payableRecurringFields');
+        const payableRecurringMonthsInput = document.getElementById('payableRecurringMonthsInput');
         const payableDateInput = document.getElementById('payableDateInput');
         const payableStatusInput = document.getElementById('payableStatusInput');
         const savePayableBtn = document.getElementById('savePayableBtn');
         const openPayableModalBtn = document.getElementById('openPayableModalBtn');
         const closePayableModalBtn = document.getElementById('closePayableModalBtn');
         const cancelPayableModalBtn = document.getElementById('cancelPayableModalBtn');
+        const payableViewModal = document.getElementById('payableViewModal');
+        const payableViewTitle = document.getElementById('payableViewTitle');
+        const payableViewSubtitle = document.getElementById('payableViewSubtitle');
+        const payableViewDescription = document.getElementById('payableViewDescription');
+        const payableViewStatusBadge = document.getElementById('payableViewStatusBadge');
+        const payableViewCategory = document.getElementById('payableViewCategory');
+        const payableViewAmount = document.getElementById('payableViewAmount');
+        const payableViewDate = document.getElementById('payableViewDate');
+        const payableViewStatusText = document.getElementById('payableViewStatusText');
+        const payableViewObservation = document.getElementById('payableViewObservation');
+        const closePayableViewModalBtn = document.getElementById('closePayableViewModalBtn');
+        const closePayableViewFooterBtn = document.getElementById('closePayableViewFooterBtn');
+        const openPayableEditFromViewBtn = document.getElementById('openPayableEditFromViewBtn');
+        const payableDeleteModal = document.getElementById('payableDeleteModal');
+        const payableDeleteTitle = document.getElementById('payableDeleteTitle');
+        const payableDeleteMessage = document.getElementById('payableDeleteMessage');
+        const closePayableDeleteModalBtn = document.getElementById('closePayableDeleteModalBtn');
+        const cancelPayableDeleteBtn = document.getElementById('cancelPayableDeleteBtn');
+        const confirmPayableDeleteBtn = document.getElementById('confirmPayableDeleteBtn');
 
         const SYSTEM_TRANSACTION_CATEGORIES = new Set(Array.isArray(pageText.systemCategories) ? pageText.systemCategories : []);
         const STATUS_FILTERS = [
@@ -518,7 +803,14 @@
             pageSize: 15,
             loading: false,
             saving: false,
+            bulkCompleting: false,
+            deleting: false,
             editingId: null,
+            viewingId: null,
+            deletingId: null,
+            selectedIds: new Set(),
+            filteredSelectableIds: [],
+            visibleSelectableIds: [],
             openMenuId: null,
         };
 
@@ -616,12 +908,117 @@
             payablesRoot.classList.toggle('screen-loading', loading);
         }
 
+        function getEntryTypeValue() {
+            if (!(payableEntryTypeInput instanceof HTMLSelectElement)) return 'single';
+            if (payableEntryTypeInput.value === 'installments') return 'installments';
+            if (payableEntryTypeInput.value === 'recurring_monthly') return 'recurring_monthly';
+            return 'single';
+        }
+
+        function getInstallmentAmountModeValue() {
+            if (!(payableInstallmentAmountModeInput instanceof HTMLSelectElement)) return 'total';
+            return payableInstallmentAmountModeInput.value === 'per_installment' ? 'per_installment' : 'total';
+        }
+
+        function syncInstallmentModeUi() {
+            const isEditMode = Boolean(state.editingId);
+            const entryType = getEntryTypeValue();
+            const isInstallmentMode = !isEditMode && entryType === 'installments';
+            const isRecurringMode = !isEditMode && entryType === 'recurring_monthly';
+
+            if (payableEntryTypeInput instanceof HTMLSelectElement) {
+                payableEntryTypeInput.disabled = isEditMode || state.saving;
+            }
+            if (payableInstallmentFields instanceof HTMLElement) {
+                payableInstallmentFields.classList.toggle('hidden', !isInstallmentMode);
+            }
+            if (payableRecurringFields instanceof HTMLElement) {
+                payableRecurringFields.classList.toggle('hidden', !isRecurringMode);
+            }
+            if (payableInstallmentCountInput instanceof HTMLInputElement) {
+                payableInstallmentCountInput.disabled = !isInstallmentMode || state.saving;
+            }
+            if (payableInstallmentAmountModeInput instanceof HTMLSelectElement) {
+                payableInstallmentAmountModeInput.disabled = !isInstallmentMode || state.saving;
+            }
+            if (payableRecurringMonthsInput instanceof HTMLInputElement) {
+                payableRecurringMonthsInput.disabled = !isRecurringMode || state.saving;
+            }
+            if (payableAmountLabel instanceof HTMLElement) {
+                if (isInstallmentMode) {
+                    payableAmountLabel.textContent = getInstallmentAmountModeValue() === 'per_installment'
+                        ? 'Valor por parcela (R$)'
+                        : 'Valor total (R$)';
+                } else if (isRecurringMode) {
+                    payableAmountLabel.textContent = 'Valor mensal (R$)';
+                } else {
+                    payableAmountLabel.textContent = 'Valor (R$)';
+                }
+            }
+        }
+
         function setSaving(loading) {
             state.saving = loading;
             savePayableBtn.disabled = loading;
+            const entryType = !state.editingId ? getEntryTypeValue() : 'single';
             savePayableBtn.textContent = loading
-                ? 'Salvando...'
+                ? (entryType === 'installments'
+                    ? 'Criando parcelas...'
+                    : entryType === 'recurring_monthly'
+                        ? 'Gerando recorrencia...'
+                        : 'Salvando...')
                 : (state.editingId ? (pageText.modalSaveEditLabel || 'Salvar alteracoes') : (pageText.modalSaveNewLabel || 'Salvar conta'));
+            syncInstallmentModeUi();
+        }
+
+        function getCompleteActionLabel() {
+            return pageText.actionCompleteLabel || (pageText.itemType === 'income' ? 'Receber' : 'Pagar');
+        }
+
+        function setBulkCompleting(loading) {
+            state.bulkCompleting = loading;
+            if (!(bulkCompleteBtn instanceof HTMLButtonElement)) return;
+            const selectedCount = state.selectedIds.size;
+            const baseLabel = `${getCompleteActionLabel()} selecionadas`;
+            bulkCompleteBtn.disabled = loading || selectedCount === 0;
+            bulkCompleteBtn.textContent = loading ? 'Processando...' : baseLabel;
+        }
+
+        function isSelectableStatus(displayStatus) {
+            return displayStatus.group !== 'paid';
+        }
+
+        function pruneSelectionByFilteredItems() {
+            const filteredSet = new Set(state.filteredSelectableIds);
+            state.selectedIds.forEach((id) => {
+                if (!filteredSet.has(id)) state.selectedIds.delete(id);
+            });
+        }
+
+        function renderBulkSelectionUi() {
+            const filteredIdsSet = new Set(state.filteredSelectableIds);
+            const selectedFilteredIds = [...state.selectedIds].filter((id) => filteredIdsSet.has(id));
+            const selectedItems = state.items.filter((item) => selectedFilteredIds.includes(item.id));
+            const selectedAmount = selectedItems.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+            const selectedCount = selectedItems.length;
+
+            if (selectedCount === 0) {
+                bulkSelectionInfo.textContent = 'Nenhuma conta selecionada.';
+            } else if (selectedCount === 1) {
+                bulkSelectionInfo.textContent = `1 conta selecionada • ${formatCurrency(selectedAmount)}`;
+            } else {
+                bulkSelectionInfo.textContent = `${selectedCount} contas selecionadas • ${formatCurrency(selectedAmount)}`;
+            }
+
+            const visibleIds = state.visibleSelectableIds;
+            if (payablesSelectAllCheckbox instanceof HTMLInputElement) {
+                const visibleSelectedCount = visibleIds.filter((id) => state.selectedIds.has(id)).length;
+                payablesSelectAllCheckbox.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
+                payablesSelectAllCheckbox.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
+                payablesSelectAllCheckbox.disabled = visibleIds.length === 0 || state.bulkCompleting;
+            }
+
+            setBulkCompleting(state.bulkCompleting);
         }
 
         function normalizeTransaction(row) {
@@ -774,10 +1171,13 @@
             const dueClass = displayStatus.group === 'overdue' ? 'payable-due payable-due--overdue'
                 : displayStatus.group === 'due-today' ? 'payable-due payable-due--today'
                     : 'payable-due';
-            const menuOpen = state.openMenuId === item.id;
-
+            const selectable = isSelectableStatus(displayStatus);
+            const checked = selectable && state.selectedIds.has(item.id);
             return `
-                <tr class="payables-row ${displayStatus.rowClass}">
+                <tr class="payables-row table-row ${displayStatus.rowClass}">
+                    <td class="payable-select-cell">
+                        ${selectable ? `<input type="checkbox" class="payable-select-checkbox" data-payable-select="${escapeHtml(item.id)}" ${checked ? 'checked' : ''} aria-label="Selecionar conta">` : ''}
+                    </td>
                     <td>
                         <div class="payable-main">
                             <span class="${displayStatus.iconClass}"><i class="fas ${displayStatus.iconName}"></i></span>
@@ -793,14 +1193,16 @@
                     <td><p class="payable-note">${escapeHtml(note)}</p></td>
                     <td>
                         <div class="row-actions">
-                            ${displayStatus.group !== 'paid' ? `<button type="button" class="row-complete-btn" data-payable-action="complete" data-payable-id="${escapeHtml(item.id)}">${escapeHtml(pageText.actionCompleteLabel || 'Baixar')}</button>` : ''}
-                            <button type="button" class="row-menu-toggle" data-payable-action="toggle-menu" data-payable-id="${escapeHtml(item.id)}" aria-label="Abrir menu da conta">
-                                <i class="fas fa-ellipsis-vertical"></i>
+                            ${displayStatus.group !== 'paid' ? `<button type="button" class="row-complete-mini-btn" data-payable-action="complete" data-payable-id="${escapeHtml(item.id)}">${escapeHtml(pageText.actionCompleteLabel || 'Pagar')}</button>` : ''}
+                            <button type="button" class="action-btn action-btn-view" data-payable-action="view" data-payable-id="${escapeHtml(item.id)}" title="Detalhes" aria-label="Detalhes">
+                                <i class="fas fa-eye"></i>
                             </button>
-                            <div class="row-menu ${menuOpen ? '' : 'hidden'}" data-payable-menu="${escapeHtml(item.id)}">
-                                <button type="button" class="row-menu-btn" data-payable-action="edit" data-payable-id="${escapeHtml(item.id)}"><i class="fas fa-pen"></i><span>Editar</span></button>
-                                <button type="button" class="row-menu-btn row-menu-btn--danger" data-payable-action="delete" data-payable-id="${escapeHtml(item.id)}"><i class="fas fa-trash"></i><span>Excluir</span></button>
-                            </div>
+                            <button type="button" class="action-btn action-btn-edit" data-payable-action="edit" data-payable-id="${escapeHtml(item.id)}" title="Editar" aria-label="Editar">
+                                <i class="fas fa-pen-to-square"></i>
+                            </button>
+                            <button type="button" class="action-btn action-btn-delete" data-payable-action="delete" data-payable-id="${escapeHtml(item.id)}" title="Excluir" aria-label="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -810,8 +1212,8 @@
         function buildMobileCard(item) {
             const displayStatus = getDisplayStatus(item);
             const note = buildObservation(item, displayStatus);
-            const menuOpen = state.openMenuId === item.id;
-
+            const selectable = isSelectableStatus(displayStatus);
+            const checked = selectable && state.selectedIds.has(item.id);
             return `
                 <article class="mobile-card mobile-card--${displayStatus.key}">
                     <div class="flex items-start justify-between gap-3">
@@ -822,7 +1224,10 @@
                                 <p class="payable-subtitle">${escapeHtml(item.category || 'Sem categoria')}</p>
                             </div>
                         </div>
-                        <span class="${displayStatus.pillClass}">${escapeHtml(displayStatus.label)}</span>
+                        <div class="flex items-center gap-2">
+                            ${selectable ? `<label class="mobile-card-select"><input type="checkbox" class="payable-select-checkbox" data-payable-select="${escapeHtml(item.id)}" ${checked ? 'checked' : ''}> <span>Sel.</span></label>` : ''}
+                            <span class="${displayStatus.pillClass}">${escapeHtml(displayStatus.label)}</span>
+                        </div>
                     </div>
                     <div class="mobile-card-grid">
                         <div><p class="mobile-card-label">Valor</p><p class="mobile-card-value">${escapeHtml(formatCurrency(item.amount))}</p></div>
@@ -830,14 +1235,16 @@
                         <div class="col-span-2"><p class="mobile-card-label">Observacoes</p><p class="mobile-card-value">${escapeHtml(note)}</p></div>
                     </div>
                     <div class="mobile-card-actions">
-                        ${displayStatus.group !== 'paid' ? `<button type="button" class="row-complete-btn" data-payable-action="complete" data-payable-id="${escapeHtml(item.id)}">${escapeHtml(pageText.actionCompleteLabel || 'Baixar')}</button>` : ''}
-                        <button type="button" class="row-menu-toggle" data-payable-action="toggle-menu" data-payable-id="${escapeHtml(item.id)}" aria-label="Abrir menu da conta">
-                            <i class="fas fa-ellipsis-vertical"></i>
+                        ${displayStatus.group !== 'paid' ? `<button type="button" class="row-complete-mini-btn" data-payable-action="complete" data-payable-id="${escapeHtml(item.id)}">${escapeHtml(pageText.actionCompleteLabel || 'Pagar')}</button>` : ''}
+                        <button type="button" class="action-btn action-btn-view" data-payable-action="view" data-payable-id="${escapeHtml(item.id)}" title="Detalhes" aria-label="Detalhes">
+                            <i class="fas fa-eye"></i>
                         </button>
-                        <div class="row-menu ${menuOpen ? '' : 'hidden'}" data-payable-menu="${escapeHtml(item.id)}">
-                            <button type="button" class="row-menu-btn" data-payable-action="edit" data-payable-id="${escapeHtml(item.id)}"><i class="fas fa-pen"></i><span>Editar</span></button>
-                            <button type="button" class="row-menu-btn row-menu-btn--danger" data-payable-action="delete" data-payable-id="${escapeHtml(item.id)}"><i class="fas fa-trash"></i><span>Excluir</span></button>
-                        </div>
+                        <button type="button" class="action-btn action-btn-edit" data-payable-action="edit" data-payable-id="${escapeHtml(item.id)}" title="Editar" aria-label="Editar">
+                            <i class="fas fa-pen-to-square"></i>
+                        </button>
+                        <button type="button" class="action-btn action-btn-delete" data-payable-action="delete" data-payable-id="${escapeHtml(item.id)}" title="Excluir" aria-label="Excluir">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
                 </article>
             `;
@@ -852,7 +1259,7 @@
                 </div>
             `;
             if (isTable) {
-                target.innerHTML = `<tr><td colspan="6">${content}</td></tr>`;
+                target.innerHTML = `<tr><td colspan="7">${content}</td></tr>`;
                 return;
             }
             target.innerHTML = content;
@@ -881,20 +1288,29 @@
             renderSummary(monthBaseItems);
 
             const filteredItems = getFilteredItems();
+            state.filteredSelectableIds = filteredItems
+                .filter((item) => isSelectableStatus(getDisplayStatus(item)))
+                .map((item) => item.id);
+            pruneSelectionByFilteredItems();
             const { currentPage } = getPaginationMeta(filteredItems.length);
             const startIndex = (currentPage - 1) * state.pageSize;
             const visibleItems = filteredItems.slice(startIndex, startIndex + state.pageSize);
+            state.visibleSelectableIds = visibleItems
+                .filter((item) => isSelectableStatus(getDisplayStatus(item)))
+                .map((item) => item.id);
 
             if (!visibleItems.length) {
                 renderEmptyState(payablesTableBody, true);
                 renderEmptyState(payablesMobileList, false);
                 renderPagination(filteredItems.length);
+                renderBulkSelectionUi();
                 return;
             }
 
             payablesTableBody.innerHTML = visibleItems.map(buildDesktopRow).join('');
             payablesMobileList.innerHTML = visibleItems.map(buildMobileCard).join('');
             renderPagination(filteredItems.length);
+            renderBulkSelectionUi();
         }
 
         async function fetchTransactions(preserveMonthCursor = false) {
@@ -904,6 +1320,10 @@
 
             const items = Array.isArray(payload?.data) ? payload.data.map(normalizeTransaction).filter(matchesPageTransaction) : [];
             state.items = items;
+            const availableIds = new Set(items.map((item) => item.id));
+            state.selectedIds.forEach((id) => {
+                if (!availableIds.has(id)) state.selectedIds.delete(id);
+            });
             if (!preserveMonthCursor) {
                 state.monthCursor = items.length
                     ? startOfMonth(parseDateOnly([...items].sort((left, right) => parseDateOnly(right.date) - parseDateOnly(left.date))[0].date))
@@ -930,23 +1350,47 @@
                 payablesMobileList.innerHTML = '';
                 paginationControls.innerHTML = '';
                 paginationInfo.textContent = `Mostrando 0-0 de 0 ${pageText.paginationPlural || 'contas'}`;
+                state.selectedIds.clear();
+                state.filteredSelectableIds = [];
+                state.visibleSelectableIds = [];
+                renderBulkSelectionUi();
             } finally {
                 setScreenLoading(false);
             }
         }
 
-        function openPayableModal(item = null) {
-            state.editingId = item?.id || null;
-            payableModalTitle.textContent = item ? (pageText.modalEditTitle || 'Editar conta') : (pageText.modalNewTitle || 'Nova conta');
-            payableModalSubtitle.textContent = item
+        function releaseBodyScrollIfNoModal() {
+            if (
+                payableModal.classList.contains('hidden')
+                && payableViewModal.classList.contains('hidden')
+                && payableDeleteModal.classList.contains('hidden')
+            ) {
+                document.body.style.overflow = '';
+            }
+        }
+
+        function openPayableModal(item = null, mode = 'create') {
+            const isEditMode = mode === 'edit' && Boolean(item);
+
+            state.editingId = isEditMode ? (item?.id || null) : null;
+            payableModalTitle.textContent = isEditMode ? (pageText.modalEditTitle || 'Editar conta') : (pageText.modalNewTitle || 'Nova conta');
+            payableModalSubtitle.textContent = isEditMode
                 ? (pageText.modalEditSubtitle || 'Ajuste os dados financeiros antes de salvar a alteracao.')
                 : (pageText.modalNewSubtitle || 'Cadastre uma obrigacao financeira do modulo.');
-            savePayableBtn.textContent = item ? (pageText.modalSaveEditLabel || 'Salvar alteracoes') : (pageText.modalSaveNewLabel || 'Salvar conta');
+            savePayableBtn.textContent = isEditMode ? (pageText.modalSaveEditLabel || 'Salvar alteracoes') : (pageText.modalSaveNewLabel || 'Salvar conta');
             payableDescriptionInput.value = item?.description || '';
             payableCategoryInput.value = item?.category || '';
             payableAmountInput.value = item ? String(Number(item.amount || 0)) : '';
+            if (payableEntryTypeInput instanceof HTMLSelectElement) payableEntryTypeInput.value = 'single';
+            if (payableInstallmentCountInput instanceof HTMLInputElement) payableInstallmentCountInput.value = '4';
+            if (payableInstallmentAmountModeInput instanceof HTMLSelectElement) payableInstallmentAmountModeInput.value = 'total';
+            if (payableRecurringMonthsInput instanceof HTMLInputElement) payableRecurringMonthsInput.value = '12';
             payableDateInput.value = item?.date || toDateInputValue(new Date());
             payableStatusInput.value = item?.status || 'pending';
+            savePayableBtn.classList.remove('hidden');
+            savePayableBtn.disabled = false;
+            cancelPayableModalBtn.textContent = 'Cancelar';
+            syncInstallmentModeUi();
             payableModal.classList.remove('hidden');
             payableModal.classList.add('flex');
             document.body.style.overflow = 'hidden';
@@ -957,30 +1401,153 @@
             state.editingId = null;
             payableModal.classList.add('hidden');
             payableModal.classList.remove('flex');
-            document.body.style.overflow = '';
+            releaseBodyScrollIfNoModal();
             payableForm.reset();
+            if (payableEntryTypeInput instanceof HTMLSelectElement) payableEntryTypeInput.value = 'single';
+            if (payableInstallmentCountInput instanceof HTMLInputElement) payableInstallmentCountInput.value = '4';
+            if (payableInstallmentAmountModeInput instanceof HTMLSelectElement) payableInstallmentAmountModeInput.value = 'total';
+            if (payableRecurringMonthsInput instanceof HTMLInputElement) payableRecurringMonthsInput.value = '12';
+            syncInstallmentModeUi();
+        }
+
+        function openPayableViewModal(item) {
+            if (!item) return;
+            const displayStatus = getDisplayStatus(item);
+            const observation = buildObservation(item, displayStatus);
+
+            state.viewingId = item.id;
+            payableViewTitle.textContent = pageText.mode === 'income' ? 'Detalhes da conta a receber' : 'Detalhes da conta a pagar';
+            payableViewSubtitle.textContent = pageText.mode === 'income'
+                ? 'Visualize as informacoes deste recebimento.'
+                : 'Visualize as informacoes desta conta.';
+            payableViewDescription.textContent = item.description || 'Conta sem descricao';
+            payableViewCategory.textContent = item.category || 'Sem categoria';
+            payableViewAmount.textContent = formatCurrency(item.amount);
+            payableViewDate.textContent = formatDate(item.date);
+            payableViewStatusText.textContent = displayStatus.label;
+            payableViewObservation.textContent = observation;
+            payableViewStatusBadge.className = displayStatus.pillClass;
+            payableViewStatusBadge.textContent = displayStatus.label;
+            openPayableEditFromViewBtn.textContent = pageText.mode === 'income' ? 'Editar recebimento' : 'Editar conta';
+
+            payableViewModal.classList.remove('hidden');
+            payableViewModal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+            window.setTimeout(() => closePayableViewModalBtn.focus(), 0);
+        }
+
+        function closePayableViewModal() {
+            state.viewingId = null;
+            payableViewModal.classList.add('hidden');
+            payableViewModal.classList.remove('flex');
+            releaseBodyScrollIfNoModal();
+        }
+
+        function setDeleteLoading(loading) {
+            state.deleting = loading;
+            if (closePayableDeleteModalBtn instanceof HTMLButtonElement) closePayableDeleteModalBtn.disabled = loading;
+            if (cancelPayableDeleteBtn instanceof HTMLButtonElement) cancelPayableDeleteBtn.disabled = loading;
+            if (!(confirmPayableDeleteBtn instanceof HTMLButtonElement)) return;
+            confirmPayableDeleteBtn.disabled = loading;
+            const deleteLabel = pageText.mode === 'income' ? 'Excluir recebimento' : 'Excluir conta';
+            confirmPayableDeleteBtn.textContent = loading ? 'Excluindo...' : deleteLabel;
+        }
+
+        function openDeleteConfirmModal(item) {
+            if (!item) return;
+            state.deletingId = String(item.id);
+            if (payableDeleteTitle instanceof HTMLElement) {
+                payableDeleteTitle.textContent = pageText.mode === 'income' ? 'Confirmar exclusao do recebimento' : 'Confirmar exclusao da conta';
+            }
+            const baseText = pageText.mode === 'income' ? 'este recebimento' : 'esta conta';
+            const description = item.description ? ` "${item.description}"` : '';
+            payableDeleteMessage.textContent = `Deseja excluir ${baseText}${description}?`;
+            setDeleteLoading(false);
+            payableDeleteModal.classList.remove('hidden');
+            payableDeleteModal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+            window.setTimeout(() => confirmPayableDeleteBtn.focus(), 0);
+        }
+
+        function closeDeleteConfirmModal(force = false) {
+            if (state.deleting && !force) return;
+            state.deletingId = null;
+            setDeleteLoading(false);
+            payableDeleteModal.classList.add('hidden');
+            payableDeleteModal.classList.remove('flex');
+            releaseBodyScrollIfNoModal();
+        }
+
+        async function confirmDeletePayable() {
+            if (state.deleting || !state.deletingId) return;
+            setDeleteLoading(true);
+            try {
+                const response = await fetch(`/api/finance/transactions/${encodeURIComponent(state.deletingId)}`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                });
+                if (!response.ok && response.status !== 204) {
+                    const body = await response.json().catch(() => null);
+                    throw new Error(body?.message || pageText.deleteError || 'Falha ao excluir a conta.');
+                }
+                state.selectedIds.delete(String(state.deletingId));
+                closeDeleteConfirmModal(true);
+                await loadPayables(true);
+                notify(pageText.deleteSuccess || 'Conta excluida com sucesso.', 'success');
+            } catch (error) {
+                console.error(error);
+                notify(error instanceof Error ? error.message : pageText.deleteError || 'Falha ao excluir a conta.', 'error');
+                setDeleteLoading(false);
+            }
         }
 
         async function savePayable(event) {
             event.preventDefault();
             if (state.saving) return;
 
+            const isEditing = Boolean(state.editingId);
             const description = payableDescriptionInput.value.trim();
             const category = payableCategoryInput.value.trim();
             const amount = Number(payableAmountInput.value);
             const date = payableDateInput.value;
             const status = payableStatusInput.value;
+            const entryType = isEditing ? 'single' : getEntryTypeValue();
+            const installmentCount = entryType === 'installments'
+                ? Number(payableInstallmentCountInput instanceof HTMLInputElement ? payableInstallmentCountInput.value : 0)
+                : 1;
+            const recurringMonths = entryType === 'recurring_monthly'
+                ? Number(payableRecurringMonthsInput instanceof HTMLInputElement ? payableRecurringMonthsInput.value : 0)
+                : 1;
+            const installmentAmountMode = getInstallmentAmountModeValue();
 
             if (!description || !category) return notify('Preencha descricao e categoria.', 'error');
             if (!Number.isFinite(amount) || amount <= 0) return notify('Informe um valor maior que zero.', 'error');
             if (!date) return notify('Informe uma data de vencimento valida.', 'error');
             if (!['pending', 'scheduled', 'completed'].includes(status)) return notify('Situacao invalida.', 'error');
+            if (entryType === 'installments') {
+                if (!Number.isInteger(installmentCount) || installmentCount < 2 || installmentCount > 60) {
+                    return notify('Informe uma quantidade de parcelas entre 2 e 60.', 'error');
+                }
+            }
+            if (entryType === 'recurring_monthly') {
+                if (!Number.isInteger(recurringMonths) || recurringMonths < 2 || recurringMonths > 120) {
+                    return notify('Informe uma quantidade de meses entre 2 e 120.', 'error');
+                }
+            }
 
             setSaving(true);
-            const isEditing = Boolean(state.editingId);
 
             try {
                 const payload = { type: pageText.itemType || 'expense', amount, category, date, description, status };
+                if (!isEditing && entryType === 'installments') {
+                    payload.creationMode = 'installments';
+                    payload.installmentCount = installmentCount;
+                    payload.installmentAmountMode = installmentAmountMode;
+                }
+                if (!isEditing && entryType === 'recurring_monthly') {
+                    payload.creationMode = 'recurring_monthly';
+                    payload.recurringMonths = recurringMonths;
+                }
                 const response = await fetch(
                     isEditing ? `/api/finance/transactions/${encodeURIComponent(state.editingId)}` : '/api/finance/transactions',
                     {
@@ -1000,7 +1567,15 @@
                 searchInput.value = '';
                 closePayableModal();
                 await loadPayables(true);
-                notify(isEditing ? (pageText.saveSuccessEdit || 'Conta atualizada com sucesso.') : (pageText.saveSuccessCreate || 'Conta cadastrada com sucesso.'), 'success');
+                if (!isEditing && entryType === 'installments') {
+                    const createdCount = Number(body?.data?.createdCount || installmentCount);
+                    notify(`${createdCount} parcela(s) cadastrada(s) com sucesso.`, 'success');
+                } else if (!isEditing && entryType === 'recurring_monthly') {
+                    const createdCount = Number(body?.data?.createdCount || recurringMonths);
+                    notify(`${createdCount} lancamento(s) mensal(is) cadastrado(s) com sucesso.`, 'success');
+                } else {
+                    notify(isEditing ? (pageText.saveSuccessEdit || 'Conta atualizada com sucesso.') : (pageText.saveSuccessCreate || 'Conta cadastrada com sucesso.'), 'success');
+                }
             } catch (error) {
                 console.error(error);
                 notify(error instanceof Error ? error.message : pageText.saveError || 'Falha ao salvar a conta.', 'error');
@@ -1019,6 +1594,7 @@
                 });
                 const body = await response.json().catch(() => null);
                 if (!response.ok) throw new Error(body?.message || pageText.completeError || 'Falha ao baixar a conta.');
+                state.selectedIds.delete(String(id));
                 await loadPayables(true);
                 notify(pageText.completeSuccess || 'Conta baixada com sucesso.', 'success');
             } catch (error) {
@@ -1027,23 +1603,51 @@
             }
         }
 
-        async function deletePayable(id) {
-            if (!window.confirm(pageText.deleteConfirm || 'Deseja excluir esta conta?')) return;
+        async function completeSelectedPayables() {
+            if (state.bulkCompleting) return;
+            const ids = [...state.selectedIds];
+            if (!ids.length) return;
+
+            const selectedItems = state.items.filter((item) => state.selectedIds.has(item.id));
+            const selectedTotal = selectedItems.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+            const actionLabel = getCompleteActionLabel();
+            const confirmText = `Confirmar ${actionLabel.toLowerCase()} ${ids.length} conta(s), total ${formatCurrency(selectedTotal)}?`;
+            if (!window.confirm(confirmText)) return;
+
+            setBulkCompleting(true);
             try {
-                const response = await fetch(`/api/finance/transactions/${encodeURIComponent(id)}`, {
-                    method: 'DELETE',
+                const response = await fetch('/api/finance/transactions/batch-complete', {
+                    method: 'POST',
                     credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids }),
                 });
-                if (!response.ok && response.status !== 204) {
-                    const body = await response.json().catch(() => null);
-                    throw new Error(body?.message || pageText.deleteError || 'Falha ao excluir a conta.');
-                }
+                const body = await response.json().catch(() => null);
+                if (!response.ok) throw new Error(body?.message || 'Falha ao processar as contas selecionadas.');
+
+                const updatedCount = Number(body?.data?.updatedCount || 0);
+                const alreadyCompletedCount = Array.isArray(body?.data?.alreadyCompletedIds) ? body.data.alreadyCompletedIds.length : 0;
+                const notFoundCount = Array.isArray(body?.data?.notFoundIds) ? body.data.notFoundIds.length : 0;
+
+                state.selectedIds.clear();
                 await loadPayables(true);
-                notify(pageText.deleteSuccess || 'Conta excluida com sucesso.', 'success');
+
+                const details = [];
+                if (alreadyCompletedCount > 0) details.push(`${alreadyCompletedCount} ja estavam concluídas`);
+                if (notFoundCount > 0) details.push(`${notFoundCount} nao encontradas`);
+                const detailsText = details.length ? ` (${details.join(' | ')})` : '';
+                notify(`${updatedCount} conta(s) processada(s) com sucesso.${detailsText}`, 'success');
             } catch (error) {
                 console.error(error);
-                notify(error instanceof Error ? error.message : pageText.deleteError || 'Falha ao excluir a conta.', 'error');
+                notify(error instanceof Error ? error.message : 'Falha ao processar as contas selecionadas.', 'error');
+            } finally {
+                setBulkCompleting(false);
+                renderBulkSelectionUi();
             }
+        }
+
+        function deletePayable(item) {
+            openDeleteConfirmModal(item);
         }
 
         function closeMenus() {
@@ -1104,9 +1708,43 @@
             syncSidebarLayout();
         });
 
-        openPayableModalBtn.addEventListener('click', () => openPayableModal());
+        openPayableModalBtn.addEventListener('click', () => openPayableModal(null, 'create'));
         closePayableModalBtn.addEventListener('click', closePayableModal);
         cancelPayableModalBtn.addEventListener('click', closePayableModal);
+        if (payableEntryTypeInput instanceof HTMLSelectElement) {
+            payableEntryTypeInput.addEventListener('change', syncInstallmentModeUi);
+        }
+        if (payableInstallmentAmountModeInput instanceof HTMLSelectElement) {
+            payableInstallmentAmountModeInput.addEventListener('change', syncInstallmentModeUi);
+        }
+        closePayableViewModalBtn.addEventListener('click', closePayableViewModal);
+        closePayableViewFooterBtn.addEventListener('click', closePayableViewModal);
+        closePayableDeleteModalBtn.addEventListener('click', closeDeleteConfirmModal);
+        cancelPayableDeleteBtn.addEventListener('click', closeDeleteConfirmModal);
+        confirmPayableDeleteBtn.addEventListener('click', confirmDeletePayable);
+        openPayableEditFromViewBtn.addEventListener('click', () => {
+            const item = state.items.find((entry) => entry.id === state.viewingId);
+            closePayableViewModal();
+            if (item) openPayableModal(item, 'edit');
+        });
+        if (payablesSelectAllCheckbox instanceof HTMLInputElement) {
+            payablesSelectAllCheckbox.addEventListener('change', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLInputElement)) return;
+                const shouldSelect = target.checked;
+                state.visibleSelectableIds.forEach((id) => {
+                    if (shouldSelect) {
+                        state.selectedIds.add(id);
+                    } else {
+                        state.selectedIds.delete(id);
+                    }
+                });
+                renderPayables();
+            });
+        }
+        if (bulkCompleteBtn instanceof HTMLButtonElement) {
+            bulkCompleteBtn.addEventListener('click', completeSelectedPayables);
+        }
         payableForm.addEventListener('submit', savePayable);
 
         searchInput.addEventListener('input', (event) => {
@@ -1154,6 +1792,21 @@
         });
 
         [payablesTableBody, payablesMobileList].forEach((container) => {
+            container.addEventListener('change', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                const checkbox = target.closest('[data-payable-select]');
+                if (!(checkbox instanceof HTMLInputElement)) return;
+                const payableId = checkbox.getAttribute('data-payable-select');
+                if (!payableId) return;
+                if (checkbox.checked) {
+                    state.selectedIds.add(payableId);
+                } else {
+                    state.selectedIds.delete(payableId);
+                }
+                renderBulkSelectionUi();
+            });
+
             container.addEventListener('click', async (event) => {
                 const target = event.target;
                 if (!(target instanceof HTMLElement)) return;
@@ -1175,8 +1828,9 @@
                 const item = state.items.find((entry) => entry.id === payableId);
                 if (!item) return;
 
-                if (action === 'edit') return openPayableModal(item);
-                if (action === 'delete') return deletePayable(payableId);
+                if (action === 'view') return openPayableViewModal(item);
+                if (action === 'edit') return openPayableModal(item, 'edit');
+                if (action === 'delete') return deletePayable(item);
                 if (action === 'complete') await completePayable(payableId);
             });
         });
@@ -1201,6 +1855,8 @@
             if (!target.closest('[data-payable-menu]') && !target.closest('[data-payable-action="toggle-menu"]')) closeMenus();
             if (!target.closest('#userMenuBtn') && !target.closest('#userMenuDropdown')) closeUserMenu();
             if (target === payableModal) closePayableModal();
+            if (target === payableViewModal) closePayableViewModal();
+            if (target === payableDeleteModal) closeDeleteConfirmModal();
         });
 
         document.addEventListener('keydown', (event) => {
@@ -1208,11 +1864,14 @@
             if (event.key === 'Escape') {
                 closeMenus();
                 if (!payableModal.classList.contains('hidden')) closePayableModal();
+                if (!payableViewModal.classList.contains('hidden')) closePayableViewModal();
+                if (!payableDeleteModal.classList.contains('hidden')) closeDeleteConfirmModal();
             }
         });
 
         window.addEventListener('resize', syncSidebarLayout);
         syncSidebarLayout();
+        syncInstallmentModeUi();
         loadPayables();
     </script>
 </body>

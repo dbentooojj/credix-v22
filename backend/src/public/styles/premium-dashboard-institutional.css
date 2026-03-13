@@ -614,3 +614,93 @@
 .dashboard-premium.dashboard-debtors #totalResults {
   color: var(--clients-text-secondary) !important;
 }
+
+/* Typography rollout v1 - Carteira (Bloco 3) */
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .page-title {
+  font-size: var(--type-page-title) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.028em !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .muted-on-dark {
+  font-size: var(--type-page-subtitle) !important;
+  line-height: 1.55 !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .kpi-label,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .metric-strip-label,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .dashboard-status-title,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .health-mini-label,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .summary-title,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .dashboard-table thead th {
+  font-size: var(--type-card-kicker) !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .kpi-card .kpi-value {
+  font-size: var(--type-card-value) !important;
+  line-height: 1.08 !important;
+  font-weight: 700 !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .kpi-card .kpi-note,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .kpi-card .kpi-insight,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .metric-strip-note,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .dashboard-status-sub,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .health-main-note,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .table-contract,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .quick-panel-header p {
+  font-size: var(--type-card-note) !important;
+  line-height: 1.4 !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .metric-strip-value,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .dashboard-status-main,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .health-main-value,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .health-mini-value,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .table-value,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 #chartReceivedMonthValue,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 #chartReceivedMoMValue,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .summary-count {
+  font-size: var(--type-stat-value) !important;
+  line-height: 1.12 !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .summary-value,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .dashboard-table tbody td,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .quick-panel-pagination,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 #upcomingPageInfo,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 #overduePageInfo {
+  font-size: var(--type-card-meta) !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .status-pill {
+  font-size: 10px !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .kpi-card {
+  padding: 18px !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .premium-card.p-5,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .glass-card.p-5 {
+  padding: 20px !important;
+}
+
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .premium-card.p-4,
+body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .glass-card.p-4 {
+  padding: 16px !important;
+}
+
+@media (min-width: 768px) {
+  body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .kpi-row-main .kpi-card,
+  body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .kpi-row-secondary .kpi-card {
+    height: auto !important;
+    min-height: 174px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  body.dashboard-premium.dashboard-financial.dashboard-carteira.typography-v1 .kpi-card .kpi-value {
+    font-size: 1.36rem !important;
+  }
+}

@@ -44,6 +44,8 @@ type NavSection = {
   items: NavItem[];
 };
 
+const showReportsNav = process.env.NEXT_PUBLIC_SHOW_REPORTS_NAV === "true";
+
 const navSections: NavSection[] = [
   {
     items: [
@@ -59,7 +61,7 @@ const navSections: NavSection[] = [
     items: [
       {
         href: "/dashboard.html",
-        label: "Painel da carteira",
+        label: "Carteira",
         icon: ChartBarsIcon,
       },
       {
@@ -76,11 +78,6 @@ const navSections: NavSection[] = [
         href: "/installments.html",
         label: "Parcelas",
         icon: CalendarIcon,
-      },
-      {
-        href: "/reports.html",
-        label: "Relatorios",
-        icon: FileTextIcon,
       },
     ],
   },
@@ -99,13 +96,22 @@ const navSections: NavSection[] = [
         icon: ArrowDownIcon,
         tone: "success",
       },
-      {
-        href: "/admin/finance-reports.html",
-        label: "Relatorios",
-        icon: FileTextIcon,
-      },
     ],
   },
+  ...(showReportsNav
+    ? [
+        {
+          title: "Analises",
+          items: [
+            {
+              href: "/admin/finance-reports.html",
+              label: "Relatorios",
+              icon: FileTextIcon,
+            },
+          ],
+        } satisfies NavSection,
+      ]
+    : []),
 ];
 
 function itemIsActive(pathname: string, href: string) {

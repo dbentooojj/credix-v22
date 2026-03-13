@@ -7,6 +7,7 @@
         isActivePage(href) ? 'active text-white' : 'text-slate-300 hover:text-white',
         tone ? `sidebar-item--${tone}` : '',
     ].filter(Boolean).join(' ');
+    const showReportsNav = process.env.SHOW_REPORTS_NAV === 'true';
 
     const icon = (name) => {
         const icons = {
@@ -178,7 +179,7 @@
             <div class="sidebar-section-menu">
                 <a href="/admin/dashboard.html" class="<%= navLinkClass('dashboard.html') %>">
                     <span class="sidebar-icon-slot"><%- icon('dashboard') %></span>
-                    <span class="sidebar-item-label">Painel da carteira</span>
+                    <span class="sidebar-item-label">Carteira</span>
                 </a>
                 <a href="/admin/debtors.html" class="<%= navLinkClass('debtors.html') %>">
                     <span class="sidebar-icon-slot"><%- icon('clients') %></span>
@@ -191,10 +192,6 @@
                 <a href="/admin/installments.html" class="<%= navLinkClass('installments.html') %>">
                     <span class="sidebar-icon-slot"><%- icon('installments') %></span>
                     <span class="sidebar-item-label">Parcelas</span>
-                </a>
-                <a href="/admin/reports.html" class="<%= navLinkClass('reports.html') %>">
-                    <span class="sidebar-icon-slot"><%- icon('reports') %></span>
-                    <span class="sidebar-item-label">Relatorios</span>
                 </a>
             </div>
         </section>
@@ -210,11 +207,19 @@
                     <span class="sidebar-icon-slot"><%- icon('receivable') %></span>
                     <span class="sidebar-item-label">Contas a receber</span>
                 </a>
-                <a href="/admin/finance-reports.html" class="<%= navLinkClass('finance-reports.html') %>">
-                    <span class="sidebar-icon-slot"><%- icon('reports') %></span>
-                    <span class="sidebar-item-label">Relatorios</span>
-                </a>
             </div>
         </section>
+
+        <% if (showReportsNav) { %>
+            <section class="sidebar-section">
+                <h3 class="sidebar-section-title">Analises</h3>
+                <div class="sidebar-section-menu">
+                    <a href="/admin/finance-reports.html" class="<%= navLinkClass('finance-reports.html') %>">
+                        <span class="sidebar-icon-slot"><%- icon('reports') %></span>
+                        <span class="sidebar-item-label">Relatorios</span>
+                    </a>
+                </div>
+            </section>
+        <% } %>
     </nav>
 </aside>

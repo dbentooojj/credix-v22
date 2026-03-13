@@ -127,8 +127,8 @@ router.get("/admin/installments.html", requireAuthPage, (req, res) => {
   return res.render("installments", buildPageViewModel(req, "installments.html"));
 });
 
-router.get("/admin/reports.html", requireAuthPage, (req, res) => {
-  return res.render("reports", buildPageViewModel(req, "reports.html"));
+router.get("/admin/reports.html", requireAuthPage, (_req, res) => {
+  return res.redirect("/admin/finance-reports.html");
 });
 
 router.get("/admin/dashboard-advanced.html", requireAuthPage, (_req, res) => {

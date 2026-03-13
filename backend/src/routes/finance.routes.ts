@@ -8,8 +8,10 @@ const router = Router();
 
 const transactionStatusSchema = z.enum(["completed", "scheduled", "pending"]);
 const transactionTypeSchema = z.enum(["income", "expense"]);
+const transactionInstallmentAmountModeSchema = z.enum(["total", "per_installment"]);
+const transactionCreationModeSchema = z.enum(["single", "installments", "recurring_monthly"]);
 
-const createTransactionSchema = z.object({
+const transactionBaseSchema = z.object({
   type: transactionTypeSchema,
   amount: z.number().positive(),
   category: z.string().trim().min(1).max(120),
@@ -18,7 +20,14 @@ const createTransactionSchema = z.object({
   status: transactionStatusSchema,
 });
 
-const updateTransactionSchema = createTransactionSchema.partial().refine((payload) => {
+const createTransactionSchema = transactionBaseSchema.extend({
+  creationMode: transactionCreationModeSchema.optional(),
+  installmentCount: z.number().int().min(1).max(120).optional(),
+  installmentAmountMode: transactionInstallmentAmountModeSchema.optional(),
+  recurringMonths: z.number().int().min(1).max(120).optional(),
+});
+
+const updateTransactionSchema = transactionBaseSchema.partial().refine((payload) => {
   return (
     payload.type !== undefined
     || payload.amount !== undefined
@@ -28,6 +37,10 @@ const updateTransactionSchema = createTransactionSchema.partial().refine((payloa
     || payload.status !== undefined
   );
 }, { message: "Nenhum campo para atualizar." });
+
+const batchCompleteSchema = z.object({
+  ids: z.array(z.union([z.number().int().positive(), z.string().trim().min(1)])).min(1).max(500),
+});
 
 function toPrismaType(type: "income" | "expense"): FinanceTransactionType {
   return type === "income" ? FinanceTransactionType.INCOME : FinanceTransactionType.EXPENSE;
@@ -52,6 +65,44 @@ function toApiStatus(status: FinanceTransactionStatus): "completed" | "scheduled
 function parseDateOnly(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day));
+}
+
+function toMoneyCents(amount: number): number {
+  return Math.round(amount * 100);
+}
+
+function centsToMoney(amountInCents: number): number {
+  return Number((amountInCents / 100).toFixed(2));
+}
+
+function splitAmountByInstallments(totalAmount: number, installmentCount: number): number[] {
+  const safeCount = Math.max(1, Math.trunc(installmentCount));
+  const totalCents = toMoneyCents(totalAmount);
+  const baseCents = Math.floor(totalCents / safeCount);
+  const remainder = totalCents - (baseCents * safeCount);
+
+  return Array.from({ length: safeCount }, (_, index) => centsToMoney(baseCents + (index < remainder ? 1 : 0)));
+}
+
+function addMonthsDateOnlyUtc(date: Date, monthsToAdd: number): Date {
+  const sourceYear = date.getUTCFullYear();
+  const sourceMonth = date.getUTCMonth();
+  const sourceDay = date.getUTCDate();
+  const firstTargetMonth = new Date(Date.UTC(sourceYear, sourceMonth + monthsToAdd, 1));
+  const targetYear = firstTargetMonth.getUTCFullYear();
+  const targetMonth = firstTargetMonth.getUTCMonth();
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(sourceDay, lastDay);
+  return new Date(Date.UTC(targetYear, targetMonth, clampedDay));
+}
+
+function buildInstallmentDescription(baseDescription: string, installmentIndex: number, installmentCount: number): string {
+  const suffix = ` (${installmentIndex}/${installmentCount})`;
+  if (baseDescription.length + suffix.length <= 300) {
+    return `${baseDescription}${suffix}`;
+  }
+  const maxBaseLength = Math.max(1, 300 - suffix.length);
+  return `${baseDescription.slice(0, maxBaseLength).trimEnd()}${suffix}`;
 }
 
 function toDateOnlyIso(value: Date): string {
@@ -97,28 +148,184 @@ router.post("/transactions", async (req, res) => {
   }
 
   const payload = createTransactionSchema.parse(req.body);
+  const parsedInstallmentCount = Math.max(1, Math.trunc(payload.installmentCount ?? 1));
+  const parsedRecurringMonths = Math.max(1, Math.trunc(payload.recurringMonths ?? 1));
+  const creationMode = payload.creationMode
+    ?? (parsedInstallmentCount > 1 ? "installments" : (parsedRecurringMonths > 1 ? "recurring_monthly" : "single"));
+  const installmentCount = creationMode === "installments" ? parsedInstallmentCount : 1;
+  const recurringMonths = creationMode === "recurring_monthly" ? parsedRecurringMonths : 1;
+  const installmentAmountMode = payload.installmentAmountMode ?? "total";
+  const type = toPrismaType(payload.type);
+  const status = toPrismaStatus(payload.status);
+  const baseDate = parseDateOnly(payload.date);
 
-  const created = await prisma.financeTransaction.create({
-    data: {
-      ownerUserId: userId,
-      type: toPrismaType(payload.type),
-      amount: payload.amount,
-      category: payload.category,
-      date: parseDateOnly(payload.date),
-      description: payload.description,
-      status: toPrismaStatus(payload.status),
-    },
+  if (creationMode === "single") {
+    const created = await prisma.financeTransaction.create({
+      data: {
+        ownerUserId: userId,
+        type,
+        amount: payload.amount,
+        category: payload.category,
+        date: baseDate,
+        description: payload.description,
+        status,
+      },
+    });
+
+    return res.status(201).json({
+      data: {
+        id: String(created.id),
+        type: toApiType(created.type),
+        amount: Number(created.amount),
+        category: created.category,
+        date: toDateOnlyIso(created.date),
+        description: created.description,
+        status: toApiStatus(created.status),
+        creationMode: "single",
+        createdCount: 1,
+      },
+    });
+  }
+
+  if (creationMode === "installments") {
+    if (installmentCount < 2) {
+      return res.status(400).json({ message: "Parcelamento invalido. Informe pelo menos 2 parcelas." });
+    }
+
+    const installmentAmounts = installmentAmountMode === "per_installment"
+      ? Array.from({ length: installmentCount }, () => centsToMoney(toMoneyCents(payload.amount)))
+      : splitAmountByInstallments(payload.amount, installmentCount);
+
+    const createdIds = await prisma.$transaction(async (tx) => {
+      const ids: number[] = [];
+      for (let index = 0; index < installmentCount; index += 1) {
+        const created = await tx.financeTransaction.create({
+          select: { id: true },
+          data: {
+            ownerUserId: userId,
+            type,
+            amount: installmentAmounts[index] ?? 0,
+            category: payload.category,
+            date: addMonthsDateOnlyUtc(baseDate, index),
+            description: buildInstallmentDescription(payload.description, index + 1, installmentCount),
+            status,
+          },
+        });
+        ids.push(created.id);
+      }
+      return ids;
+    });
+
+    return res.status(201).json({
+      data: {
+        creationMode: "installments",
+        createdCount: createdIds.length,
+        installmentCount,
+        installmentAmountMode,
+        firstId: createdIds[0] ? String(createdIds[0]) : null,
+        lastId: createdIds[createdIds.length - 1] ? String(createdIds[createdIds.length - 1]) : null,
+      },
+    });
+  }
+
+  if (recurringMonths < 2) {
+    return res.status(400).json({ message: "Recorrencia mensal invalida. Informe pelo menos 2 meses." });
+  }
+
+  const recurringAmount = centsToMoney(toMoneyCents(payload.amount));
+  const createdIds = await prisma.$transaction(async (tx) => {
+    const ids: number[] = [];
+    for (let index = 0; index < recurringMonths; index += 1) {
+      const created = await tx.financeTransaction.create({
+        select: { id: true },
+        data: {
+          ownerUserId: userId,
+          type,
+          amount: recurringAmount,
+          category: payload.category,
+          date: addMonthsDateOnlyUtc(baseDate, index),
+          description: payload.description,
+          status,
+        },
+      });
+      ids.push(created.id);
+    }
+    return ids;
   });
 
   return res.status(201).json({
     data: {
-      id: String(created.id),
-      type: toApiType(created.type),
-      amount: Number(created.amount),
-      category: created.category,
-      date: toDateOnlyIso(created.date),
-      description: created.description,
-      status: toApiStatus(created.status),
+      creationMode: "recurring_monthly",
+      createdCount: createdIds.length,
+      recurringMonths,
+      firstId: createdIds[0] ? String(createdIds[0]) : null,
+      lastId: createdIds[createdIds.length - 1] ? String(createdIds[createdIds.length - 1]) : null,
+    },
+  });
+});
+
+router.post("/transactions/batch-complete", async (req, res) => {
+  const userId = readUserId(req);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ message: "Nao autenticado" });
+  }
+
+  const payload = batchCompleteSchema.parse(req.body);
+  const requestedIds = [...new Set(
+    payload.ids
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .map((value) => Math.trunc(value)),
+  )];
+
+  if (requestedIds.length === 0) {
+    return res.status(400).json({ message: "Nenhum identificador valido foi enviado." });
+  }
+
+  const rows = await prisma.financeTransaction.findMany({
+    where: {
+      ownerUserId: userId,
+      id: { in: requestedIds },
+    },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  const existingIds = new Set(rows.map((row) => row.id));
+  const alreadyCompletedIds: number[] = [];
+  const updatableIds: number[] = [];
+
+  rows.forEach((row) => {
+    if (row.status === FinanceTransactionStatus.COMPLETED) {
+      alreadyCompletedIds.push(row.id);
+      return;
+    }
+    updatableIds.push(row.id);
+  });
+
+  if (updatableIds.length > 0) {
+    await prisma.financeTransaction.updateMany({
+      where: {
+        ownerUserId: userId,
+        id: { in: updatableIds },
+      },
+      data: {
+        status: FinanceTransactionStatus.COMPLETED,
+      },
+    });
+  }
+
+  const notFoundIds = requestedIds.filter((id) => !existingIds.has(id));
+
+  return res.json({
+    data: {
+      requestedCount: requestedIds.length,
+      updatedCount: updatableIds.length,
+      updatedIds: updatableIds.map(String),
+      alreadyCompletedIds: alreadyCompletedIds.map(String),
+      notFoundIds: notFoundIds.map(String),
     },
   });
 });

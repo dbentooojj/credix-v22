@@ -147,7 +147,7 @@
     </style>
     <link rel="stylesheet" href="/styles/premium-dashboard-theme.css?v=20260303f">
 </head>
-<body class="dashboard-premium dashboard-financial primary-gradient min-h-screen">
+<body class="dashboard-premium typography-v1 dashboard-financial primary-gradient min-h-screen">
     <header class="premium-header fixed w-full top-0 z-50">
         <div class="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
             <div class="flex items-center">
@@ -196,7 +196,18 @@
                     <a id="overviewCashCard" href="/admin/dashboard.html" class="overview-top-card overview-top-card--cash">
                         <div class="relative z-10 flex items-start justify-between gap-3">
                             <p class="overview-top-label">Saldo em caixa</p>
-                            <span class="overview-top-icon"><i class="fas fa-wallet"></i></span>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    id="openCashAdjustModalBtn"
+                                    role="button"
+                                    tabindex="0"
+                                    class="inline-flex min-h-[28px] items-center rounded-lg border border-slate-500/45 bg-slate-800/65 px-2 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-slate-700/35"
+                                    aria-label="Ajustar caixa"
+                                >
+                                    <i class="fas fa-wallet mr-1"></i>Ajustar caixa
+                                </span>
+                                <span class="overview-top-icon"><i class="fas fa-wallet"></i></span>
+                            </div>
                         </div>
                         <p id="overviewCashValue" class="overview-top-value js-value">--</p>
                         <p id="overviewCashNote" class="overview-top-note js-note">Disponivel agora</p>
@@ -394,6 +405,59 @@
         </main>
     </div>
 
+    <div id="cashAdjustModal" class="modal-base fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-4" data-modal-base="true" role="dialog" aria-modal="true" aria-labelledby="cashAdjustModalTitle">
+        <div class="modal-base__panel modal-base__panel--md">
+            <form id="cashAdjustForm" class="flex min-h-0 flex-1 flex-col">
+                <div class="modal-base__header">
+                    <div class="modal-base__title-wrap">
+                        <h3 id="cashAdjustModalTitle" class="modal-base__title">Ajustar caixa</h3>
+                        <p class="modal-base__description">Registre entrada ou retirada para atualizar o saldo atual.</p>
+                    </div>
+                    <button id="closeCashAdjustModalBtn" class="modal-base__close" type="button" aria-label="Fechar ajuste de caixa">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="modal-base__body">
+                    <section class="modal-base__section">
+                        <div class="modal-base__grid-2">
+                            <div class="modal-base__field">
+                                <label for="cashAdjustmentType" class="modal-base__field-label">Tipo</label>
+                                <select id="cashAdjustmentType" class="filter-control" data-modal-autofocus>
+                                    <option value="income">Entrada</option>
+                                    <option value="expense">Saida</option>
+                                </select>
+                            </div>
+                            <div class="modal-base__field">
+                                <label for="cashAdjustmentAmount" class="modal-base__field-label">Valor (R$)</label>
+                                <input id="cashAdjustmentAmount" type="number" min="0.01" step="0.01" inputmode="decimal" class="filter-control" placeholder="0,00" required>
+                            </div>
+                            <div class="modal-base__field">
+                                <label for="cashAdjustmentDate" class="modal-base__field-label">Data</label>
+                                <input id="cashAdjustmentDate" type="date" class="filter-control" required>
+                            </div>
+                            <div class="modal-base__field">
+                                <label for="cashAdjustmentDescription" class="modal-base__field-label">Observacao</label>
+                                <input id="cashAdjustmentDescription" type="text" maxlength="300" class="filter-control" placeholder="Motivo do ajuste (opcional)">
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="modal-base__footer">
+                    <div class="modal-base__footer-secondary">
+                        <button id="cancelCashAdjustModalBtn" type="button" class="modal-btn modal-btn--ghost">Cancelar</button>
+                    </div>
+                    <div class="modal-base__footer-actions">
+                        <button id="saveCashAdjustmentBtn" type="submit" class="modal-btn modal-btn--primary">
+                            <i class="fas fa-check mr-2"></i>Salvar ajuste
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>window.__AUTH_USER__ = <%- JSON.stringify(currentUser || null) %>;</script>
     <script>
         const currentUser = window.__AUTH_USER__;
@@ -416,12 +480,23 @@
         const recentMovementsPageInfo = document.getElementById('recentMovementsPageInfo');
         const recentMovementsPagination = document.getElementById('recentMovementsPagination');
         const recentMovementsMobileList = document.getElementById('recentMovementsMobileList');
+        const openCashAdjustModalBtn = document.getElementById('openCashAdjustModalBtn');
+        const cashAdjustModal = document.getElementById('cashAdjustModal');
+        const cashAdjustForm = document.getElementById('cashAdjustForm');
+        const closeCashAdjustModalBtn = document.getElementById('closeCashAdjustModalBtn');
+        const cancelCashAdjustModalBtn = document.getElementById('cancelCashAdjustModalBtn');
+        const saveCashAdjustmentBtn = document.getElementById('saveCashAdjustmentBtn');
+        const cashAdjustmentTypeInput = document.getElementById('cashAdjustmentType');
+        const cashAdjustmentAmountInput = document.getElementById('cashAdjustmentAmount');
+        const cashAdjustmentDateInput = document.getElementById('cashAdjustmentDate');
+        const cashAdjustmentDescriptionInput = document.getElementById('cashAdjustmentDescription');
         let overviewMonthlyChart = null;
         const overviewState = {
             recentMovementsPage: 1,
             recentMovementsPageSize: 6,
             recentMovementsTotalPages: 1,
             isPaginatingRecentMovements: false,
+            cashAdjustmentSubmitting: false,
         };
         const isMobileViewport = () => window.matchMedia('(max-width: 1024px)').matches;
 
@@ -488,6 +563,20 @@
                 .replaceAll('>', '&gt;')
                 .replaceAll('"', '&quot;')
                 .replaceAll("'", '&#39;');
+        }
+        function notify(message, type = 'success') {
+            if (typeof showMessage === 'function') {
+                showMessage(message, type);
+                return;
+            }
+            window.alert(message);
+        }
+        function getLocalTodayDateInputValue() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
         function renderOperationList(containerId, items, emptyTitle, emptyNote, amountTone) {
             const container = document.getElementById(containerId);
@@ -1031,6 +1120,85 @@
                 showError(error instanceof Error ? error.message : 'Falha ao carregar a visao geral.');
             } finally { setLoading(false); }
         }
+        function setCashAdjustmentSubmitting(loading) {
+            overviewState.cashAdjustmentSubmitting = loading;
+            if (saveCashAdjustmentBtn instanceof HTMLButtonElement) {
+                saveCashAdjustmentBtn.disabled = loading;
+                saveCashAdjustmentBtn.innerHTML = loading
+                    ? '<i class="fas fa-spinner fa-spin mr-2"></i>Salvando...'
+                    : '<i class="fas fa-check mr-2"></i>Salvar ajuste';
+            }
+            if (closeCashAdjustModalBtn instanceof HTMLButtonElement) closeCashAdjustModalBtn.disabled = loading;
+            if (cancelCashAdjustModalBtn instanceof HTMLButtonElement) cancelCashAdjustModalBtn.disabled = loading;
+            if (cashAdjustmentTypeInput instanceof HTMLSelectElement) cashAdjustmentTypeInput.disabled = loading;
+            if (cashAdjustmentAmountInput instanceof HTMLInputElement) cashAdjustmentAmountInput.disabled = loading;
+            if (cashAdjustmentDateInput instanceof HTMLInputElement) cashAdjustmentDateInput.disabled = loading;
+            if (cashAdjustmentDescriptionInput instanceof HTMLInputElement) cashAdjustmentDescriptionInput.disabled = loading;
+        }
+        function resetCashAdjustmentForm() {
+            if (cashAdjustmentTypeInput instanceof HTMLSelectElement) cashAdjustmentTypeInput.value = 'income';
+            if (cashAdjustmentAmountInput instanceof HTMLInputElement) cashAdjustmentAmountInput.value = '';
+            if (cashAdjustmentDateInput instanceof HTMLInputElement) cashAdjustmentDateInput.value = getLocalTodayDateInputValue();
+            if (cashAdjustmentDescriptionInput instanceof HTMLInputElement) cashAdjustmentDescriptionInput.value = '';
+        }
+        function openCashAdjustModal() {
+            if (!(cashAdjustModal instanceof HTMLElement)) return;
+            setCashAdjustmentSubmitting(false);
+            resetCashAdjustmentForm();
+            cashAdjustModal.classList.remove('hidden');
+            cashAdjustModal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+            window.setTimeout(() => {
+                if (cashAdjustmentTypeInput instanceof HTMLElement) cashAdjustmentTypeInput.focus();
+            }, 0);
+        }
+        function closeCashAdjustModal(force = false) {
+            if (!(cashAdjustModal instanceof HTMLElement)) return;
+            if (overviewState.cashAdjustmentSubmitting && !force) return;
+            cashAdjustModal.classList.add('hidden');
+            cashAdjustModal.classList.remove('flex');
+            document.body.style.overflow = '';
+            setCashAdjustmentSubmitting(false);
+        }
+        async function submitCashAdjustment(event) {
+            if (event instanceof Event) event.preventDefault();
+            if (overviewState.cashAdjustmentSubmitting) return;
+
+            const type = String(cashAdjustmentTypeInput?.value || 'income').toLowerCase();
+            const rawAmount = String(cashAdjustmentAmountInput?.value || '').trim().replace(',', '.');
+            const amount = Number(rawAmount);
+            const date = String(cashAdjustmentDateInput?.value || '').trim();
+            const description = String(cashAdjustmentDescriptionInput?.value || '').trim();
+
+            if (!['income', 'expense'].includes(type)) return notify('Tipo de ajuste invalido.', 'error');
+            if (!Number.isFinite(amount) || amount <= 0) return notify('Informe um valor maior que zero.', 'error');
+            if (!date) return notify('Informe uma data valida.', 'error');
+
+            setCashAdjustmentSubmitting(true);
+            try {
+                const response = await fetch('/api/dashboard/cash-adjustments', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type,
+                        amount,
+                        date,
+                        description: description || undefined,
+                    }),
+                });
+                const payload = await response.json().catch(() => null);
+                if (!response.ok) throw new Error(payload?.message || 'Falha ao salvar ajuste de caixa.');
+
+                closeCashAdjustModal(true);
+                notify('Ajuste de caixa salvo com sucesso.', 'success');
+                await loadOverview();
+            } catch (error) {
+                console.error(error);
+                notify(error instanceof Error ? error.message : 'Falha ao salvar ajuste de caixa.', 'error');
+                setCashAdjustmentSubmitting(false);
+            }
+        }
         function syncSidebarLayout() {
             if (isMobileViewport()) { main.style.marginLeft = '0'; main.style.width = '100%'; main.style.flex = '1 1 100%'; return; }
             sidebar.classList.remove('mobile-open');
@@ -1041,6 +1209,23 @@
         async function performLogout() { localStorage.removeItem('isLoggedIn'); localStorage.removeItem('currentUser'); await fetch('/auth/logout', { method: 'POST', credentials: 'include' }); window.location.href = '/login'; }
         async function handleUserMenuAction(action) { if (action === 'logout') return performLogout(); const allowedTabs = new Set(['profile', 'security', 'help']); window.location.href = `/admin/account.html?tab=${encodeURIComponent(allowedTabs.has(action) ? action : 'profile')}`; }
         sidebarToggle.addEventListener('click', () => { if (isMobileViewport()) { sidebar.classList.toggle('mobile-open'); return; } document.body.classList.toggle('sidebar-collapsed'); syncSidebarLayout(); });
+        if (openCashAdjustModalBtn instanceof HTMLElement) {
+            openCashAdjustModalBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openCashAdjustModal();
+            });
+            openCashAdjustModalBtn.addEventListener('keydown', (event) => {
+                if (!(event instanceof KeyboardEvent)) return;
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                event.stopPropagation();
+                openCashAdjustModal();
+            });
+        }
+        if (closeCashAdjustModalBtn instanceof HTMLButtonElement) closeCashAdjustModalBtn.addEventListener('click', () => closeCashAdjustModal());
+        if (cancelCashAdjustModalBtn instanceof HTMLButtonElement) cancelCashAdjustModalBtn.addEventListener('click', () => closeCashAdjustModal());
+        if (cashAdjustForm instanceof HTMLFormElement) cashAdjustForm.addEventListener('submit', submitCashAdjustment);
         const recentMovementsList = document.getElementById('recentMovementsList');
         function openRecentMovementFromTarget(target) {
             if (!(target instanceof HTMLElement)) return;
@@ -1078,6 +1263,12 @@
             const actionBtn = target.closest('[data-user-menu-action]');
             if (actionBtn) { const action = actionBtn.getAttribute('data-user-menu-action'); closeUserMenu(); if (action) await handleUserMenuAction(action); return; }
             if (!target.closest('#userMenuBtn') && !target.closest('#userMenuDropdown')) closeUserMenu();
+            if (target === cashAdjustModal) closeCashAdjustModal();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (!(event instanceof KeyboardEvent)) return;
+            if (event.key !== 'Escape') return;
+            closeCashAdjustModal();
         });
         window.addEventListener('resize', syncSidebarLayout);
         syncSidebarLayout();
