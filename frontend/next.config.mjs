@@ -11,10 +11,8 @@ function resolveLegacyBackendUrl() {
 
 const legacyBackendUrl = resolveLegacyBackendUrl();
 const legacyPageRoutes = [
-  "/login",
-  "/index.html",
-  "/forgot-password",
-  "/forgot-password.html",
+  // A rota /login agora e renderizada pelo Next.
+  // A rota /forgot-password agora e renderizada pelo Next.
   "/reset-password",
   "/reset-password.html",
   "/visao-geral",

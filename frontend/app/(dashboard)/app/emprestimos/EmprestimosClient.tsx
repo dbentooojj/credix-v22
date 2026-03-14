@@ -1,0 +1,718 @@
+"use client";
+
+import { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  Hash,
+  Banknote,
+  BarChart3,
+  CheckCircle2,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Edit2,
+  Trash2,
+  ArrowUpDown,
+  Plus,
+  FlaskConical,
+  X,
+} from "lucide-react";
+import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
+
+// --- TYPES ---
+type Debtor = {
+  id: string | number;
+  name?: string;
+  document?: string;
+  cpf?: string;
+  cnpj?: string;
+};
+
+type Loan = {
+  id: string | number;
+  debtor_id: string | number;
+  status?: string;
+  borrowed_amount?: number | string;
+  amount?: number | string;
+  total_amount?: number | string;
+  created_at?: string;
+  date?: string; 
+};
+
+// --- HELPERS ---
+function sameId(a: any, b: any) {
+  return String(a ?? "") === String(b ?? "");
+}
+
+function parseDateValue(value: any) {
+  if (!value) return null;
+  if (value instanceof Date) return new Date(value.getTime());
+  
+  const raw = String(value).trim();
+  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]) - 1;
+    const day = Number(dateOnlyMatch[3]);
+    return new Date(year, month, day);
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function formatCurrency(value: any) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value || 0));
+}
+
+function formatDocument(value: any) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 11) {
+    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  }
+  if (digits.length === 14) {
+    return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  }
+  return value || "-";
+}
+
+function getStatusBadge(status: string) {
+  const normalized = String(status || "").trim().toLowerCase();
+  switch (normalized) {
+    case "ativo":
+    case "active":
+      return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    case "atrasado":
+    case "late":
+    case "overdue":
+      return "bg-red-100 text-red-800 border-red-300";
+    case "inativo":
+    case "inactive":
+    case "quitado":
+    case "paid":
+      return "bg-slate-200 text-slate-800 border-slate-300";
+    default:
+      return "bg-slate-200 text-slate-800 border-slate-300";
+  }
+}
+
+function translateStatus(status: string) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "ativo" || normalized === "active") return "Ativo";
+  if (normalized === "inativo" || normalized === "inactive") return "Inativo";
+  if (normalized === "atrasado" || normalized === "late" || normalized === "overdue") return "Atrasado";
+  if (normalized === "quitado" || normalized === "paid") return "Quitado";
+  return status || "Desconhecido";
+}
+
+export function EmprestimosClient() {
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filtros
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Todos");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  // Modal state
+  const [showLoanModal, setShowLoanModal] = useState(false);
+  const [loanModalMode, setLoanModalMode] = useState<"loan" | "simulation">("loan");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingLoan, setDeletingLoan] = useState<Loan | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Form fields
+  const [formClientId, setFormClientId] = useState("");
+  const [formPrincipal, setFormPrincipal] = useState("");
+  const [formInterestType, setFormInterestType] = useState("composto");
+  const [formRate, setFormRate] = useState("");
+  const [formInstallments, setFormInstallments] = useState("");
+  const [formCalcByInstallment, setFormCalcByInstallment] = useState(false);
+  const [formStartDate, setFormStartDate] = useState("");
+  const [formFirstDue, setFormFirstDue] = useState("");
+  const [formObservations, setFormObservations] = useState("");
+
+  function toDateInput(d: Date) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function addMonths(dateStr: string, months: number) {
+    const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return dateStr;
+    const y = Number(m[1]), mo = Number(m[2]) - 1 + months, d = Number(m[3]);
+    const ny = Math.floor((y * 12 + mo) / 12), nm = ((y * 12 + mo) % 12 + 12) % 12;
+    const ld = new Date(ny, nm + 1, 0).getDate();
+    return `${ny}-${String(nm + 1).padStart(2, "0")}-${String(Math.min(d, ld)).padStart(2, "0")}`;
+  }
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [resLoans, resDebtors] = await Promise.all([
+        fetch("/api/tables/loans").then((r) => r.json()),
+        fetch("/api/tables/debtors").then((r) => r.json()),
+      ]);
+      if (resLoans.data) setLoans(resLoans.data);
+      if (resDebtors.data) setDebtors(resDebtors.data);
+    } catch (err) {
+      setError("Erro ao carregar dados. Verifique a conexão.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // --- Cálculo dinâmico do resumo ---
+  const loanSummary = useMemo(() => {
+    const principal = Number(formPrincipal) || 0;
+    const rate = Number(formRate) || 0;
+    const n = Math.max(1, Math.trunc(Number(formInstallments) || 0));
+    let totalAmount = principal;
+    let installmentAmount = 0;
+
+    if (formInterestType === "composto" && rate > 0 && n > 0) {
+      totalAmount = principal * Math.pow(1 + rate / 100, n);
+    } else if (formInterestType === "simples" && rate > 0 && n > 0) {
+      totalAmount = principal * (1 + (rate / 100) * n);
+    }
+
+    totalAmount = Math.round(totalAmount * 100) / 100;
+    installmentAmount = n > 0 ? Math.round((totalAmount / n) * 100) / 100 : 0;
+
+    return {
+      totalAmount,
+      installmentAmount,
+      installments: n || "(a definir)",
+      rateLabel: `${formInterestType === "composto" ? "Composto" : formInterestType === "simples" ? "Simples" : "Fixo"}`,
+      rateValue: rate > 0 ? `${rate}% a.m.` : "0% a.m.",
+      firstDue: formFirstDue || "--/--/----",
+    };
+  }, [formPrincipal, formRate, formInstallments, formInterestType, formFirstDue]);
+
+  // --- Modal handlers ---
+  function resetForm() {
+    const today = toDateInput(new Date());
+    setFormClientId(debtors.length > 0 ? String(debtors[0].id) : "");
+    setFormPrincipal(""); setFormRate(""); setFormInstallments("");
+    setFormInterestType("composto"); setFormCalcByInstallment(false);
+    setFormStartDate(today); setFormFirstDue(addMonths(today, 1));
+    setFormObservations("");
+  }
+
+  function openLoanModal() {
+    resetForm();
+    setLoanModalMode("loan");
+    setShowLoanModal(true);
+  }
+
+  function openSimulationModal() {
+    resetForm();
+    setLoanModalMode("simulation");
+    setShowLoanModal(true);
+  }
+
+  function openDeleteModal(loan: Loan) {
+    setDeletingLoan(loan);
+    setShowDeleteModal(true);
+  }
+
+  async function handleSaveLoan() {
+    if (!formClientId || !formPrincipal) return;
+    setSaving(true);
+    try {
+      // 1. Criar simulação na API
+      const simRes = await fetch("/api/loan-simulations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: Number(formClientId),
+          principalAmount: Number(formPrincipal),
+          interestType: formInterestType,
+          interestRate: Number(formRate) || 0,
+          installmentsCount: Number(formInstallments) || 1,
+          startDate: formStartDate,
+          firstDueDate: formFirstDue,
+          observations: formObservations,
+        }),
+      }).then(r => r.json());
+
+      if (simRes.data?.id) {
+        // 2. Aprovar automaticamente (cria o empréstimo real)
+        await fetch(`/api/loan-simulations/${simRes.data.id}/approve`, { method: "POST" });
+      }
+      setShowLoanModal(false);
+      await fetchData();
+    } catch { /* silent */ } finally { setSaving(false); }
+  }
+
+  async function handleSaveSimulation() {
+    if (!formClientId || !formPrincipal) return;
+    setSaving(true);
+    try {
+      const simRes = await fetch("/api/loan-simulations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: Number(formClientId),
+          principalAmount: Number(formPrincipal),
+          interestType: formInterestType,
+          interestRate: Number(formRate) || 0,
+          installmentsCount: Number(formInstallments) || 1,
+          startDate: formStartDate,
+          firstDueDate: formFirstDue,
+          observations: formObservations,
+        }),
+      }).then(r => r.json());
+
+      setShowLoanModal(false);
+      return simRes.data;
+    } catch { /* silent */ } finally { setSaving(false); }
+    return null;
+  }
+
+  async function handleSendWhatsApp() {
+    const sim = await handleSaveSimulation();
+    if (sim?.id) {
+      try {
+        const sendRes = await fetch(`/api/loan-simulations/${sim.id}/send`, { method: "POST" }).then(r => r.json());
+        if (sendRes.data?.whatsappUrl) {
+          window.open(sendRes.data.whatsappUrl, "_blank");
+        }
+      } catch { /* silent */ }
+    }
+  }
+
+  async function handleDeleteLoan() {
+    if (!deletingLoan) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/tables/loans").then((r) => r.json());
+      const rows = (res.data || []).filter((r: any) => String(r.id) !== String(deletingLoan.id));
+      await fetch("/api/tables/loans", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
+      setShowDeleteModal(false); setDeletingLoan(null);
+      await fetchData();
+    } catch { /* silent */ } finally { setSaving(false); }
+  }
+
+  // Dropdown de clientes para o form
+  const clientOptions = useMemo(() => {
+    return debtors.map(d => ({ id: String(d.id), name: d.name || `Cliente #${d.id}` })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [debtors]);
+
+  const enrichedLoans = useMemo(() => {
+    return loans.map(loan => {
+      const debtor = debtors.find(d => sameId(d.id, loan.debtor_id));
+      const principal = Number(loan.borrowed_amount ?? loan.amount ?? 0);
+      const total = Number(loan.total_amount ?? 0);
+      const uiStatus = translateStatus(loan.status || "");
+      const createdAt = parseDateValue(loan.created_at || loan.date);
+
+      return {
+        ...loan,
+        debtor,
+        principal,
+        total,
+        uiStatus,
+        createdAt,
+        searchStr: `${loan.id} ${debtor?.name || ""} ${debtor?.document || debtor?.cpf || ""}`.toLowerCase()
+      };
+    });
+  }, [loans, debtors]);
+
+  const filteredAndSortedLoans = useMemo(() => {
+    let result = [...enrichedLoans];
+
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      result = result.filter(L => L.searchStr.includes(s));
+    }
+
+    if (statusFilter !== "Todos") {
+      result = result.filter(L => L.uiStatus === statusFilter);
+    }
+
+    result.sort((a, b) => {
+      let valA: any = a.id;
+      let valB: any = b.id;
+
+      if (sortBy === "id") {
+        valA = Number(a.id) || a.id;
+        valB = Number(b.id) || b.id;
+      } else if (sortBy === "debtor") {
+        valA = String(a.debtor?.name || "").toLowerCase();
+        valB = String(b.debtor?.name || "").toLowerCase();
+      } else if (sortBy === "principal") {
+        valA = a.principal;
+        valB = b.principal;
+      } else if (sortBy === "total") {
+        valA = a.total;
+        valB = b.total;
+      } else if (sortBy === "created_at") {
+        valA = a.createdAt ? a.createdAt.getTime() : 0;
+        valB = b.createdAt ? b.createdAt.getTime() : 0;
+      } else if (sortBy === "status") {
+        valA = a.uiStatus;
+        valB = b.uiStatus;
+      }
+
+      if (valA < valB) return sortDir === "asc" ? -1 : 1;
+      if (valA > valB) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [enrichedLoans, search, statusFilter, sortBy, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedLoans.length / pageSize));
+  const currentPageSafe = Math.min(Math.max(1, page), totalPages);
+  const startIdx = (currentPageSafe - 1) * pageSize;
+  const pageRows = filteredAndSortedLoans.slice(startIdx, startIdx + pageSize);
+
+  // KPIs
+  const totalCount = enrichedLoans.length;
+  const totalPrincipal = enrichedLoans.reduce((acc, curr) => acc + curr.principal, 0);
+  const totalContracted = enrichedLoans.reduce((acc, curr) => acc + curr.total, 0);
+  const activeCount = enrichedLoans.filter(L => L.uiStatus === "Ativo").length;
+
+  function toggleSort(field: string) {
+    if (sortBy === field) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortDir("asc");
+    }
+  }
+
+  function renderSortIcon(field: string) {
+    if (sortBy !== field) return <ArrowUpDown className="h-3 w-3 opacity-40 ml-1 inline text-slate-500" />;
+    return <ArrowUpDown className="h-3 w-3 opacity-100 ml-1 inline text-blue-500" />;
+  }
+
+  return (
+    <div className="w-full max-w-[1600px] mx-auto pb-20">
+      <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Empréstimos</h1>
+          <p className="mt-1 text-sm text-slate-400">Acompanhe contratos, valores e status da carteira ativa.</p>
+        </div>
+        <div className="flex w-full flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
+          <button onClick={openSimulationModal} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-5 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700">
+            <FlaskConical className="h-4 w-4" /> Nova simulação
+          </button>
+          <button onClick={openLoanModal} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:bg-blue-700">
+            <Plus className="h-4 w-4" /> Novo empréstimo
+          </button>
+        </div>
+      </section>
+
+      {/* KPIs */}
+      <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
+          <Hash className="pointer-events-none absolute right-4 top-4 h-5 w-5 text-slate-500" />
+          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Qtd. empréstimos</p>
+          <p className="mt-3 text-[1.375rem] font-bold text-slate-100">{loading ? "..." : totalCount}</p>
+          <p className="mt-1.5 text-xs font-semibold text-slate-500">Na base de dados</p>
+        </div>
+        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
+          <Banknote className="pointer-events-none absolute right-4 top-4 h-5 w-5 text-slate-500" />
+          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Principal total</p>
+          <p className="mt-3 text-[1.375rem] font-bold text-slate-100">{loading ? "..." : formatCurrency(totalPrincipal)}</p>
+          <p className="mt-1.5 text-xs font-semibold text-slate-500">Capital emprestado</p>
+        </div>
+        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
+          <BarChart3 className="pointer-events-none absolute right-4 top-4 h-5 w-5 text-slate-500" />
+          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Total contratado</p>
+          <p className="mt-3 text-[1.375rem] font-bold text-slate-100">{loading ? "..." : formatCurrency(totalContracted)}</p>
+          <p className="mt-1.5 text-xs font-semibold text-slate-500">Custo Efetivo + Juros</p>
+        </div>
+        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
+          <CheckCircle2 className="pointer-events-none absolute right-4 top-4 h-5 w-5 text-slate-500" />
+          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Empréstimos ativos</p>
+          <p className="mt-3 text-[1.375rem] font-bold text-slate-100">{loading ? "..." : activeCount}</p>
+          <p className="mt-1.5 text-xs font-semibold text-slate-500">Contratos vigentes</p>
+        </div>
+      </div>
+
+      {/* Filter and Table */}
+      <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950 p-4 sm:p-5 lg:p-6 shadow-xl">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-5">
+          <div className="md:col-span-5">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Buscar</label>
+            <input
+              type="text"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+              placeholder="Cliente ou ID do empréstimo"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="md:col-span-3">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Status</label>
+            <select
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+            >
+              <option value="Todos">Todos</option>
+              <option value="Ativo">Ativo</option>
+              <option value="Inativo">Inativo</option>
+              <option value="Quitado">Quitado</option>
+              <option value="Atrasado">Atrasado</option>
+            </select>
+          </div>
+          <div className="md:col-span-4"></div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-left text-sm text-slate-300">
+            <thead className="bg-slate-900/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <tr>
+                <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("id")}>
+                  ID {renderSortIcon("id")}
+                </th>
+                <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("debtor")}>
+                  Cliente {renderSortIcon("debtor")}
+                </th>
+                <th className="px-4 py-3 text-right cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("principal")}>
+                  Principal {renderSortIcon("principal")}
+                </th>
+                <th className="px-4 py-3 text-right cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("total")}>
+                  Total {renderSortIcon("total")}
+                </th>
+                <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("created_at")}>
+                  Data {renderSortIcon("created_at")}
+                </th>
+                <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("status")}>
+                  Status {renderSortIcon("status")}
+                </th>
+                <th className="px-4 py-3 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">Carregando empréstimos...</td>
+                </tr>
+              ) : pageRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">Nenhum empréstimo encontrado.</td>
+                </tr>
+              ) : (
+                pageRows.map(loan => (
+                  <tr key={loan.id} className="transition-colors hover:bg-slate-800/40">
+                    <td className="px-4 py-4 font-semibold text-slate-200">#{loan.id}</td>
+                    <td className="px-4 py-4">
+                      <div className="font-semibold text-slate-100">{loan.debtor?.name || "Cliente excluído"}</div>
+                      <div className="mt-1 text-xs text-slate-400">
+                        {formatDocument(loan.debtor?.document || loan.debtor?.cpf) || "Sem documento"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 text-right font-medium text-slate-300">
+                      {formatCurrency(loan.principal)}
+                    </td>
+                    <td className="px-4 py-4 text-right font-bold text-slate-100">
+                      {formatCurrency(loan.total)}
+                    </td>
+                    <td className="px-4 py-4 text-slate-400">
+                      {loan.createdAt ? new Intl.DateTimeFormat("pt-BR").format(loan.createdAt) : "-"}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(loan.uiStatus)}`}>
+                        {loan.uiStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <button onClick={() => openDeleteModal(loan)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20" title="Excluir">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Rodapé Tabela (Paginação) */}
+        {!loading && (
+          <div className="mt-4 flex items-center justify-between border-t border-slate-800/60 pt-4">
+            <p className="text-sm text-slate-400">
+              Mostrando <span className="text-slate-200">{filteredAndSortedLoans.length > 0 ? startIdx + 1 : 0}</span> até{" "}
+              <span className="text-slate-200">{Math.min(startIdx + pageSize, filteredAndSortedLoans.length)}</span> de{" "}
+              <span className="font-semibold text-slate-200">{filteredAndSortedLoans.length}</span> resultados
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-sm font-medium text-slate-400">
+                Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
+              </span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => p + 1)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 disabled:opacity-50"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ===== MODAL: NOVO EMPRÉSTIMO / NOVA SIMULAÇÃO ===== */}
+      {showLoanModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm pt-8 overflow-y-auto" onClick={() => setShowLoanModal(false)}>
+          <div className="w-full max-w-[920px] mx-4 mb-8 rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-800 px-6 py-5">
+              <div>
+                <h2 className="text-xl font-bold text-slate-100">{loanModalMode === "loan" ? "Novo emprestimo" : "Nova simulacao"}</h2>
+                <p className="mt-1 text-sm text-slate-400">{loanModalMode === "loan" ? "Defina as informações, condições e agenda do contrato." : "Monte a proposta, envie no WhatsApp e aprove para criar o emprestimo real."}</p>
+              </div>
+              <button onClick={() => setShowLoanModal(false)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"><X className="h-5 w-5" /></button>
+            </div>
+
+            {/* Body: 2 columns */}
+            <div className="flex flex-col lg:flex-row">
+              {/* Left: Form */}
+              <div className="flex-1 px-6 py-5 space-y-5">
+                {/* Informações Básicas */}
+                <div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Informacoes basicas</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">Cliente</label>
+                      <select className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" value={formClientId} onChange={(e) => setFormClientId(e.target.value)}>
+                        <option value="">Selecione o cliente</option>
+                        {clientOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">Valor principal (R$)</label>
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" type="number" min="0.01" step="0.01" placeholder="R$ 0,00" value={formPrincipal} onChange={(e) => setFormPrincipal(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Condições */}
+                <div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Condicoes</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">Tipo de juros</label>
+                      <select className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" value={formInterestType} onChange={(e) => setFormInterestType(e.target.value)}>
+                        <option value="composto">Composto %</option>
+                        <option value="simples">Simples %</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">Taxa mensal (%)*</label>
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" type="number" min="0" step="0.01" placeholder="Ex: 8" value={formRate} onChange={(e) => setFormRate(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">Parcelas*</label>
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" type="number" min="1" step="1" value={formInstallments} onChange={(e) => setFormInstallments(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <button type="button" onClick={() => setFormCalcByInstallment(!formCalcByInstallment)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formCalcByInstallment ? "bg-blue-600" : "bg-slate-700"}`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formCalcByInstallment ? "translate-x-6" : "translate-x-1"}`} />
+                    </button>
+                    <span className="text-xs text-slate-400">Calcular por valor da parcela</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">Se ativado, o sistema define automaticamente a quantidade de parcelas.</p>
+                </div>
+
+                {/* Datas */}
+                <div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Datas</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">Data de inicio</label>
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formStartDate} onChange={(e) => { setFormStartDate(e.target.value); setFormFirstDue(addMonths(e.target.value, 1)); }} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">1o vencimento</label>
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formFirstDue} onChange={(e) => setFormFirstDue(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Observações */}
+                <div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Observacoes</h3>
+                  <label className="mb-1 block text-xs font-semibold text-slate-400">Detalhes adicionais</label>
+                  <textarea className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none resize-none" rows={3} placeholder="Observações sobre o emprestimo" value={formObservations} onChange={(e) => setFormObservations(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Right: Resumo */}
+              <div className="w-full lg:w-[280px] border-t lg:border-t-0 lg:border-l border-slate-800 px-6 py-5">
+                <h3 className="text-base font-bold text-slate-100 mb-4">Resumo do emprestimo</h3>
+                <div className="space-y-3">
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor</p><p className="text-sm font-bold text-slate-100">{formatCurrency(Number(formPrincipal) || 0)}</p></div>
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor da parcela</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.installmentAmount)}</p></div>
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">Parcelas</p><p className="text-sm font-bold text-slate-100">{loanSummary.installments}</p></div>
+                  <hr className="border-slate-800" />
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">Taxa</p><p className="text-sm font-bold text-slate-100">{loanSummary.rateLabel}</p><p className="text-xs text-slate-400">{loanSummary.rateValue}</p></div>
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">1o vencimento</p><p className="text-sm font-bold text-slate-100">{formFirstDue ? new Intl.DateTimeFormat("pt-BR").format(new Date(formFirstDue + "T12:00:00")) : "--/--/----"}</p></div>
+                  <hr className="border-slate-800" />
+                  <p className="text-xs text-slate-500">Parcelas manuais</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 border-t border-slate-800 px-6 py-4">
+              {loanModalMode === "loan" ? (
+                <button onClick={handleSaveLoan} disabled={saving || !formClientId || !formPrincipal} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
+                  {saving ? "Salvando..." : "Salvar empréstimo"}
+                </button>
+              ) : (
+                <>
+                  <button onClick={() => handleSaveSimulation()} disabled={saving || !formClientId || !formPrincipal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-6 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50">
+                    {saving ? "Salvando..." : "Salvar simulacao"}
+                  </button>
+                  <button onClick={handleSendWhatsApp} disabled={saving || !formClientId || !formPrincipal} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
+                    Enviar WhatsApp
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL: EXCLUIR EMPRÉSTIMO ===== */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
+          <div className="w-full max-w-md mx-4 rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-slate-100">Confirmar exclusão</h2>
+            <p className="mt-1 text-sm text-slate-400">Deseja excluir o empréstimo #{deletingLoan?.id}?</p>
+            <p className="mt-3 text-sm text-slate-400">Esta ação não pode ser desfeita. O empréstimo e suas parcelas serão removidos permanentemente.</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setShowDeleteModal(false)} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-5 text-sm font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50">Cancelar</button>
+              <button onClick={handleDeleteLoan} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">{saving ? "Excluindo..." : "Excluir empréstimo"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

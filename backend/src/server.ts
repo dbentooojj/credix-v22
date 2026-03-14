@@ -13,15 +13,12 @@ import { dashboardRoutes } from "./routes/dashboard.routes";
 import { financeRoutes } from "./routes/finance.routes";
 import { loanSimulationsRoutes } from "./routes/loan-simulations.routes";
 import { notificationsRoutes } from "./routes/notifications.routes";
-import { pageRoutes } from "./routes/page.routes";
 import { paymentsRoutes } from "./routes/payments.routes";
 import { tablesRoutes } from "./routes/tables.routes";
 
 const app = express();
 
 app.disable("x-powered-by");
-app.set("view engine", "ejs");
-app.set("views", path.join(process.cwd(), "src", "views"));
 
 app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json({ limit: "2mb" }));
@@ -45,7 +42,6 @@ app.use("/api/loan-simulations", loanSimulationsRoutes);
 app.use("/api/tables", tablesRoutes);
 app.use("/api/payments", paymentsRoutes);
 app.use("/api/notifications", notificationsRoutes);
-app.use(pageRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Rota nao encontrada" });

@@ -832,7 +832,7 @@ export function OverviewPageClient() {
   ];
 
   return (
-    <div className={`w-full ${initialLoading ? "opacity-90" : ""}`}>
+    <div className={`w-full max-w-[1600px] mx-auto ${initialLoading ? "opacity-90" : ""}`}>
       <section className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-[clamp(2rem,1.2vw+1.2rem,2.45rem)] font-bold leading-[1.04] tracking-[-0.035em] text-slate-100">
