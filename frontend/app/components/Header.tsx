@@ -63,17 +63,17 @@ export function Header({ isOpen, onMenuClick }: { isOpen?: boolean; onMenuClick:
 
   return (
     <header className="fixed w-full top-0 z-50 bg-slate-950/80 border-b border-blue-500/10 backdrop-blur-md shadow-sm">
-      <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
+      <div className="flex w-full items-center justify-between px-3 py-3 sm:px-4 sm:py-4 lg:px-5">
         
         <div className="flex items-center">
           <button 
             onClick={onMenuClick}
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-blue-500/20 active:bg-blue-600/30 transition-colors focus:outline-none lg:hidden"
+            className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-blue-500/20 active:bg-blue-600/30 transition-colors focus:outline-none"
           >
             {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           
-          <h1 className="ml-2 sm:ml-4">
+          <h1 className="ml-2 sm:ml-3">
             <Link href="/app/visao-geral" className="flex items-center focus:outline-none" aria-label="Credix">
               <BrandWordmark size="header" />
             </Link>

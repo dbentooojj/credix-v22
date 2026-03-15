@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
+import { calculateLoanPreview } from "../../../../utils/loanCalculator";
 
 // --- TYPES ---
 type Debtor = {
@@ -134,9 +135,11 @@ export function EmprestimosClient() {
   // Form fields
   const [formClientId, setFormClientId] = useState("");
   const [formPrincipal, setFormPrincipal] = useState("");
-  const [formInterestType, setFormInterestType] = useState("composto");
+  const [formInterestType, setFormInterestType] = useState<"composto" | "simples" | "fixo">("composto");
   const [formRate, setFormRate] = useState("");
+  const [formFixedAddition, setFormFixedAddition] = useState("");
   const [formInstallments, setFormInstallments] = useState("");
+  const [formMaxInstallment, setFormMaxInstallment] = useState("");
   const [formCalcByInstallment, setFormCalcByInstallment] = useState(false);
   const [formStartDate, setFormStartDate] = useState("");
   const [formFirstDue, setFormFirstDue] = useState("");
@@ -175,36 +178,103 @@ export function EmprestimosClient() {
 
   // --- Cálculo dinâmico do resumo ---
   const loanSummary = useMemo(() => {
-    const principal = Number(formPrincipal) || 0;
-    const rate = Number(formRate) || 0;
-    const n = Math.max(1, Math.trunc(Number(formInstallments) || 0));
-    let totalAmount = principal;
-    let installmentAmount = 0;
-
-    if (formInterestType === "composto" && rate > 0 && n > 0) {
-      totalAmount = principal * Math.pow(1 + rate / 100, n);
-    } else if (formInterestType === "simples" && rate > 0 && n > 0) {
-      totalAmount = principal * (1 + (rate / 100) * n);
-    }
-
-    totalAmount = Math.round(totalAmount * 100) / 100;
-    installmentAmount = n > 0 ? Math.round((totalAmount / n) * 100) / 100 : 0;
+    const calculation = calculateLoanPreview({
+      principal: formPrincipal,
+      monthlyRate: formRate,
+      fixedAddition: formFixedAddition,
+      installments: formInstallments,
+      maxInstallment: formMaxInstallment,
+      useMaxInstallment: formCalcByInstallment,
+      interestType: formInterestType,
+      startDate: formStartDate,
+      firstDueDate: formFirstDue,
+    });
 
     return {
-      totalAmount,
-      installmentAmount,
-      installments: n || "(a definir)",
-      rateLabel: `${formInterestType === "composto" ? "Composto" : formInterestType === "simples" ? "Simples" : "Fixo"}`,
-      rateValue: rate > 0 ? `${rate}% a.m.` : "0% a.m.",
-      firstDue: formFirstDue || "--/--/----",
+      totalAmount: calculation.calcResult.totalAmount,
+      installmentAmount: calculation.calcResult.installmentAmount,
+      installments: calculation.installmentsLabel,
+      installmentsCount: calculation.values.installments,
+      rateLabel: calculation.rateLabel,
+      rateValue: calculation.rateValue,
+      firstDue: calculation.values.firstDueDate || "--/--/----",
+      dueDates: calculation.dueDates,
+      plan: calculation.plan,
+      modeLabel: calculation.modeLabel,
+      fromMaxInstallment: calculation.fromMaxInstallment,
+      autoInstallmentPending: calculation.autoInstallmentPending,
+      autoInstallmentError: calculation.autoInstallmentError,
     };
-  }, [formPrincipal, formRate, formInstallments, formInterestType, formFirstDue]);
+  }, [
+    formPrincipal,
+    formRate,
+    formFixedAddition,
+    formInstallments,
+    formMaxInstallment,
+    formCalcByInstallment,
+    formInterestType,
+    formStartDate,
+    formFirstDue,
+  ]);
+
+  function buildLoanSimulationPayload() {
+    const safeStartDate = formStartDate || toDateInput(new Date());
+    const safeFirstDueDate = formFirstDue || addMonths(safeStartDate, 1);
+    const installmentsCount = Math.max(1, loanSummary.installmentsCount || Math.trunc(Number(formInstallments) || 0));
+    const fallbackDueDates = Array.from({ length: installmentsCount }, (_, index) => addMonths(safeFirstDueDate, index));
+    const dueDates = loanSummary.dueDates.length > 0 ? loanSummary.dueDates : fallbackDueDates;
+
+    return {
+      clientId: Number(formClientId),
+      principalAmount: Number(formPrincipal) || 0,
+      interestType: formInterestType,
+      interestRate: formInterestType === "fixo" ? 0 : (Number(formRate) || 0),
+      fixedFeeAmount: formInterestType === "fixo" ? (Number(formFixedAddition) || 0) : 0,
+      installmentsCount,
+      startDate: safeStartDate,
+      firstDueDate: safeFirstDueDate,
+      dueDates,
+      observations: formObservations,
+      _preview: {
+        totalAmount: loanSummary.totalAmount,
+        installmentAmount: loanSummary.installmentAmount,
+      },
+    };
+  }
+
+  const canSubmitLoan = useMemo(() => {
+    const principal = Number(formPrincipal) || 0;
+    const rate = Number(formRate) || 0;
+    const fixedAddition = Number(formFixedAddition) || 0;
+
+    if (!formClientId || principal <= 0) return false;
+    if (!formStartDate || !formFirstDue) return false;
+    if (loanSummary.installmentsCount <= 0) return false;
+    if (loanSummary.autoInstallmentError) return false;
+    if (loanSummary.autoInstallmentPending) return false;
+
+    if (formInterestType === "fixo") {
+      return fixedAddition >= 0;
+    }
+    return rate > 0;
+  }, [
+    formClientId,
+    formPrincipal,
+    formRate,
+    formFixedAddition,
+    formStartDate,
+    formFirstDue,
+    formInterestType,
+    loanSummary.installmentsCount,
+    loanSummary.autoInstallmentError,
+    loanSummary.autoInstallmentPending,
+  ]);
 
   // --- Modal handlers ---
   function resetForm() {
     const today = toDateInput(new Date());
     setFormClientId(debtors.length > 0 ? String(debtors[0].id) : "");
-    setFormPrincipal(""); setFormRate(""); setFormInstallments("");
+    setFormPrincipal(""); setFormRate(""); setFormFixedAddition(""); setFormInstallments(""); setFormMaxInstallment("");
     setFormInterestType("composto"); setFormCalcByInstallment(false);
     setFormStartDate(today); setFormFirstDue(addMonths(today, 1));
     setFormObservations("");
@@ -228,23 +298,14 @@ export function EmprestimosClient() {
   }
 
   async function handleSaveLoan() {
-    if (!formClientId || !formPrincipal) return;
+    if (!canSubmitLoan) return;
     setSaving(true);
     try {
       // 1. Criar simulação na API
       const simRes = await fetch("/api/loan-simulations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: Number(formClientId),
-          principalAmount: Number(formPrincipal),
-          interestType: formInterestType,
-          interestRate: Number(formRate) || 0,
-          installmentsCount: Number(formInstallments) || 1,
-          startDate: formStartDate,
-          firstDueDate: formFirstDue,
-          observations: formObservations,
-        }),
+        body: JSON.stringify(buildLoanSimulationPayload()),
       }).then(r => r.json());
 
       if (simRes.data?.id) {
@@ -257,22 +318,13 @@ export function EmprestimosClient() {
   }
 
   async function handleSaveSimulation() {
-    if (!formClientId || !formPrincipal) return;
+    if (!canSubmitLoan) return;
     setSaving(true);
     try {
       const simRes = await fetch("/api/loan-simulations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: Number(formClientId),
-          principalAmount: Number(formPrincipal),
-          interestType: formInterestType,
-          interestRate: Number(formRate) || 0,
-          installmentsCount: Number(formInstallments) || 1,
-          startDate: formStartDate,
-          firstDueDate: formFirstDue,
-          observations: formObservations,
-        }),
+        body: JSON.stringify(buildLoanSimulationPayload()),
       }).then(r => r.json());
 
       setShowLoanModal(false);
@@ -616,18 +668,48 @@ export function EmprestimosClient() {
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Tipo de juros</label>
-                      <select className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" value={formInterestType} onChange={(e) => setFormInterestType(e.target.value)}>
+                      <select className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" value={formInterestType} onChange={(e) => setFormInterestType(e.target.value as "composto" | "simples" | "fixo")}>
                         <option value="composto">Composto %</option>
                         <option value="simples">Simples %</option>
+                        <option value="fixo">Fixo (valor total)</option>
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-400">Taxa mensal (%)*</label>
-                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" type="number" min="0" step="0.01" placeholder="Ex: 8" value={formRate} onChange={(e) => setFormRate(e.target.value)} />
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">{formInterestType === "fixo" ? "Acrescimo fixo (R$)" : "Taxa mensal (%)*"}</label>
+                      <input
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder={formInterestType === "fixo" ? "Ex: 500" : "Ex: 8"}
+                        value={formInterestType === "fixo" ? formFixedAddition : formRate}
+                        onChange={(e) => {
+                          if (formInterestType === "fixo") {
+                            setFormFixedAddition(e.target.value);
+                            return;
+                          }
+                          setFormRate(e.target.value);
+                        }}
+                      />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-400">Parcelas*</label>
-                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" type="number" min="1" step="1" value={formInstallments} onChange={(e) => setFormInstallments(e.target.value)} />
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">{formCalcByInstallment ? "Valor da parcela (R$)" : "Parcelas*"}</label>
+                      <input
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                        type="number"
+                        min={formCalcByInstallment ? "0.01" : "1"}
+                        max={formCalcByInstallment ? undefined : "96"}
+                        step={formCalcByInstallment ? "0.01" : "1"}
+                        placeholder={formCalcByInstallment ? "Ex: 750" : ""}
+                        value={formCalcByInstallment ? formMaxInstallment : formInstallments}
+                        onChange={(e) => {
+                          if (formCalcByInstallment) {
+                            setFormMaxInstallment(e.target.value);
+                            return;
+                          }
+                          setFormInstallments(e.target.value);
+                        }}
+                      />
                     </div>
                   </div>
                   <div className="mt-3 flex items-center gap-3">
@@ -636,7 +718,14 @@ export function EmprestimosClient() {
                     </button>
                     <span className="text-xs text-slate-400">Calcular por valor da parcela</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">Se ativado, o sistema define automaticamente a quantidade de parcelas.</p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {formCalcByInstallment
+                      ? `Se ativado, o sistema define automaticamente a quantidade de parcelas. Quantidade atual: ${loanSummary.installmentsCount > 0 ? loanSummary.installmentsCount : "-"}`
+                      : "Se ativado, o sistema define automaticamente a quantidade de parcelas."}
+                  </p>
+                  {loanSummary.autoInstallmentError && (
+                    <p className="mt-1 text-[11px] text-red-400">{loanSummary.autoInstallmentError}</p>
+                  )}
                 </div>
 
                 {/* Datas */}
@@ -660,20 +749,43 @@ export function EmprestimosClient() {
                   <label className="mb-1 block text-xs font-semibold text-slate-400">Detalhes adicionais</label>
                   <textarea className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none resize-none" rows={3} placeholder="Observações sobre o emprestimo" value={formObservations} onChange={(e) => setFormObservations(e.target.value)} />
                 </div>
+
+                {/* Previa das parcelas */}
+                <div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Previa das parcelas</h3>
+                  <div className="space-y-2 max-h-52 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                    {loanSummary.plan.length === 0 ? (
+                      <p className="text-xs text-slate-500">Preencha os campos para visualizar as parcelas.</p>
+                    ) : (
+                      loanSummary.plan.map((item) => (
+                        <div key={item.installmentNumber} className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-200">Parcela #{item.installmentNumber}</p>
+                            <p className="text-base font-bold text-slate-100">{formatCurrency(item.amount)}</p>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Vencimento: {item.dueDate ? new Intl.DateTimeFormat("pt-BR").format(new Date(item.dueDate + "T12:00:00")) : "--/--/----"}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">Juros: {formatCurrency(item.interestAmount)}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Right: Resumo */}
               <div className="w-full lg:w-[280px] border-t lg:border-t-0 lg:border-l border-slate-800 px-6 py-5">
                 <h3 className="text-base font-bold text-slate-100 mb-4">Resumo do emprestimo</h3>
                 <div className="space-y-3">
-                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor</p><p className="text-sm font-bold text-slate-100">{formatCurrency(Number(formPrincipal) || 0)}</p></div>
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.totalAmount)}</p></div>
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor da parcela</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.installmentAmount)}</p></div>
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Parcelas</p><p className="text-sm font-bold text-slate-100">{loanSummary.installments}</p></div>
                   <hr className="border-slate-800" />
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Taxa</p><p className="text-sm font-bold text-slate-100">{loanSummary.rateLabel}</p><p className="text-xs text-slate-400">{loanSummary.rateValue}</p></div>
-                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">1o vencimento</p><p className="text-sm font-bold text-slate-100">{formFirstDue ? new Intl.DateTimeFormat("pt-BR").format(new Date(formFirstDue + "T12:00:00")) : "--/--/----"}</p></div>
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">1o vencimento</p><p className="text-sm font-bold text-slate-100">{loanSummary.firstDue !== "--/--/----" ? new Intl.DateTimeFormat("pt-BR").format(new Date(loanSummary.firstDue + "T12:00:00")) : "--/--/----"}</p></div>
                   <hr className="border-slate-800" />
-                  <p className="text-xs text-slate-500">Parcelas manuais</p>
+                  <p className="text-xs text-slate-500">{loanSummary.modeLabel}</p>
                 </div>
               </div>
             </div>
@@ -681,15 +793,15 @@ export function EmprestimosClient() {
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 border-t border-slate-800 px-6 py-4">
               {loanModalMode === "loan" ? (
-                <button onClick={handleSaveLoan} disabled={saving || !formClientId || !formPrincipal} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
+                <button onClick={handleSaveLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
                   {saving ? "Salvando..." : "Salvar empréstimo"}
                 </button>
               ) : (
                 <>
-                  <button onClick={() => handleSaveSimulation()} disabled={saving || !formClientId || !formPrincipal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-6 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50">
+                  <button onClick={() => handleSaveSimulation()} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-6 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50">
                     {saving ? "Salvando..." : "Salvar simulacao"}
                   </button>
-                  <button onClick={handleSendWhatsApp} disabled={saving || !formClientId || !formPrincipal} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
+                  <button onClick={handleSendWhatsApp} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
                     Enviar WhatsApp
                   </button>
                 </>
@@ -716,3 +828,4 @@ export function EmprestimosClient() {
     </div>
   );
 }
+

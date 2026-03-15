@@ -639,6 +639,8 @@ router.get("/", async (req, res) => {
   let totalToReceiveOutstanding = 0;
   let openReceivableFuture = 0;
   let openReceivableOverdue = 0;
+  let receivableMonthLoanTotal = 0;
+  let receivableMonthLoanCount = 0;
 
   let dueTodayCount = 0;
   let dueTodayValue = 0;
@@ -676,9 +678,15 @@ router.get("/", async (req, res) => {
     const current = getInstallmentStatus(dueDateIso, todayIso, paidAmount, amount);
     const outstanding = current.outstanding;
     const monthKey = dueDateIso.slice(0, 7);
+    const includeInMonthlyReceivable = current.status === "ATRASADA" || monthKey === currentMonthKey;
 
     if (outstanding > 0) {
       totalToReceiveOutstanding += outstanding;
+    }
+
+    if (outstanding > 0 && includeInMonthlyReceivable) {
+      receivableMonthLoanTotal += outstanding;
+      receivableMonthLoanCount += 1;
     }
 
     if (outstanding > 0 && monthKeySet.has(monthKey)) {
@@ -1054,12 +1062,24 @@ router.get("/", async (req, res) => {
     .filter((transaction) => transaction.type === FinanceTransactionType.INCOME);
   const openFinancePayableTransactions = openFinanceTransactions
     .filter((transaction) => transaction.type === FinanceTransactionType.EXPENSE);
+  const includeOpenFinanceInCurrentMonth = (transactionDate: Date) => {
+    const dateIso = dateToIso(transactionDate);
+    return dateIso < todayIso || dateIso.slice(0, 7) === currentMonthKey;
+  };
+  const openFinanceReceivableMonthTransactions = openFinanceReceivableTransactions
+    .filter((transaction) => includeOpenFinanceInCurrentMonth(transaction.date));
+  const openFinancePayableMonthTransactions = openFinancePayableTransactions
+    .filter((transaction) => includeOpenFinanceInCurrentMonth(transaction.date));
   const financeReceivableOpenTotal = openFinanceReceivableTransactions
     .reduce((sum, transaction) => sum + toSafeNumber(transaction.amount), 0);
   const financePayableOpenTotal = openFinancePayableTransactions
     .reduce((sum, transaction) => sum + toSafeNumber(transaction.amount), 0);
-  const accountsReceivableTotal = totalOpenReceivable + financeReceivableOpenTotal;
-  const accountsPayableTotal = financePayableOpenTotal;
+  const financeReceivableMonthTotal = openFinanceReceivableMonthTransactions
+    .reduce((sum, transaction) => sum + toSafeNumber(transaction.amount), 0);
+  const financePayableMonthTotal = openFinancePayableMonthTransactions
+    .reduce((sum, transaction) => sum + toSafeNumber(transaction.amount), 0);
+  const accountsReceivableTotal = receivableMonthLoanTotal + financeReceivableMonthTotal;
+  const accountsPayableTotal = financePayableMonthTotal;
   const projectedBalance = cashBalance + accountsReceivableTotal - accountsPayableTotal;
 
   const receiptsTodayItems = upcomingCandidates
@@ -1089,22 +1109,36 @@ router.get("/", async (req, res) => {
     }));
 
   const paymentsTodayItems = openFinancePayableTransactions
-    .filter((transaction) => dateToIso(transaction.date) === todayIso)
-    .map((transaction) => ({
-      id: `finance-expense-${transaction.id}`,
-      title: transaction.description,
-      subtitle: `Categoria: ${transaction.category}`,
-      typeLabel: "Financeiro",
-      moduleLabel: transaction.category,
-      amount: toSafeNumber(transaction.amount),
-      href: "/admin/contas-a-pagar.html",
-    }));
+    .filter((transaction) => dateToIso(transaction.date) <= todayIso)
+    .map((transaction) => {
+      const dueDateIso = dateToIso(transaction.date);
+      const isOverdue = dueDateIso < todayIso;
+
+      return {
+        id: `finance-expense-${transaction.id}`,
+        title: transaction.description,
+        subtitle: `Vencimento: ${formatDateDayMonthPtBr(transaction.date)} | Categoria: ${transaction.category}`,
+        typeLabel: isOverdue ? "Conta vencida" : "Conta a pagar",
+        moduleLabel: "Financeiro",
+        amount: toSafeNumber(transaction.amount),
+        href: "/admin/contas-a-pagar.html",
+      };
+    });
 
   const overdueIncomingFinance = openFinanceReceivableTransactions
     .filter((transaction) => dateToIso(transaction.date) < todayIso);
 
+  const dueTodayOutgoingFinance = openFinancePayableTransactions
+    .filter((transaction) => dateToIso(transaction.date) === todayIso);
+
   const overdueOutgoingFinance = openFinancePayableTransactions
     .filter((transaction) => dateToIso(transaction.date) < todayIso);
+
+  const upcoming7OutgoingFinance = openFinancePayableTransactions
+    .filter((transaction) => {
+      const dateIso = dateToIso(transaction.date);
+      return dateIso > todayIso && dateIso <= next7Iso;
+    });
 
   const receiptsToday = [...receiptsTodayItems, ...financeReceiptsToday]
     .sort((a, b) => b.amount - a.amount);
@@ -1113,8 +1147,14 @@ router.get("/", async (req, res) => {
   const overdueIncomingCount = overduePayments.length + overdueIncomingFinance.length;
   const overdueIncomingValue = overduePayments.reduce((sum, item) => sum + item.amount, 0)
     + overdueIncomingFinance.reduce((sum, item) => sum + toSafeNumber(item.amount), 0);
+  const dueTodayOutgoingCount = dueTodayOutgoingFinance.length;
+  const dueTodayOutgoingValue = dueTodayOutgoingFinance
+    .reduce((sum, item) => sum + toSafeNumber(item.amount), 0);
   const overdueOutgoingCount = overdueOutgoingFinance.length;
   const overdueOutgoingValue = overdueOutgoingFinance.reduce((sum, item) => sum + toSafeNumber(item.amount), 0);
+  const upcoming7OutgoingCount = upcoming7OutgoingFinance.length;
+  const upcoming7OutgoingValue = upcoming7OutgoingFinance
+    .reduce((sum, item) => sum + toSafeNumber(item.amount), 0);
 
   const ranking = [...overdueByDebtor.entries()]
     .map(([debtorId, data]) => ({
@@ -1218,6 +1258,9 @@ router.get("/", async (req, res) => {
       projectedBalance,
       financeReceivableOpenTotal,
       financePayableOpenTotal,
+      financeReceivableMonthTotal,
+      financePayableMonthTotal,
+      receivableMonthLoanTotal,
       openReceivableFuture,
       openReceivableOverdue,
       totalReceived,
@@ -1249,22 +1292,22 @@ router.get("/", async (req, res) => {
       },
       accountsReceivable: {
         value: accountsReceivableTotal,
-        loanValue: totalOpenReceivable,
-        financeValue: financeReceivableOpenTotal,
-        itemsCount: upcomingDue.length + overduePayments.length + openFinanceReceivableTransactions.length,
-        note: "Emprestimos + Financeiro",
+        loanValue: receivableMonthLoanTotal,
+        financeValue: financeReceivableMonthTotal,
+        itemsCount: receivableMonthLoanCount + openFinanceReceivableMonthTransactions.length,
+        note: "Mes atual + atrasados",
         href: "/admin/contas-a-receber.html",
       },
       accountsPayable: {
         value: accountsPayableTotal,
-        financeValue: financePayableOpenTotal,
-        itemsCount: openFinancePayableTransactions.length,
-        note: "Compromissos pendentes",
+        financeValue: financePayableMonthTotal,
+        itemsCount: openFinancePayableMonthTransactions.length,
+        note: "Mes atual + atrasados",
         href: "/admin/contas-a-pagar.html",
       },
       projectedBalance: {
         value: projectedBalance,
-        note: "Apos entradas e saidas",
+        note: "Caixa + entradas e saidas do mes",
         receivableValue: accountsReceivableTotal,
         payableValue: accountsPayableTotal,
         href: "/admin/visao-geral.html",
@@ -1297,10 +1340,14 @@ router.get("/", async (req, res) => {
         items: paymentsToday,
       },
       alerts: {
+        dueTodayOutgoingCount,
+        dueTodayOutgoingValue,
         overdueIncomingCount,
         overdueIncomingValue,
         overdueOutgoingCount,
         overdueOutgoingValue,
+        upcoming7OutgoingCount,
+        upcoming7OutgoingValue,
         incomingHref: "/admin/installments.html?status=overdue&due=month",
         outgoingHref: "/admin/contas-a-pagar.html",
       },

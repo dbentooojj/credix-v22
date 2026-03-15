@@ -4,14 +4,19 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
+  ModalBase,
+  ModalBtnGhost,
+  ModalBtnPrimary,
+  ModalField,
+  modalInputClass,
+} from "../app/components/ModalBase";
+import {
   AlertCircleIcon,
   ArrowDownLeftIcon,
   ArrowUpRightIcon,
   BellIcon,
   CalendarCheckIcon,
-  ChevronRightIcon,
   HistoryIcon,
-  PulseIcon,
   RefreshIcon,
   TrendUpIcon,
   WalletIcon,
@@ -45,8 +50,14 @@ type DashboardPayload = {
     receiptsToday?: OperationGroup;
     paymentsToday?: OperationGroup;
     alerts?: {
+      dueTodayOutgoingCount?: number;
+      dueTodayOutgoingValue?: number;
       overdueIncomingCount?: number;
+      overdueIncomingValue?: number;
       overdueOutgoingCount?: number;
+      overdueOutgoingValue?: number;
+      upcoming7OutgoingCount?: number;
+      upcoming7OutgoingValue?: number;
       incomingHref?: string;
       outgoingHref?: string;
     };
@@ -127,17 +138,11 @@ function formatCurrency(value: unknown) {
   }).format(toNumber(value));
 }
 
-function formatDateTime(value?: string, timeZone?: string) {
-  if (!value) return "--";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--";
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: timeZone || "UTC",
-  }).format(date);
+function formatCompactNumber(value: unknown) {
+  return new Intl.NumberFormat("pt-BR", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(toNumber(value));
 }
 
 function formatDateLong(value?: string) {
@@ -154,14 +159,24 @@ function formatDateLong(value?: string) {
   }).format(date);
 }
 
-function formatPeriodLabel(period?: string) {
-  return (
-    {
-      "3m": "Ultimos 3 meses",
-      "6m": "Ultimos 6 meses",
-      "12m": "Ultimos 12 meses",
-    }[period || ""] || "Periodo padrao"
-  );
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseCurrencyInput(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return Number.NaN;
+  const cleaned = trimmed.replace(/[^\d,.-]/g, "");
+  if (!cleaned) return Number.NaN;
+
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+
+  return Number(normalized);
 }
 
 function formatMetricLabel(metric?: string) {
@@ -262,14 +277,21 @@ function MetricCard({
   meta,
   tone,
   icon,
+  action,
 }: {
-  href: string;
+  href?: string;
   label: string;
   value: string;
   note: string;
   meta: string;
   tone: "cash" | "receivable" | "payable" | "projected";
   icon: ReactNode;
+  action?: {
+    label: string;
+    onClick: () => void;
+    icon?: ReactNode;
+    disabled?: boolean;
+  };
 }) {
   const toneClass = {
     cash: "border-sky-400/40 bg-[linear-gradient(135deg,rgba(14,41,105,0.94),rgba(13,30,77,0.9))]",
@@ -278,83 +300,96 @@ function MetricCard({
     projected: "border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(78,17,133,0.94),rgba(67,20,108,0.9))]",
   }[tone];
 
-  return (
-    <Link
-      className={`relative block min-h-[132px] overflow-hidden rounded-[18px] border px-5 py-[1.15rem] shadow-[0_16px_34px_rgba(2,6,23,0.24)] ${toneClass}`}
-      href={normalizeHref(href)}
-    >
+  const content = (
+    <>
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_42%)]" />
       <div className="relative z-10 flex items-start justify-between gap-3">
         <p className="text-[0.8rem] font-medium uppercase tracking-[0.04em] text-slate-200">{label}</p>
-        <span className="text-slate-200/90">{icon}</span>
+        <div className="flex items-center gap-2">
+          {action ? (
+            <button
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300/20 bg-slate-900/35 px-2.5 text-[0.76rem] font-semibold text-slate-100 transition hover:border-slate-200/35 hover:bg-slate-900/60 disabled:opacity-50"
+              disabled={action.disabled}
+              onClick={action.onClick}
+              type="button"
+            >
+              {action.icon ?? null}
+              <span>{action.label}</span>
+            </button>
+          ) : null}
+          <span className="text-slate-200/90">{icon}</span>
+        </div>
       </div>
       <p className="relative z-10 mt-4 text-[2rem] font-medium tracking-[-0.03em] text-slate-50">{value}</p>
       <p className="relative z-10 mt-2 text-[0.98rem] text-slate-50/95">{note}</p>
       <p className="relative z-10 mt-1 text-[0.8rem] text-slate-200/80">{meta}</p>
-    </Link>
+    </>
   );
+
+  const classes = `relative block min-h-[132px] overflow-hidden rounded-[18px] border px-5 py-[1.15rem] shadow-[0_16px_34px_rgba(2,6,23,0.24)] ${toneClass}`;
+  if (!action && href) {
+    return (
+      <Link className={classes} href={normalizeHref(href)}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <article className={classes}>{content}</article>;
 }
 
 function FinancialAlert({
-  href,
   label,
   tone,
   icon,
 }: {
-  href: string;
   label: string;
   tone: "amber" | "rose" | "sky" | "slate" | "violet";
   icon: ReactNode;
 }) {
   const toneClass = {
     amber: {
-      card: "border-amber-400/15 bg-amber-500/10 hover:border-amber-300/25",
+      card: "border-amber-400/15 bg-amber-500/10",
       icon: "bg-amber-400/10 text-amber-100",
       text: "text-amber-50",
     },
     rose: {
-      card: "border-rose-400/15 bg-rose-500/10 hover:border-rose-300/25",
+      card: "border-rose-400/15 bg-rose-500/10",
       icon: "bg-rose-400/10 text-rose-100",
       text: "text-rose-50",
     },
     violet: {
-      card: "border-fuchsia-400/15 bg-fuchsia-500/10 hover:border-fuchsia-300/25",
+      card: "border-fuchsia-400/15 bg-fuchsia-500/10",
       icon: "bg-fuchsia-400/10 text-fuchsia-100",
       text: "text-fuchsia-50",
     },
     sky: {
-      card: "border-sky-400/15 bg-sky-500/10 hover:border-sky-300/25",
+      card: "border-sky-400/15 bg-sky-500/10",
       icon: "bg-sky-400/10 text-sky-100",
       text: "text-sky-50",
     },
     slate: {
-      card: "border-slate-700/60 bg-slate-950/30 hover:border-slate-500/50 hover:bg-slate-900/70",
+      card: "border-slate-700/60 bg-slate-950/30",
       icon: "bg-slate-800/80 text-slate-300",
       text: "text-slate-100",
     },
   }[tone];
 
   return (
-    <Link
-      className={`group flex items-center gap-3 rounded-2xl border px-3.5 py-3 transition hover:-translate-y-0.5 ${toneClass.card}`}
-      href={normalizeHref(href)}
-    >
+    <article className={`flex items-center gap-3 rounded-2xl border px-3.5 py-3 ${toneClass.card}`}>
       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${toneClass.icon}`}>{icon}</span>
       <span className={`min-w-0 flex-1 text-sm font-semibold leading-5 ${toneClass.text}`}>{label}</span>
-      <ChevronRightIcon className="h-3 w-3 shrink-0 text-slate-500 transition group-hover:text-slate-300" />
-    </Link>
+    </article>
   );
 }
 
 function DailySummaryCard({
-  href,
   title,
   value,
   meta,
   tone,
   icon,
 }: {
-  href: string;
   title: string;
   value: string;
   meta: string;
@@ -380,10 +415,7 @@ function DailySummaryCard({
   }[tone];
 
   return (
-    <Link
-      className={`relative block overflow-hidden rounded-[18px] border px-4 py-4 transition hover:-translate-y-0.5 ${toneClass.card}`}
-      href={normalizeHref(href)}
-    >
+    <article className={`relative block overflow-hidden rounded-[18px] border px-4 py-4 ${toneClass.card}`}>
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_42%)] opacity-70" />
       <div className="relative z-10 flex items-start gap-3">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl ${toneClass.icon}`}>{icon}</span>
@@ -393,7 +425,7 @@ function DailySummaryCard({
           <p className="mt-2 text-sm leading-6 text-slate-200/80">{meta}</p>
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -415,8 +447,9 @@ function MonthlyFlowChart({ points, hasData, emptyMessage }: { points: MonthlyPo
   const height = 290;
   const top = 20;
   const bottom = 44;
-  const side = 16;
-  const innerWidth = width - side * 2;
+  const left = 56;
+  const right = 16;
+  const innerWidth = width - left - right;
   const innerHeight = height - top - bottom;
   const maxValue = Math.max(
     1,
@@ -427,33 +460,41 @@ function MonthlyFlowChart({ points, hasData, emptyMessage }: { points: MonthlyPo
   const barGap = Math.max(4, groupWidth * 0.08);
   const linePoints = points
     .map((point, index) => {
-      const centerX = side + groupWidth * index + groupWidth / 2;
+      const centerX = left + groupWidth * index + groupWidth / 2;
       const y = top + innerHeight - (toNumber(point.received ?? point.value) / maxValue) * innerHeight;
       return `${centerX.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");
+  const gridSteps = [0, 0.25, 0.5, 0.75, 1];
 
   return (
     <div className="relative mt-4 overflow-hidden rounded-[18px] border border-slate-700/40 bg-slate-950/30 p-4">
+      <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-slate-500">Escala em R$</p>
       <svg aria-label="Fluxo mensal" className="block h-[290px] w-full" role="img" viewBox={`0 0 ${width} ${height}`}>
-        {[0, 0.25, 0.5, 0.75, 1].map((step) => {
+        {gridSteps.map((step) => {
           const y = top + innerHeight * step;
+          const tickValue = maxValue * (1 - step);
+
           return (
-            <line
-              key={step}
-              stroke="rgba(71,85,105,0.45)"
-              strokeDasharray="4 6"
-              strokeWidth="1"
-              x1={side}
-              x2={width - side}
-              y1={y}
-              y2={y}
-            />
+            <g key={step}>
+              <line
+                stroke="rgba(71,85,105,0.45)"
+                strokeDasharray="4 6"
+                strokeWidth="1"
+                x1={left}
+                x2={width - right}
+                y1={y}
+                y2={y}
+              />
+              <text fill="rgba(148,163,184,0.72)" fontSize="10" textAnchor="end" x={left - 8} y={y + 3}>
+                {formatCompactNumber(tickValue)}
+              </text>
+            </g>
           );
         })}
 
         {points.map((point, index) => {
-          const centerX = side + groupWidth * index + groupWidth / 2;
+          const centerX = left + groupWidth * index + groupWidth / 2;
           const open = toNumber(point.open);
           const overdue = toNumber(point.overdue);
           const openHeight = (open / maxValue) * innerHeight;
@@ -462,6 +503,13 @@ function MonthlyFlowChart({ points, hasData, emptyMessage }: { points: MonthlyPo
 
           return (
             <g key={`bars-${point.label || index}`}>
+              <title>
+                {(point.label || "--")}
+                {" | "}
+                Em aberto: {formatCurrency(open)}
+                {" | "}
+                Atrasado: {formatCurrency(overdue)}
+              </title>
               <rect
                 fill="rgba(59,130,246,0.32)"
                 height={openHeight}
@@ -496,11 +544,17 @@ function MonthlyFlowChart({ points, hasData, emptyMessage }: { points: MonthlyPo
         />
 
         {points.map((point, index) => {
-          const centerX = side + groupWidth * index + groupWidth / 2;
-          const y = top + innerHeight - (toNumber(point.received ?? point.value) / maxValue) * innerHeight;
+          const centerX = left + groupWidth * index + groupWidth / 2;
+          const receivedValue = toNumber(point.received ?? point.value);
+          const y = top + innerHeight - (receivedValue / maxValue) * innerHeight;
 
           return (
             <g key={`point-${point.label || index}`}>
+              <title>
+                {(point.label || "--")}
+                {" | "}
+                Recebido: {formatCurrency(receivedValue)}
+              </title>
               <circle cx={centerX} cy={y} fill="#34d399" r="4" stroke="rgba(15,23,42,0.9)" strokeWidth="2" />
               <text fill="#94a3b8" fontSize="11" textAnchor="middle" x={centerX} y={height - 16}>
                 {point.label || "--"}
@@ -735,10 +789,81 @@ function RecentMovements({
 
 export function OverviewPageClient() {
   const [page, setPage] = useState(1);
+  const [refreshTick, setRefreshTick] = useState(0);
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [pageLoading, setPageLoading] = useState(false);
+  const [cashModalOpen, setCashModalOpen] = useState(false);
+  const [cashType, setCashType] = useState<"income" | "expense">("income");
+  const [cashAmount, setCashAmount] = useState("");
+  const [cashDate, setCashDate] = useState(() => toDateInputValue(new Date()));
+  const [cashDescription, setCashDescription] = useState("");
+  const [cashSaving, setCashSaving] = useState(false);
+  const [cashError, setCashError] = useState<string | null>(null);
+
+  function openCashAdjustmentModal() {
+    setCashType("income");
+    setCashAmount("");
+    setCashDate(toDateInputValue(new Date()));
+    setCashDescription("");
+    setCashError(null);
+    setCashModalOpen(true);
+  }
+
+  async function handleCashAdjustmentSave() {
+    const parsedAmount = parseCurrencyInput(cashAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setCashError("Informe um valor valido maior que zero.");
+      return;
+    }
+
+    if (!cashDate) {
+      setCashError("Informe uma data valida para o ajuste.");
+      return;
+    }
+
+    setCashSaving(true);
+    setCashError(null);
+    try {
+      const response = await fetch("/api/dashboard/cash-adjustments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          type: cashType,
+          amount: parsedAmount,
+          date: cashDate,
+          description: cashDescription.trim() || undefined,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+
+      if (response.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          typeof body?.message === "string"
+            ? body.message
+            : "Falha ao salvar ajuste de caixa.",
+        );
+      }
+
+      setCashModalOpen(false);
+      setRefreshTick((current) => current + 1);
+    } catch (nextError) {
+      setCashError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Nao foi possivel registrar o ajuste.",
+      );
+    } finally {
+      setCashSaving(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -768,7 +893,7 @@ export function OverviewPageClient() {
       active = false;
       controller.abort();
     };
-  }, [page]);
+  }, [page, refreshTick]);
 
   const overview = payload?.overviewSummary;
   const operations = payload?.dailyOperations;
@@ -779,7 +904,9 @@ export function OverviewPageClient() {
   const currentValue = toNumber(currentPoint?.received ?? currentPoint?.value);
   const previousValue = toNumber(previousPoint?.received ?? previousPoint?.value);
   const flowInsight = buildInsight(currentValue, previousValue);
-  const exposure = toNumber(currentPoint?.open) + toNumber(currentPoint?.overdue);
+  const openCurrentMonth = toNumber(currentPoint?.open);
+  const overdueCurrentMonth = toNumber(currentPoint?.overdue);
+  const pendingCurrentMonth = openCurrentMonth + overdueCurrentMonth;
 
   const receiptsToday = operations?.receiptsToday;
   const paymentsToday = operations?.paymentsToday;
@@ -789,26 +916,26 @@ export function OverviewPageClient() {
   const outgoingValue = toNumber(paymentsToday?.totalValue);
   const cashBalance = toNumber(overview?.cashBalance?.value);
   const projectedDayValue = cashBalance + incomingValue - outgoingValue;
-  const projectedValue = toNumber(overview?.projectedBalance?.value);
+  const dueTodayOutgoingCount = toNumber(operations?.alerts?.dueTodayOutgoingCount);
   const overdueIncomingCount = toNumber(operations?.alerts?.overdueIncomingCount);
+  const overdueIncomingValue = toNumber(operations?.alerts?.overdueIncomingValue);
   const overdueOutgoingCount = toNumber(operations?.alerts?.overdueOutgoingCount);
+  const upcoming7OutgoingCount = toNumber(operations?.alerts?.upcoming7OutgoingCount);
+  const upcoming7OutgoingValue = toNumber(operations?.alerts?.upcoming7OutgoingValue);
 
   const alerts: Array<{
-    href: string;
     icon: ReactNode;
     label: string;
     tone: "amber" | "rose" | "sky" | "slate" | "violet";
   }> = [
     {
-      href: operations?.alerts?.outgoingHref || "/admin/contas-a-pagar.html",
       icon: <BellIcon className="h-4 w-4" />,
-      label: paymentsTodayItems.length
-        ? `${paymentsTodayItems.length} ${paymentsTodayItems.length === 1 ? "conta vence hoje" : "contas vencem hoje"}`
+      label: dueTodayOutgoingCount
+        ? `${dueTodayOutgoingCount} ${dueTodayOutgoingCount === 1 ? "conta vence hoje" : "contas vencem hoje"}`
         : "Nenhuma conta vence hoje",
-      tone: paymentsTodayItems.length ? "amber" : "slate",
+      tone: dueTodayOutgoingCount ? "amber" : "slate",
     },
     {
-      href: operations?.alerts?.outgoingHref || "/admin/contas-a-pagar.html",
       icon: <AlertCircleIcon className="h-4 w-4" />,
       label: overdueOutgoingCount
         ? `${overdueOutgoingCount} ${overdueOutgoingCount === 1 ? "conta atrasada" : "contas atrasadas"}`
@@ -816,7 +943,6 @@ export function OverviewPageClient() {
       tone: overdueOutgoingCount ? "rose" : "slate",
     },
     {
-      href: operations?.alerts?.incomingHref || "/admin/installments.html?status=overdue&due=month",
       icon: <HistoryIcon className="h-4 w-4" />,
       label: overdueIncomingCount
         ? `${overdueIncomingCount} ${overdueIncomingCount === 1 ? "recebimento atrasado" : "recebimentos atrasados"}`
@@ -824,16 +950,17 @@ export function OverviewPageClient() {
       tone: overdueIncomingCount ? "amber" : "slate",
     },
     {
-      href: overview?.projectedBalance?.href || "/app/visao-geral",
-      icon: <PulseIcon className="h-4 w-4" />,
-      label: projectedValue < 1000 ? `Saldo projetado < ${formatCurrency(1000)}` : `Saldo projetado: ${formatCurrency(projectedValue)}`,
-      tone: projectedValue < 1000 ? "violet" : "sky",
+      icon: <CalendarCheckIcon className="h-4 w-4" />,
+      label: upcoming7OutgoingCount
+        ? `${upcoming7OutgoingCount} ${upcoming7OutgoingCount === 1 ? "vencimento nos proximos 7 dias" : "vencimentos nos proximos 7 dias"} (${formatCurrency(upcoming7OutgoingValue)})`
+        : "Nenhum vencimento nos proximos 7 dias",
+      tone: upcoming7OutgoingCount ? "sky" : "slate",
     },
   ];
 
   return (
     <div className={`w-full max-w-[1600px] mx-auto ${initialLoading ? "opacity-90" : ""}`}>
-      <section className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <section className="mb-7">
         <div>
           <h1 className="text-[clamp(2rem,1.2vw+1.2rem,2.45rem)] font-bold leading-[1.04] tracking-[-0.035em] text-slate-100">
             Visao geral
@@ -841,17 +968,6 @@ export function OverviewPageClient() {
           <p className="mt-2 max-w-[54rem] text-[0.96rem] leading-[1.6] text-slate-300">
             Resumo do caixa, recebimentos e compromissos financeiros.
           </p>
-        </div>
-        <div className="grid gap-3 text-left lg:justify-items-end lg:text-right">
-          <span className="inline-flex items-center rounded-full border border-sky-400/15 bg-slate-900/60 px-3 py-[0.34rem] text-[0.69rem] font-semibold text-slate-300">
-            Periodo: {formatPeriodLabel(payload?.meta?.period)}
-          </span>
-          <div className="text-sm text-slate-400">
-            Atualizado:{" "}
-            <span className="font-semibold text-slate-200">
-              {formatDateTime(payload?.meta?.generatedAt, payload?.meta?.timezone)}
-            </span>
-          </div>
         </div>
       </section>
 
@@ -863,7 +979,12 @@ export function OverviewPageClient() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          href={overview?.cashBalance?.href || "/dashboard.html"}
+          action={{
+            label: "Ajustar caixa",
+            onClick: openCashAdjustmentModal,
+            icon: <WalletIcon className="h-3.5 w-3.5" />,
+            disabled: cashSaving,
+          }}
           icon={<WalletIcon className="h-[1.05rem] w-[1.05rem]" />}
           label="Saldo em caixa"
           meta={`Ajustes: ${formatCurrency(payload?.cashAdjustment?.net)}`}
@@ -872,16 +993,14 @@ export function OverviewPageClient() {
           value={formatCurrency(overview?.cashBalance?.value)}
         />
         <MetricCard
-          href={overview?.accountsReceivable?.href || "/admin/contas-a-receber.html"}
           icon={<ArrowUpRightIcon className="h-[1.05rem] w-[1.05rem]" />}
           label="Contas a receber"
-          meta={`Emprestimos: ${formatCurrency(overview?.accountsReceivable?.loanValue)} | Financeiro: ${formatCurrency(overview?.accountsReceivable?.financeValue)}`}
+          meta={`Emprestimos (mes): ${formatCurrency(overview?.accountsReceivable?.loanValue)} | Financeiro (mes): ${formatCurrency(overview?.accountsReceivable?.financeValue)}`}
           note={overview?.accountsReceivable?.note || "Emprestimos + Financeiro"}
           tone="receivable"
           value={formatCurrency(overview?.accountsReceivable?.value)}
         />
         <MetricCard
-          href={overview?.accountsPayable?.href || "/admin/contas-a-pagar.html"}
           icon={<ArrowDownLeftIcon className="h-[1.05rem] w-[1.05rem]" />}
           label="Contas a pagar"
           meta={`${toNumber(overview?.accountsPayable?.itemsCount)} lancamento(s) pendente(s)`}
@@ -890,10 +1009,9 @@ export function OverviewPageClient() {
           value={formatCurrency(overview?.accountsPayable?.value)}
         />
         <MetricCard
-          href={overview?.projectedBalance?.href || "/app/visao-geral"}
           icon={<TrendUpIcon className="h-[1.05rem] w-[1.05rem]" />}
           label="Saldo previsto"
-          meta={`Entradas: ${formatCurrency(overview?.projectedBalance?.receivableValue)} | Saidas: ${formatCurrency(overview?.projectedBalance?.payableValue)}`}
+          meta={`Entradas (mes): ${formatCurrency(overview?.projectedBalance?.receivableValue)} | Saidas (mes): ${formatCurrency(overview?.projectedBalance?.payableValue)}`}
           note={overview?.projectedBalance?.note || "Apos entradas e saidas"}
           tone="projected"
           value={formatCurrency(overview?.projectedBalance?.value)}
@@ -906,16 +1024,21 @@ export function OverviewPageClient() {
           emptyNote="Quando houver parcelas ou contas a receber no dia, elas aparecem aqui."
           emptyTitle="Sem recebimentos previstos para hoje."
           items={receiptsTodayItems}
-          note="Titulos previstos para entrada no dia atual."
+          secondaryTotalLabel={
+            overdueIncomingCount
+              ? `Atrasados (${overdueIncomingCount})`
+              : undefined
+          }
+          secondaryTotalValue={overdueIncomingCount ? overdueIncomingValue : undefined}
           title="Recebimentos de hoje"
           totalValue={incomingValue}
         />
         <OperationPanel
           amountClassName="text-rose-100"
-          emptyNote="Quando houver contas a pagar no dia, elas aparecem aqui."
-          emptyTitle="Sem pagamentos previstos para hoje."
+          emptyNote="Quando houver contas a pagar hoje ou vencidas, elas aparecem aqui."
+          emptyTitle="Sem pagamentos para hoje ou vencidos."
           items={paymentsTodayItems}
-          note="Saidas financeiras previstas para hoje."
+          note="Saidas financeiras previstas para hoje e vencidas."
           title="Pagamentos de hoje"
           totalValue={outgoingValue}
         />
@@ -928,7 +1051,7 @@ export function OverviewPageClient() {
             </div>
             <div className="grid gap-3">
               {alerts.map((alert) => (
-                <FinancialAlert href={alert.href} icon={alert.icon} key={alert.label} label={alert.label} tone={alert.tone} />
+                <FinancialAlert icon={alert.icon} key={alert.label} label={alert.label} tone={alert.tone} />
               ))}
             </div>
           </div>
@@ -942,7 +1065,7 @@ export function OverviewPageClient() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[1.06rem] font-bold tracking-[-0.02em] text-slate-100">Fluxo mensal</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Leitura dos ultimos meses com recebido, em aberto e atraso.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Leitura dos ultimos meses com recebido, a vencer e atrasado.</p>
               </div>
               <span className="inline-flex items-center rounded-full border border-sky-400/15 bg-slate-900/60 px-3 py-1 text-[0.72rem] font-bold text-indigo-200">
                 Ultimos 6 meses
@@ -972,11 +1095,12 @@ export function OverviewPageClient() {
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-700/50 bg-slate-950/25 px-4 py-4">
-                <p className="text-[0.72rem] font-extrabold uppercase tracking-[0.12em] text-slate-400">Carteira do mes</p>
-                <p className="mt-2 text-[1.42rem] font-bold tracking-[-0.03em] text-slate-100">{formatCurrency(exposure)}</p>
+                <p className="text-[0.72rem] font-extrabold uppercase tracking-[0.12em] text-slate-400">Pendencias do mes</p>
+                <p className="mt-2 text-[1.42rem] font-bold tracking-[-0.03em] text-slate-100">{formatCurrency(pendingCurrentMonth)}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Em aberto: {formatCurrency(currentPoint?.open)} | Atrasado: {formatCurrency(currentPoint?.overdue)}
+                  Total ainda nao recebido no mes atual.
                 </p>
+                <p className="text-sm leading-6 text-slate-400">A vencer: {formatCurrency(openCurrentMonth)} | Em atraso: {formatCurrency(overdueCurrentMonth)}</p>
               </div>
             </div>
             <MonthlyFlowChart
@@ -996,7 +1120,6 @@ export function OverviewPageClient() {
             </div>
             <div className="mt-5 grid gap-4">
               <DailySummaryCard
-                href={overview?.accountsReceivable?.href || "/admin/contas-a-receber.html"}
                 icon={<ArrowUpRightIcon className="h-4 w-4" />}
                 meta={
                   receiptsTodayItems.length
@@ -1008,7 +1131,6 @@ export function OverviewPageClient() {
                 value={formatCurrency(incomingValue)}
               />
               <DailySummaryCard
-                href={overview?.accountsPayable?.href || "/admin/contas-a-pagar.html"}
                 icon={<ArrowDownLeftIcon className="h-4 w-4" />}
                 meta={
                   paymentsTodayItems.length
@@ -1020,7 +1142,6 @@ export function OverviewPageClient() {
                 value={formatCurrency(outgoingValue)}
               />
               <DailySummaryCard
-                href={overview?.projectedBalance?.href || "/app/visao-geral"}
                 icon={<WalletIcon className="h-4 w-4" />}
                 meta={`Caixa atual ${formatCurrency(cashBalance)} + entradas - saidas do dia.`}
                 title="Saldo projetado do dia"
@@ -1043,6 +1164,88 @@ export function OverviewPageClient() {
           }}
         />
       </section>
+
+      <ModalBase
+        footer={
+          <>
+            <ModalBtnGhost
+              disabled={cashSaving}
+              onClick={() => {
+                if (cashSaving) return;
+                setCashModalOpen(false);
+              }}
+            >
+              Cancelar
+            </ModalBtnGhost>
+            <ModalBtnPrimary disabled={cashSaving} onClick={handleCashAdjustmentSave}>
+              {cashSaving ? "Salvando..." : "Salvar ajuste"}
+            </ModalBtnPrimary>
+          </>
+        }
+        onClose={() => {
+          if (cashSaving) return;
+          setCashModalOpen(false);
+        }}
+        open={cashModalOpen}
+        size="max-w-3xl"
+        subtitle="Registre entrada ou retirada para atualizar o saldo atual."
+        title="Ajustar caixa"
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <ModalField label="Tipo">
+            <select
+              className={modalInputClass}
+              disabled={cashSaving}
+              onChange={(event) => setCashType(event.target.value as "income" | "expense")}
+              value={cashType}
+            >
+              <option value="income">Entrada</option>
+              <option value="expense">Retirada</option>
+            </select>
+          </ModalField>
+
+          <ModalField label="Valor (R$)">
+            <input
+              className={modalInputClass}
+              disabled={cashSaving}
+              inputMode="decimal"
+              maxLength={24}
+              onChange={(event) => setCashAmount(event.target.value)}
+              placeholder="0,00"
+              type="text"
+              value={cashAmount}
+            />
+          </ModalField>
+
+          <ModalField label="Data">
+            <input
+              className={modalInputClass}
+              disabled={cashSaving}
+              onChange={(event) => setCashDate(event.target.value)}
+              type="date"
+              value={cashDate}
+            />
+          </ModalField>
+
+          <ModalField label="Observacao">
+            <input
+              className={modalInputClass}
+              disabled={cashSaving}
+              maxLength={300}
+              onChange={(event) => setCashDescription(event.target.value)}
+              placeholder="Motivo do ajuste (opcional)"
+              type="text"
+              value={cashDescription}
+            />
+          </ModalField>
+        </div>
+
+        {cashError ? (
+          <div className="mt-4 rounded-xl border border-rose-400/30 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
+            {cashError}
+          </div>
+        ) : null}
+      </ModalBase>
     </div>
   );
 }
@@ -1063,14 +1266,18 @@ function OperationPanel({
   title,
   note,
   totalValue,
+  secondaryTotalLabel,
+  secondaryTotalValue,
   items,
   emptyTitle,
   emptyNote,
   amountClassName,
 }: {
   title: string;
-  note: string;
+  note?: string;
   totalValue: number;
+  secondaryTotalLabel?: string;
+  secondaryTotalValue?: number;
   items: OperationItem[];
   emptyTitle: string;
   emptyNote: string;
@@ -1082,11 +1289,18 @@ function OperationPanel({
       <div className="relative z-10 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-[1.06rem] font-bold tracking-[-0.02em] text-slate-100">{title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-300">{note}</p>
+          {note ? <p className="mt-2 text-sm leading-6 text-slate-300">{note}</p> : null}
         </div>
-        <span className="inline-flex items-center rounded-full border border-sky-400/15 bg-slate-900/70 px-3 py-1 text-[0.72rem] font-bold text-indigo-200">
-          Total: {formatCurrency(totalValue)}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <span className="inline-flex items-center rounded-full border border-sky-400/15 bg-slate-900/70 px-3 py-1 text-[0.72rem] font-bold text-indigo-200">
+            Total hoje: {formatCurrency(totalValue)}
+          </span>
+          {secondaryTotalLabel && typeof secondaryTotalValue === "number" && secondaryTotalValue > 0 ? (
+            <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[0.7rem] font-bold text-amber-100">
+              {secondaryTotalLabel}: {formatCurrency(secondaryTotalValue)}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <div className="relative z-10 mt-4 grid gap-3">

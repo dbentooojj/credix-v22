@@ -13,7 +13,15 @@ import {
   Users 
 } from "lucide-react";
 
-export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function Sidebar({
+  isOpen,
+  isCollapsed = false,
+  onClose,
+}: {
+  isOpen: boolean;
+  isCollapsed?: boolean;
+  onClose: () => void;
+}) {
   const pathname = usePathname();
 
   const isLinkActive = (path: string) => pathname.startsWith(path);
@@ -53,7 +61,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         onClick={onClose}
       />
       <aside 
-        className={`fixed top-16 sm:top-20 left-0 h-[calc(100%-4rem)] sm:h-[calc(100%-5rem)] w-64 z-40 bg-gradient-to-b from-slate-950/98 to-slate-900/98 border-r border-blue-500/10 shadow-[inset_-1px_0_0_rgba(255,255,255,0.02)] transition-transform duration-300 lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed top-16 sm:top-20 left-0 h-[calc(100%-4rem)] sm:h-[calc(100%-5rem)] w-64 z-40 bg-gradient-to-b from-slate-950/98 to-slate-900/98 border-r border-blue-500/10 shadow-[inset_-1px_0_0_rgba(255,255,255,0.02)] transition-transform duration-300 ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        } ${isCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"}`}
       >
         <div className="h-full overflow-y-auto overflow-x-hidden p-4 pb-6 scrollbar-thin scrollbar-thumb-blue-500/30">
           <section className="mb-5">

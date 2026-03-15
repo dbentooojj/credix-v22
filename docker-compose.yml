@@ -16,9 +16,7 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: dbentooooojj/credix-backend:latest
     container_name: credix_backend
     restart: unless-stopped
     depends_on:
@@ -60,17 +58,17 @@ services:
       retries: 5
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        LEGACY_BACKEND_URL: ${LEGACY_BACKEND_URL:-http://backend:4000}
+    image: dbentooooojj/credix-frontend:latest
     container_name: credix_frontend
     restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
       COOKIE_NAME: ${COOKIE_NAME:-credix_token}
+      LEGACY_BACKEND_URL: ${LEGACY_BACKEND_URL:-http://backend:4000}
     ports:
       - "3000:3000"
     healthcheck:
