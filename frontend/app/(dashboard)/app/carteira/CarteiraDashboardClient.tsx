@@ -329,6 +329,8 @@ export default function CarteiraDashboardClient() {
   };
 
   const health = getHealthMetrics();
+  const panelClass = "relative overflow-hidden rounded-2xl border border-slate-700/30 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] shadow-[0_10px_30px_rgba(2,6,23,0.28)]";
+  const innerCardClass = "rounded-xl border border-slate-700/40 bg-slate-950/40";
 
   return (
     <div className="space-y-6 pb-20 bg-transparent min-h-screen text-slate-100 font-sans w-full max-w-[1600px] mx-auto">
@@ -348,36 +350,36 @@ export default function CarteiraDashboardClient() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
 
         {/* Card: Total Recebido */}
-        <div className="rounded-2xl p-5 min-h-[120px] flex flex-col justify-between border border-slate-800 bg-slate-950">
+        <div className="relative overflow-hidden rounded-2xl p-5 min-h-[124px] flex flex-col justify-between border border-emerald-400/30 bg-[linear-gradient(135deg,rgba(4,93,74,0.94),rgba(3,64,50,0.9))] shadow-[0_16px_34px_rgba(2,6,23,0.24)]">
           <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] text-slate-400 font-semibold tracking-widest uppercase">Total recebido no mês</span>
-            <CheckCircle2 className="w-4 h-4 text-slate-500" />
+            <span className="text-[0.75rem] text-slate-200 font-semibold tracking-widest uppercase">Total recebido no mês</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-200/80" />
           </div>
           <div className="mt-3">
             <div className="text-[1.9rem] text-slate-50 font-bold leading-none tracking-tight">{formatCurrency(kpis.receivedThisMonth || 0)}</div>
-            <p className="mt-2 text-[0.75rem] font-medium text-slate-500">Proj.: {formatCurrency((kpis.receivedThisMonth || 0) * 1.05)}</p>
+            <p className="mt-2 text-[0.75rem] font-medium text-emerald-100/75">Proj.: {formatCurrency((kpis.receivedThisMonth || 0) * 1.05)}</p>
           </div>
         </div>
 
         {/* Card: A Receber */}
-        <div className="rounded-2xl p-5 min-h-[120px] flex flex-col justify-between border border-slate-800 bg-slate-950">
+        <div className="relative overflow-hidden rounded-2xl p-5 min-h-[124px] flex flex-col justify-between border border-sky-400/30 bg-[linear-gradient(135deg,rgba(14,41,105,0.94),rgba(13,30,77,0.9))] shadow-[0_16px_34px_rgba(2,6,23,0.24)]">
           <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] text-slate-400 font-semibold tracking-widest uppercase">A receber</span>
-            <AlertCircle className="w-4 h-4 text-slate-500" />
+            <span className="text-[0.75rem] text-slate-200 font-semibold tracking-widest uppercase">A receber</span>
+            <AlertCircle className="w-4 h-4 text-sky-200/80" />
           </div>
           <div className="mt-3">
             <div className="text-[1.9rem] text-slate-50 font-bold leading-none tracking-tight">{formatCurrency(kpis.totalOpenReceivable || 0)}</div>
-            <p className={`mt-2 text-[0.75rem] font-medium ${kpis.openReceivableOverdue > 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+            <p className={`mt-2 text-[0.75rem] font-medium ${kpis.openReceivableOverdue > 0 ? 'text-rose-300' : 'text-sky-100/75'}`}>
               Futuras: {formatCurrency(kpis.openReceivableFuture || 0)} &bull; {kpis.openReceivableOverdue > 0 ? `Atrasadas: ${formatCurrency(kpis.openReceivableOverdue)}` : 'Sem inadimplência'}
             </p>
           </div>
         </div>
 
         {/* Card: Lucro do Mês */}
-        <div className="rounded-2xl p-5 min-h-[120px] flex flex-col justify-between border border-slate-800 bg-slate-950">
+        <div className="relative overflow-hidden rounded-2xl p-5 min-h-[124px] flex flex-col justify-between border border-violet-400/20 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] shadow-[0_16px_34px_rgba(2,6,23,0.24)]">
           <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] text-slate-400 font-semibold tracking-widest uppercase">Lucro do mês</span>
-            <TrendingUp className="w-4 h-4 text-slate-500" />
+            <span className="text-[0.75rem] text-slate-200 font-semibold tracking-widest uppercase">Lucro do mês</span>
+            <TrendingUp className="w-4 h-4 text-violet-200/80" />
           </div>
           <div className="mt-3">
             <div className="text-[1.9rem] text-slate-50 font-bold leading-none tracking-tight">{formatCurrency(kpis.profitThisMonth || 0)}</div>
@@ -387,34 +389,34 @@ export default function CarteiraDashboardClient() {
       </div>
 
       {/* Strip de KPIs Secundários */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <div className="rounded-xl bg-slate-950 border border-slate-800 p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-slate-700/30 bg-slate-800/20 mb-6">
+        <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Total emprestado</p>
           <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{formatCurrency(kpis.totalLoaned || 0)}</p>
         </div>
-        <div className="rounded-xl bg-[#0d1117] border border-slate-800 p-4">
+        <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Retorno total</p>
           <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{formatCurrency(kpis.profitTotal || 0)}</p>
           <p className="text-slate-500 text-[0.72rem] font-medium mt-1">ROI: {formatPercent(kpis.roiRate || 0)}</p>
         </div>
-        <div className="rounded-xl bg-[#0d1117] border border-slate-800 p-4">
+        <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Taxa de inadimplência</p>
           <p className="text-[1.3rem] font-bold text-rose-500 tracking-tight">{formatPercent(kpis.delinquencyRate || 0)}</p>
         </div>
-        <div className="rounded-xl bg-[#0d1117] border border-slate-800 p-4">
+        <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Health score</p>
           <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{healthScore}<span className="text-slate-500 text-sm font-medium">/100</span></p>
         </div>
       </div>
 
       {/* Action Center */}
-      <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 mb-6">
+      <div className={`${panelClass} p-5 mb-6`}>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Resumo do Dia</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Vence hoje */}
-          <div className="bg-slate-900/60 border border-slate-700/50 rounded-xl p-4 flex items-center justify-between hover:bg-slate-800/60 transition-colors cursor-pointer">
+          <div className="rounded-xl border border-slate-700/40 bg-slate-950/45 p-4 flex items-center justify-between hover:bg-slate-900/80 transition-colors cursor-pointer">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-slate-800/90 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-4 h-4 text-slate-400" />
               </div>
               <div>
@@ -426,9 +428,9 @@ export default function CarteiraDashboardClient() {
           </div>
 
           {/* Em atraso */}
-          <div className="bg-slate-900/60 border border-slate-700/50 rounded-xl p-4 flex items-center justify-between hover:bg-slate-800/60 transition-colors cursor-pointer">
+          <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 flex items-center justify-between hover:bg-rose-500/15 transition-colors cursor-pointer">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-rose-500/15 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-4 h-4 text-red-400" />
               </div>
               <div>
@@ -440,9 +442,9 @@ export default function CarteiraDashboardClient() {
           </div>
 
           {/* Próximos 7 dias */}
-          <div className="bg-slate-900/60 border border-slate-700/50 rounded-xl p-4 flex items-center justify-between hover:bg-slate-800/60 transition-colors cursor-pointer">
+          <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 flex items-center justify-between hover:bg-sky-500/15 transition-colors cursor-pointer">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-sky-500/15 flex items-center justify-center flex-shrink-0">
                 <Calendar className="w-4 h-4 text-slate-400" />
               </div>
               <div>
@@ -458,7 +460,7 @@ export default function CarteiraDashboardClient() {
       {/* Listas Operacionais */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
         {/* Próximos Vencimentos */}
-        <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 flex flex-col">
+        <div className={`${panelClass} p-5 flex flex-col`}>
           <div className="mb-4">
             <h3 className="text-base font-bold text-slate-100">Ação rápida: próximos vencimentos</h3>
             <p className="mt-0.5 text-xs text-slate-500">Lista operacional para marcar pagamento rápido.</p>
@@ -472,7 +474,7 @@ export default function CarteiraDashboardClient() {
             ) : (
               <div className="space-y-2">
                 {(data?.upcomingDue || []).slice(0, 4).map((item, idx) => (
-                  <div key={`upc-${idx}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-700/40 hover:bg-slate-800/50 transition-colors">
+                  <div key={`upc-${idx}`} className={`${innerCardClass} flex items-center justify-between p-3 hover:bg-slate-900/70 transition-colors`}>
                     <div>
                       <p className="text-sm font-semibold text-slate-200 truncate max-w-[180px]">{item.debtorName}</p>
                       <p className="text-[0.7rem] text-slate-500 font-medium mt-0.5">Vence {formatDateShort(item.dueDate)}</p>
@@ -496,7 +498,7 @@ export default function CarteiraDashboardClient() {
         </div>
 
         {/* Pagamentos Atrasados */}
-        <div className="bg-[#0d1117] border border-slate-800 rounded-2xl p-5 flex flex-col">
+        <div className={`${panelClass} p-5 flex flex-col`}>
           <div className="mb-4">
             <h3 className="text-base font-bold text-slate-100">Pagamentos atrasados</h3>
             <p className="mt-0.5 text-xs text-slate-500">Lista operacional para cobrança e baixa de atrasos.</p>
@@ -510,7 +512,7 @@ export default function CarteiraDashboardClient() {
             ) : (
               <div className="space-y-2">
                 {(data?.overduePayments || []).slice(0, 4).map((item, idx) => (
-                  <div key={`ovrd-${idx}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-700/40 hover:bg-slate-800/50 transition-colors">
+                  <div key={`ovrd-${idx}`} className={`${innerCardClass} flex items-center justify-between p-3 hover:bg-slate-900/70 transition-colors`}>
                     <div>
                       <p className="text-sm font-semibold text-slate-200 truncate max-w-[180px]">{item.debtorName}</p>
                       <p className="text-[0.7rem] text-rose-400 font-medium mt-0.5">Atrasado ({formatDateShort(item.dueDate)})</p>
@@ -542,7 +544,7 @@ export default function CarteiraDashboardClient() {
         <section className="grid grid-cols-1 xl:grid-cols-12 gap-5 mb-8 w-full">
           {/* Gráfico */}
           <div className="xl:col-span-8">
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 h-full">
+            <div className={`${panelClass} p-6 h-full`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-2.5">
                   <TrendingUp className="text-indigo-400 w-5 h-5" />
@@ -565,7 +567,7 @@ export default function CarteiraDashboardClient() {
                 </div>
               </div>
 
-              <div className="bg-slate-900/60 border border-slate-700/40 rounded-xl px-5 py-4 mb-5 flex flex-col sm:flex-row sm:items-end justify-between">
+              <div className={`${innerCardClass} px-5 py-4 mb-5 flex flex-col sm:flex-row sm:items-end justify-between`}>
                 <div>
                   <p className="text-[0.68rem] font-bold uppercase tracking-widest text-slate-500 mb-1">Recebido no mês</p>
                   <p className="text-2xl font-bold text-slate-100">{formatCurrency(data.kpis.receivedThisMonth || 0)}</p>
@@ -576,7 +578,7 @@ export default function CarteiraDashboardClient() {
                 </div>
               </div>
 
-              <div className="h-[280px] w-full relative bg-slate-900/30 border border-slate-800 rounded-xl p-4">
+              <div className="h-[280px] w-full relative rounded-[18px] border border-slate-700/40 bg-slate-950/35 p-4">
                 {(!data.chart.points || data.chart.points.length === 0 || !data.chart.points.some(p => p.received > 0 || p.overdue > 0 || p.open > 0)) ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 z-10 rounded-xl">
                     <TrendingUp className="w-10 h-10 opacity-20 mb-3" />
@@ -590,7 +592,7 @@ export default function CarteiraDashboardClient() {
 
           {/* Saúde da Carteira */}
           <aside className="xl:col-span-4">
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 h-full flex flex-col">
+            <div className={`${panelClass} p-6 h-full flex flex-col`}>
               <h3 className="text-base font-bold text-slate-100 mb-6">Saúde da carteira</h3>
 
               {/* Taxa de recuperação */}
@@ -605,11 +607,11 @@ export default function CarteiraDashboardClient() {
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
+                <div className={`${innerCardClass} p-4`}>
                   <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-2 leading-tight">Clientes<br/>Inadimplentes</p>
                   <p className="text-2xl font-bold text-slate-100">{health?.overdueCount || 0}</p>
                 </div>
-                <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800">
+                <div className={`${innerCardClass} p-4`}>
                   <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-2 leading-tight">Contratos<br/>Em risco</p>
                   <p className="text-2xl font-bold text-slate-100">{health?.riskContracts || 0}</p>
                 </div>
