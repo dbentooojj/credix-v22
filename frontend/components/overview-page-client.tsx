@@ -147,10 +147,8 @@ function formatCompactNumber(value: unknown) {
 
 function formatDateLong(value?: string) {
   if (!value) return "--";
-
   const date = new Date(`${String(value).slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return "--";
-
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -171,11 +169,9 @@ function parseCurrencyInput(value: string): number {
   if (!trimmed) return Number.NaN;
   const cleaned = trimmed.replace(/[^\d,.-]/g, "");
   if (!cleaned) return Number.NaN;
-
   const normalized = cleaned.includes(",")
     ? cleaned.replace(/\./g, "").replace(",", ".")
     : cleaned;
-
   return Number(normalized);
 }
 
@@ -226,16 +222,13 @@ function buildPaginationSequence(currentPage: number, totalPages: number): Pagin
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
   }
-
   const sequence: PaginationToken[] = [1];
   const start = Math.max(2, currentPage - 1);
   const end = Math.min(totalPages - 1, currentPage + 1);
-
   if (start > 2) sequence.push("left");
   for (let page = start; page <= end; page += 1) sequence.push(page);
   if (end < totalPages - 1) sequence.push("right");
   sequence.push(totalPages);
-
   return sequence;
 }
 
@@ -269,6 +262,9 @@ async function fetchOverview(page: number, signal: AbortSignal) {
   return payload as DashboardPayload;
 }
 
+/* ─────────────────────────────────────────
+   METRIC CARD  (KPI top row)
+───────────────────────────────────────── */
 function MetricCard({
   href,
   label,
@@ -293,40 +289,70 @@ function MetricCard({
     disabled?: boolean;
   };
 }) {
-  const toneClass = {
-    cash: "border-sky-400/40 bg-[linear-gradient(135deg,rgba(14,41,105,0.94),rgba(13,30,77,0.9))]",
-    receivable: "border-emerald-400/35 bg-[linear-gradient(135deg,rgba(4,93,74,0.94),rgba(3,64,50,0.9))]",
-    payable: "border-rose-400/35 bg-[linear-gradient(135deg,rgba(117,7,39,0.94),rgba(85,7,32,0.9))]",
-    projected: "border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(78,17,133,0.94),rgba(67,20,108,0.9))]",
+  const toneConfig = {
+    cash: {
+      iconBg: "bg-[#EEF4FF]",
+      iconColor: "text-[#4F7EF7]",
+      accent: "text-[#4F7EF7]",
+      badge: "bg-[#EEF4FF] text-[#4F7EF7]",
+      border: "border-[#4F7EF7]/15",
+      topBar: "bg-[#4F7EF7]",
+    },
+    receivable: {
+      iconBg: "bg-[#ECFDF5]",
+      iconColor: "text-emerald-600",
+      accent: "text-emerald-600",
+      badge: "bg-[#ECFDF5] text-emerald-700",
+      border: "border-emerald-200/60",
+      topBar: "bg-emerald-500",
+    },
+    payable: {
+      iconBg: "bg-[#FFF1F2]",
+      iconColor: "text-rose-500",
+      accent: "text-rose-500",
+      badge: "bg-[#FFF1F2] text-rose-600",
+      border: "border-rose-200/60",
+      topBar: "bg-rose-500",
+    },
+    projected: {
+      iconBg: "bg-[#FAF5FF]",
+      iconColor: "text-violet-600",
+      accent: "text-violet-600",
+      badge: "bg-[#FAF5FF] text-violet-700",
+      border: "border-violet-200/60",
+      topBar: "bg-violet-500",
+    },
   }[tone];
 
   const content = (
     <>
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_42%)]" />
-      <div className="relative z-10 flex items-start justify-between gap-3">
-        <p className="text-[0.8rem] font-medium uppercase tracking-[0.04em] text-slate-200">{label}</p>
-        <div className="flex items-center gap-2">
-          {action ? (
-            <button
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300/20 bg-slate-900/35 px-2.5 text-[0.76rem] font-semibold text-slate-100 transition hover:border-slate-200/35 hover:bg-slate-900/60 disabled:opacity-50"
-              disabled={action.disabled}
-              onClick={action.onClick}
-              type="button"
-            >
-              {action.icon ?? null}
-              <span>{action.label}</span>
-            </button>
-          ) : null}
-          <span className="text-slate-200/90">{icon}</span>
+      {/* Thin accent top bar */}
+      <div className={`absolute inset-x-0 top-0 h-1 rounded-t-[18px] ${toneConfig.topBar}`} />
+      <div className="flex items-start justify-between gap-3 pt-1">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneConfig.iconBg}`}>
+          <span className={toneConfig.iconColor}>{icon}</span>
         </div>
+        {action ? (
+          <button
+            className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[0.75rem] font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50"
+            disabled={action.disabled}
+            onClick={action.onClick}
+            type="button"
+          >
+            {action.icon ?? null}
+            <span>{action.label}</span>
+          </button>
+        ) : null}
       </div>
-      <p className="relative z-10 mt-4 text-[2rem] font-medium tracking-[-0.03em] text-slate-50">{value}</p>
-      <p className="relative z-10 mt-2 text-[0.98rem] text-slate-50/95">{note}</p>
-      <p className="relative z-10 mt-1 text-[0.8rem] text-slate-200/80">{meta}</p>
+      <p className="mt-3 text-sm font-medium text-slate-500">{label}</p>
+      <p className="mt-1 text-[1.75rem] font-bold tracking-tight text-slate-800">{value}</p>
+      <p className="mt-1.5 text-sm text-slate-500">{note}</p>
+      <p className="mt-1 text-xs text-slate-400">{meta}</p>
     </>
   );
 
-  const classes = `relative block min-h-[132px] overflow-hidden rounded-[18px] border px-5 py-[1.15rem] shadow-[0_16px_34px_rgba(2,6,23,0.24)] ${toneClass}`;
+  const classes = `relative block overflow-hidden rounded-[18px] border ${toneConfig.border} bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] transition hover:shadow-[0_4px_20px_rgba(15,23,42,0.10)]`;
+
   if (!action && href) {
     return (
       <Link className={classes} href={normalizeHref(href)}>
@@ -338,6 +364,9 @@ function MetricCard({
   return <article className={classes}>{content}</article>;
 }
 
+/* ─────────────────────────────────────────
+   FINANCIAL ALERT PILL
+───────────────────────────────────────── */
 function FinancialAlert({
   label,
   tone,
@@ -349,40 +378,43 @@ function FinancialAlert({
 }) {
   const toneClass = {
     amber: {
-      card: "border-amber-400/15 bg-amber-500/10",
-      icon: "bg-amber-400/10 text-amber-100",
-      text: "text-amber-50",
+      card: "border-amber-200/70 bg-amber-50",
+      icon: "bg-amber-100 text-amber-600",
+      text: "text-amber-800",
     },
     rose: {
-      card: "border-rose-400/15 bg-rose-500/10",
-      icon: "bg-rose-400/10 text-rose-100",
-      text: "text-rose-50",
+      card: "border-rose-200/70 bg-rose-50",
+      icon: "bg-rose-100 text-rose-600",
+      text: "text-rose-800",
     },
     violet: {
-      card: "border-fuchsia-400/15 bg-fuchsia-500/10",
-      icon: "bg-fuchsia-400/10 text-fuchsia-100",
-      text: "text-fuchsia-50",
+      card: "border-violet-200/70 bg-violet-50",
+      icon: "bg-violet-100 text-violet-600",
+      text: "text-violet-800",
     },
     sky: {
-      card: "border-sky-400/15 bg-sky-500/10",
-      icon: "bg-sky-400/10 text-sky-100",
-      text: "text-sky-50",
+      card: "border-sky-200/70 bg-sky-50",
+      icon: "bg-sky-100 text-sky-600",
+      text: "text-sky-800",
     },
     slate: {
-      card: "border-slate-700/60 bg-slate-950/30",
-      icon: "bg-slate-800/80 text-slate-300",
-      text: "text-slate-100",
+      card: "border-slate-200/70 bg-slate-50",
+      icon: "bg-slate-100 text-slate-500",
+      text: "text-slate-600",
     },
   }[tone];
 
   return (
-    <article className={`flex items-center gap-3 rounded-2xl border px-3.5 py-3 ${toneClass.card}`}>
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${toneClass.icon}`}>{icon}</span>
-      <span className={`min-w-0 flex-1 text-sm font-semibold leading-5 ${toneClass.text}`}>{label}</span>
+    <article className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 ${toneClass.card}`}>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${toneClass.icon}`}>{icon}</span>
+      <span className={`min-w-0 flex-1 text-sm font-medium leading-5 ${toneClass.text}`}>{label}</span>
     </article>
   );
 }
 
+/* ─────────────────────────────────────────
+   DAILY SUMMARY CARD
+───────────────────────────────────────── */
 function DailySummaryCard({
   title,
   value,
@@ -398,45 +430,55 @@ function DailySummaryCard({
 }) {
   const toneClass = {
     incoming: {
-      card: "border-emerald-400/35 bg-[linear-gradient(135deg,rgba(8,76,77,0.9),rgba(12,54,64,0.88))]",
-      icon: "bg-emerald-500/15 text-emerald-300",
-      value: "text-teal-300",
+      card: "border-emerald-200/60 bg-emerald-50/60",
+      icon: "bg-emerald-100 text-emerald-600",
+      value: "text-emerald-700",
     },
     outgoing: {
-      card: "border-rose-400/30 bg-[linear-gradient(135deg,rgba(80,16,58,0.9),rgba(60,18,53,0.88))]",
-      icon: "bg-rose-500/15 text-rose-300",
-      value: "text-rose-300",
+      card: "border-rose-200/60 bg-rose-50/60",
+      icon: "bg-rose-100 text-rose-600",
+      value: "text-rose-700",
     },
     projected: {
-      card: "border-sky-400/30 bg-[linear-gradient(135deg,rgba(23,49,104,0.9),rgba(26,50,93,0.88))]",
-      icon: "bg-sky-500/15 text-sky-300",
-      value: "text-sky-300",
+      card: "border-[#4F7EF7]/20 bg-[#EEF4FF]/60",
+      icon: "bg-[#EEF4FF] text-[#4F7EF7]",
+      value: "text-[#4F7EF7]",
     },
   }[tone];
 
   return (
-    <article className={`relative block overflow-hidden rounded-[18px] border px-4 py-4 ${toneClass.card}`}>
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_42%)] opacity-70" />
-      <div className="relative z-10 flex items-start gap-3">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl ${toneClass.icon}`}>{icon}</span>
-        <div className="min-w-0">
-          <p className="text-[0.96rem] font-medium text-slate-200">{title}</p>
-          <p className={`mt-4 text-[2rem] font-medium tracking-[-0.03em] ${toneClass.value}`}>{value}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-200/80">{meta}</p>
+    <article className={`overflow-hidden rounded-xl border px-4 py-4 ${toneClass.card}`}>
+      <div className="flex items-start gap-3">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${toneClass.icon}`}>{icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-slate-600">{title}</p>
+          <p className={`mt-2 text-[1.6rem] font-bold tracking-tight ${toneClass.value}`}>{value}</p>
+          <p className="mt-1.5 text-xs text-slate-500">{meta}</p>
         </div>
       </div>
     </article>
   );
 }
 
-function MonthlyFlowChart({ points, hasData, emptyMessage }: { points: MonthlyPoint[]; hasData: boolean; emptyMessage: string }) {
+/* ─────────────────────────────────────────
+   MONTHLY FLOW CHART
+───────────────────────────────────────── */
+function MonthlyFlowChart({
+  points,
+  hasData,
+  emptyMessage,
+}: {
+  points: MonthlyPoint[];
+  hasData: boolean;
+  emptyMessage: string;
+}) {
   if (!hasData || points.length === 0) {
     return (
-      <div className="relative mt-4 min-h-[320px] overflow-hidden rounded-[18px] border border-slate-700/40 bg-slate-950/30 p-4">
-        <div className="absolute inset-4 flex items-center justify-center rounded-[14px] bg-slate-950/70 text-center text-sm leading-6 text-slate-400">
+      <div className="relative mt-4 min-h-[280px] overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4">
+        <div className="absolute inset-4 flex items-center justify-center rounded-xl text-center text-sm text-slate-400">
           <div>
-            <TrendUpIcon className="mx-auto mb-2 h-8 w-8 opacity-60" />
-            <p className="font-semibold">{emptyMessage}</p>
+            <TrendUpIcon className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+            <p className="font-semibold text-slate-500">{emptyMessage}</p>
           </div>
         </div>
       </div>
@@ -444,137 +486,158 @@ function MonthlyFlowChart({ points, hasData, emptyMessage }: { points: MonthlyPo
   }
 
   const width = 700;
-  const height = 290;
+  const height = 270;
   const top = 20;
   const bottom = 44;
-  const left = 56;
+  const left = 60;
   const right = 16;
   const innerWidth = width - left - right;
   const innerHeight = height - top - bottom;
   const maxValue = Math.max(
     1,
-    ...points.flatMap((point) => [toNumber(point.received ?? point.value), toNumber(point.open), toNumber(point.overdue)]),
+    ...points.flatMap((point) => [
+      toNumber(point.received ?? point.value),
+      toNumber(point.open),
+      toNumber(point.overdue),
+    ]),
   );
   const groupWidth = innerWidth / points.length;
   const barWidth = Math.max(10, groupWidth * 0.16);
   const barGap = Math.max(4, groupWidth * 0.08);
-  const linePoints = points
-    .map((point, index) => {
-      const centerX = left + groupWidth * index + groupWidth / 2;
-      const y = top + innerHeight - (toNumber(point.received ?? point.value) / maxValue) * innerHeight;
-      return `${centerX.toFixed(2)},${y.toFixed(2)}`;
-    })
+
+  // Build area path for received line
+  const areaPoints = points.map((point, index) => {
+    const cx = left + groupWidth * index + groupWidth / 2;
+    const y = top + innerHeight - (toNumber(point.received ?? point.value) / maxValue) * innerHeight;
+    return { cx, y };
+  });
+  const lineD = areaPoints
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.cx.toFixed(1)} ${p.y.toFixed(1)}`)
     .join(" ");
+  const areaD =
+    lineD +
+    ` L ${areaPoints[areaPoints.length - 1]?.cx.toFixed(1)} ${(top + innerHeight).toFixed(1)}` +
+    ` L ${areaPoints[0]?.cx.toFixed(1)} ${(top + innerHeight).toFixed(1)} Z`;
+
   const gridSteps = [0, 0.25, 0.5, 0.75, 1];
 
   return (
-    <div className="relative mt-4 overflow-hidden rounded-[18px] border border-slate-700/40 bg-slate-950/30 p-4">
-      <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-slate-500">Escala em R$</p>
-      <svg aria-label="Fluxo mensal" className="block h-[290px] w-full" role="img" viewBox={`0 0 ${width} ${height}`}>
+    <div className="relative mt-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-4">
+      <p className="mb-2 text-[0.64rem] font-bold uppercase tracking-[0.12em] text-slate-400">Escala em R$</p>
+      <svg
+        aria-label="Fluxo mensal"
+        className="block h-[270px] w-full"
+        role="img"
+        viewBox={`0 0 ${width} ${height}`}
+      >
+        <defs>
+          <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4F7EF7" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#4F7EF7" stopOpacity="0.01" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
         {gridSteps.map((step) => {
           const y = top + innerHeight * step;
           const tickValue = maxValue * (1 - step);
-
           return (
             <g key={step}>
               <line
-                stroke="rgba(71,85,105,0.45)"
-                strokeDasharray="4 6"
+                stroke="rgba(203,213,225,0.8)"
+                strokeDasharray="4 5"
                 strokeWidth="1"
                 x1={left}
                 x2={width - right}
                 y1={y}
                 y2={y}
               />
-              <text fill="rgba(148,163,184,0.72)" fontSize="10" textAnchor="end" x={left - 8} y={y + 3}>
+              <text fill="#94A3B8" fontSize="10" textAnchor="end" x={left - 8} y={y + 3}>
                 {formatCompactNumber(tickValue)}
               </text>
             </g>
           );
         })}
 
+        {/* Bars: open & overdue */}
         {points.map((point, index) => {
           const centerX = left + groupWidth * index + groupWidth / 2;
           const open = toNumber(point.open);
           const overdue = toNumber(point.overdue);
-          const openHeight = (open / maxValue) * innerHeight;
-          const overdueHeight = (overdue / maxValue) * innerHeight;
+          const openH = (open / maxValue) * innerHeight;
+          const overdueH = (overdue / maxValue) * innerHeight;
           const baseY = top + innerHeight;
-
           return (
             <g key={`bars-${point.label || index}`}>
               <title>
-                {(point.label || "--")}
-                {" | "}
-                Em aberto: {formatCurrency(open)}
-                {" | "}
-                Atrasado: {formatCurrency(overdue)}
+                {point.label || "--"} | Em aberto: {formatCurrency(open)} | Atrasado: {formatCurrency(overdue)}
               </title>
               <rect
-                fill="rgba(59,130,246,0.32)"
-                height={openHeight}
-                rx="8"
-                stroke="rgba(96,165,250,0.7)"
+                fill="#BFDBFE"
+                height={openH}
+                rx="5"
+                stroke="#93C5FD"
                 strokeWidth="1"
                 width={barWidth}
                 x={centerX - barWidth - barGap / 2}
-                y={baseY - openHeight}
+                y={baseY - openH}
               />
               <rect
-                fill="rgba(248,113,113,0.28)"
-                height={overdueHeight}
-                rx="8"
-                stroke="rgba(252,165,165,0.75)"
+                fill="#FECACA"
+                height={overdueH}
+                rx="5"
+                stroke="#FCA5A5"
                 strokeWidth="1"
                 width={barWidth}
                 x={centerX + barGap / 2}
-                y={baseY - overdueHeight}
+                y={baseY - overdueH}
               />
             </g>
           );
         })}
 
-        <polyline
+        {/* Area fill */}
+        <path d={areaD} fill="url(#areaGrad)" />
+
+        {/* Line */}
+        <path
+          d={lineD}
           fill="none"
-          points={linePoints}
-          stroke="#34d399"
+          stroke="#4F7EF7"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth="3"
+          strokeWidth="2.5"
         />
 
-        {points.map((point, index) => {
-          const centerX = left + groupWidth * index + groupWidth / 2;
-          const receivedValue = toNumber(point.received ?? point.value);
-          const y = top + innerHeight - (receivedValue / maxValue) * innerHeight;
-
+        {/* Data points + labels */}
+        {areaPoints.map((p, index) => {
+          const point = points[index];
+          const receivedValue = toNumber(point?.received ?? point?.value);
           return (
-            <g key={`point-${point.label || index}`}>
+            <g key={`pt-${point?.label || index}`}>
               <title>
-                {(point.label || "--")}
-                {" | "}
-                Recebido: {formatCurrency(receivedValue)}
+                {point?.label || "--"} | Recebido: {formatCurrency(receivedValue)}
               </title>
-              <circle cx={centerX} cy={y} fill="#34d399" r="4" stroke="rgba(15,23,42,0.9)" strokeWidth="2" />
-              <text fill="#94a3b8" fontSize="11" textAnchor="middle" x={centerX} y={height - 16}>
-                {point.label || "--"}
+              <circle cx={p.cx} cy={p.y} fill="#4F7EF7" r="4" stroke="#fff" strokeWidth="2" />
+              <text fill="#94A3B8" fontSize="11" textAnchor="middle" x={p.cx} y={height - 16}>
+                {point?.label || "--"}
               </text>
             </g>
           );
         })}
       </svg>
 
-      <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-slate-300">
-        <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+      <div className="mt-3 flex flex-wrap gap-4 text-xs font-semibold text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-[#4F7EF7]" />
           Recebido
         </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-sky-400/80" />
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
           Em aberto
         </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
           Atrasado
         </span>
       </div>
@@ -582,6 +645,9 @@ function MonthlyFlowChart({ points, hasData, emptyMessage }: { points: MonthlyPo
   );
 }
 
+/* ─────────────────────────────────────────
+   RECENT MOVEMENTS TABLE
+───────────────────────────────────────── */
 function RecentMovements({
   items,
   meta,
@@ -602,191 +668,304 @@ function RecentMovements({
   const pages = buildPaginationSequence(currentPage, totalPages);
 
   return (
-    <article className={`relative overflow-hidden rounded-2xl border border-slate-700/30 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)] ${loading ? "opacity-70" : ""}`}>
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)] opacity-60" />
-      <div className="relative z-10">
-        <div>
-          <h3 className="text-[1.06rem] font-bold tracking-[-0.02em] text-slate-100">Movimentacoes recentes</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-300">Apenas transacoes realizadas.</p>
+    <article
+      className={`overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] ${loading ? "opacity-70" : ""}`}
+    >
+      <div className="px-5 py-4 border-b border-slate-100">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-800">Movimentacoes recentes</h3>
+            <p className="mt-0.5 text-sm text-slate-500">Apenas transacoes realizadas.</p>
+          </div>
+          {totalItems > 0 ? (
+            <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-bold text-[#4F7EF7]">
+              {totalItems} {totalItems === 1 ? "registro" : "registros"}
+            </span>
+          ) : null}
         </div>
+      </div>
 
-        {items.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-950/30 px-4 py-10 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-700/70 bg-slate-900/70 text-slate-400">
-              <RefreshIcon className="h-6 w-6" />
-            </div>
-            <p className="mt-4 text-base font-semibold text-slate-100">Sem movimentacoes recentes.</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Quando houver recebimentos, ajustes ou lancamentos, eles aparecem aqui.
-            </p>
+      {items.length === 0 ? (
+        <div className="px-5 py-12 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+            <RefreshIcon className="h-6 w-6" />
           </div>
-        ) : (
-          <>
-            <div className="mt-4 hidden overflow-hidden rounded-[18px] border border-slate-700/40 bg-slate-950/25 md:block">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-700/60 text-left text-[0.76rem] font-extrabold uppercase tracking-[0.12em] text-slate-400">
-                      <th className="px-5 py-4">Data</th>
-                      <th className="px-5 py-4">Tipo</th>
-                      <th className="px-5 py-4">Origem</th>
-                      <th className="px-5 py-4">Descricao</th>
-                      <th className="px-5 py-4 text-right">Entrada</th>
-                      <th className="px-5 py-4 text-right">Saida</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, index) => {
-                      const isOutgoing = item.direction === "out";
-                      const href = normalizeHref(item.href);
+          <p className="mt-4 font-semibold text-slate-700">Sem movimentacoes recentes.</p>
+          <p className="mt-1.5 text-sm text-slate-400">
+            Quando houver recebimentos, ajustes ou lancamentos, eles aparecem aqui.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[900px] border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-[0.7rem] font-bold uppercase tracking-[0.1em] text-slate-400">
+                  <th className="px-5 py-3.5">Data</th>
+                  <th className="px-5 py-3.5">Tipo</th>
+                  <th className="px-5 py-3.5">Origem</th>
+                  <th className="px-5 py-3.5">Descricao</th>
+                  <th className="px-5 py-3.5 text-right">Entrada</th>
+                  <th className="px-5 py-3.5 text-right">Saida</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => {
+                  const isOutgoing = item.direction === "out";
+                  const href = normalizeHref(item.href);
 
-                      return (
-                        <tr
-                          className="cursor-pointer border-t border-slate-800/80 transition hover:bg-slate-900/60"
-                          key={`${item.id || "movement"}-${index}`}
-                          onClick={() => {
-                            window.location.href = href;
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              window.location.href = href;
-                            }
-                          }}
-                          role="link"
-                          tabIndex={0}
+                  return (
+                    <tr
+                      className="cursor-pointer border-t border-slate-100 transition hover:bg-slate-50/80"
+                      key={`${item.id || "movement"}-${index}`}
+                      onClick={() => {
+                        window.location.href = href;
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          window.location.href = href;
+                        }
+                      }}
+                      role="link"
+                      tabIndex={0}
+                    >
+                      <td className="px-5 py-3.5 text-sm font-medium text-slate-700">
+                        {formatDateLong(item.occurredAt)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.68rem] font-bold uppercase tracking-wide ${
+                            isOutgoing
+                              ? "bg-rose-50 text-rose-600"
+                              : "bg-emerald-50 text-emerald-700"
+                          }`}
                         >
-                          <td className="px-5 py-4 text-[0.98rem] font-medium text-slate-100">{formatDateLong(item.occurredAt)}</td>
-                          <td className="px-5 py-4">
-                            <span
-                              className={`inline-flex min-h-[26px] items-center rounded-full border px-3 text-[0.68rem] font-extrabold uppercase tracking-[0.12em] ${
-                                isOutgoing
-                                  ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
-                                  : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                              }`}
-                            >
-                              {item.typeLabel || "-"}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4">
-                            <span className="inline-flex min-h-[26px] items-center rounded-full border border-slate-600/50 bg-slate-900/70 px-3 text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-slate-200">
-                              {item.moduleLabel || "-"}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4">
-                            <p className="text-base font-medium text-slate-50">{item.title || "-"}</p>
-                            <p className="mt-1 text-sm leading-6 text-slate-400">{item.subtitle || "-"}</p>
-                          </td>
-                          <td className={`px-5 py-4 text-right text-base font-bold tracking-[-0.02em] ${isOutgoing ? "text-slate-500" : "text-emerald-300"}`}>
-                            {isOutgoing ? "-" : formatCurrency(item.amount)}
-                          </td>
-                          <td className={`px-5 py-4 text-right text-base font-bold tracking-[-0.02em] ${isOutgoing ? "text-rose-300" : "text-slate-500"}`}>
-                            {isOutgoing ? formatCurrency(item.amount) : "-"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:hidden">
-              {items.map((item, index) => {
-                const isOutgoing = item.direction === "out";
-
-                return (
-                  <Link
-                    className="block rounded-2xl border border-slate-700/50 bg-slate-950/25 px-4 py-4 transition hover:-translate-y-0.5 hover:border-slate-500/50 hover:bg-slate-900/70"
-                    href={normalizeHref(item.href)}
-                    key={`${item.id || "movement-mobile"}-${index}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="mb-2 flex flex-wrap gap-2">
-                          <span
-                            className={`inline-flex min-h-[26px] items-center rounded-full border px-3 text-[0.68rem] font-extrabold uppercase tracking-[0.12em] ${
-                              isOutgoing
-                                ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
-                                : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                            }`}
-                          >
-                            {item.typeLabel || "-"}
-                          </span>
-                          <span className="inline-flex min-h-[26px] items-center rounded-full border border-slate-600/50 bg-slate-900/70 px-3 text-[0.68rem] font-extrabold uppercase tracking-[0.12em] text-slate-200">
-                            {item.moduleLabel || "-"}
-                          </span>
-                        </div>
-                        <p className="text-[0.98rem] font-bold text-slate-50">{item.title || "-"}</p>
-                        <p className="mt-1 text-sm leading-6 text-slate-400">{item.subtitle || "-"}</p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className={`text-base font-extrabold tracking-[-0.02em] ${isOutgoing ? "text-rose-300" : "text-emerald-300"}`}>
-                          {isOutgoing ? "-" : "+"}
-                          {formatCurrency(item.amount)}
-                        </p>
-                        <p className="mt-2 text-[0.78rem] text-slate-400">{formatDateLong(item.occurredAt)}</p>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {totalPages > 1 ? (
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-400">
-              Mostrando {startItem}-{endItem} de {totalItems} movimentacoes
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="inline-flex min-h-[2.35rem] min-w-[2.35rem] items-center justify-center rounded-full border border-slate-600/70 bg-slate-950/30 px-4 text-sm font-bold text-slate-200 transition hover:border-sky-400/40 hover:bg-slate-800/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-                disabled={currentPage <= 1 || loading}
-                onClick={() => onPageChange(currentPage - 1)}
-                type="button"
-              >
-                Anterior
-              </button>
-              {pages.map((page) =>
-                typeof page === "number" ? (
-                  <button
-                    aria-current={page === currentPage ? "page" : undefined}
-                    className={`inline-flex min-h-[2.35rem] min-w-[2.35rem] items-center justify-center rounded-full border px-4 text-sm font-bold transition ${
-                      page === currentPage
-                        ? "border-violet-400/50 bg-[linear-gradient(135deg,rgba(109,40,217,0.46),rgba(91,33,182,0.4))] text-white shadow-[0_8px_20px_rgba(76,29,149,0.24)]"
-                        : "border-slate-600/70 bg-slate-950/30 text-slate-200 hover:border-sky-400/40 hover:bg-slate-800/80 hover:text-white"
-                    }`}
-                    disabled={loading}
-                    key={page}
-                    onClick={() => onPageChange(page)}
-                    type="button"
-                  >
-                    {page}
-                  </button>
-                ) : (
-                  <span className="inline-flex min-w-[2rem] items-center justify-center text-sm font-bold text-slate-500" key={page}>
-                    ...
-                  </span>
-                ),
-              )}
-              <button
-                className="inline-flex min-h-[2.35rem] min-w-[2.35rem] items-center justify-center rounded-full border border-slate-600/70 bg-slate-950/30 px-4 text-sm font-bold text-slate-200 transition hover:border-sky-400/40 hover:bg-slate-800/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-                disabled={currentPage >= totalPages || loading}
-                onClick={() => onPageChange(currentPage + 1)}
-                type="button"
-              >
-                Proxima
-              </button>
-            </div>
+                          {item.typeLabel || "-"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[0.68rem] font-bold uppercase tracking-wide text-slate-600">
+                          {item.moduleLabel || "-"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-semibold text-slate-800">{item.title || "-"}</p>
+                        <p className="mt-0.5 text-xs text-slate-400">{item.subtitle || "-"}</p>
+                      </td>
+                      <td
+                        className={`px-5 py-3.5 text-right text-sm font-bold ${isOutgoing ? "text-slate-300" : "text-emerald-600"}`}
+                      >
+                        {isOutgoing ? "-" : formatCurrency(item.amount)}
+                      </td>
+                      <td
+                        className={`px-5 py-3.5 text-right text-sm font-bold ${isOutgoing ? "text-rose-500" : "text-slate-300"}`}
+                      >
+                        {isOutgoing ? formatCurrency(item.amount) : "-"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ) : null}
+
+          {/* Mobile cards */}
+          <div className="grid gap-3 p-4 md:hidden">
+            {items.map((item, index) => {
+              const isOutgoing = item.direction === "out";
+              return (
+                <Link
+                  className="block rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5 transition hover:border-slate-300 hover:bg-white"
+                  href={normalizeHref(item.href)}
+                  key={`${item.id || "movement-mobile"}-${index}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide ${
+                            isOutgoing ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-700"
+                          }`}
+                        >
+                          {item.typeLabel || "-"}
+                        </span>
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-slate-600">
+                          {item.moduleLabel || "-"}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-800">{item.title || "-"}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{item.subtitle || "-"}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className={`text-base font-extrabold ${isOutgoing ? "text-rose-500" : "text-emerald-600"}`}>
+                        {isOutgoing ? "-" : "+"}
+                        {formatCurrency(item.amount)}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">{formatDateLong(item.occurredAt)}</p>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 ? (
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-500">
+            Mostrando {startItem}–{endItem} de {totalItems} movimentacoes
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7] disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={currentPage <= 1 || loading}
+              onClick={() => onPageChange(currentPage - 1)}
+              type="button"
+            >
+              Anterior
+            </button>
+            {pages.map((page) =>
+              typeof page === "number" ? (
+                <button
+                  aria-current={page === currentPage ? "page" : undefined}
+                  className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border px-2.5 text-xs font-bold transition ${
+                    page === currentPage
+                      ? "border-[#4F7EF7] bg-[#4F7EF7] text-white shadow-[0_4px_12px_rgba(79,126,247,0.3)]"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7]"
+                  }`}
+                  disabled={loading}
+                  key={page}
+                  onClick={() => onPageChange(page)}
+                  type="button"
+                >
+                  {page}
+                </button>
+              ) : (
+                <span
+                  className="inline-flex h-8 min-w-[2rem] items-center justify-center text-xs font-bold text-slate-400"
+                  key={page}
+                >
+                  ...
+                </span>
+              ),
+            )}
+            <button
+              className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7] disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={currentPage >= totalPages || loading}
+              onClick={() => onPageChange(currentPage + 1)}
+              type="button"
+            >
+              Proxima
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+/* ─────────────────────────────────────────
+   EMPTY STATE
+───────────────────────────────────────── */
+function EmptyState({ title, note }: { title: string; note: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-10 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+        <CalendarCheckIcon className="h-5 w-5" />
+      </div>
+      <p className="mt-3 font-semibold text-slate-700">{title}</p>
+      <p className="mt-1 text-sm text-slate-500">{note}</p>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   OPERATION PANEL
+───────────────────────────────────────── */
+function OperationPanel({
+  title,
+  note,
+  totalValue,
+  secondaryTotalLabel,
+  secondaryTotalValue,
+  items,
+  emptyTitle,
+  emptyNote,
+  amountClassName,
+}: {
+  title: string;
+  note?: string;
+  totalValue: number;
+  secondaryTotalLabel?: string;
+  secondaryTotalValue?: number;
+  items: OperationItem[];
+  emptyTitle: string;
+  emptyNote: string;
+  amountClassName: string;
+}) {
+  return (
+    <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
+      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
+        <div>
+          <h3 className="text-base font-bold text-slate-800">{title}</h3>
+          {note ? <p className="mt-0.5 text-sm text-slate-500">{note}</p> : null}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className="inline-flex items-center rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-bold text-[#4F7EF7]">
+            Total: {formatCurrency(totalValue)}
+          </span>
+          {secondaryTotalLabel && typeof secondaryTotalValue === "number" && secondaryTotalValue > 0 ? (
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+              {secondaryTotalLabel}: {formatCurrency(secondaryTotalValue)}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="grid gap-2.5 p-4">
+        {items.length === 0 ? (
+          <EmptyState note={emptyNote} title={emptyTitle} />
+        ) : (
+          items.map((item, index) => (
+            <Link
+              className="rounded-xl border border-slate-200/80 bg-slate-50/50 px-4 py-3.5 transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
+              href={normalizeHref(item.href)}
+              key={`${item.title || "item"}-${index}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="mb-1.5 flex flex-wrap gap-1.5">
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-slate-600">
+                      {item.typeLabel || "-"}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-slate-50 border border-slate-200 px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-slate-500">
+                      {item.moduleLabel || "-"}
+                    </span>
+                  </div>
+                  <p className="truncate text-sm font-semibold text-slate-800">{item.title || "-"}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{item.subtitle || "-"}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className={`text-base font-bold ${amountClassName}`}>
+                    {formatCurrency(item.amount)}
+                  </p>
+                </div>
+              </div>
+            </Link>
+          ))
+        )}
       </div>
     </article>
   );
 }
 
+/* ─────────────────────────────────────────
+   MAIN PAGE COMPONENT
+───────────────────────────────────────── */
 export function OverviewPageClient() {
   const [page, setPage] = useState(1);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -817,12 +996,10 @@ export function OverviewPageClient() {
       setCashError("Informe um valor valido maior que zero.");
       return;
     }
-
     if (!cashDate) {
       setCashError("Informe uma data valida para o ajuste.");
       return;
     }
-
     setCashSaving(true);
     setCashError(null);
     try {
@@ -838,27 +1015,20 @@ export function OverviewPageClient() {
         }),
       });
       const body = await response.json().catch(() => null);
-
       if (response.status === 401) {
         window.location.href = "/login";
         return;
       }
-
       if (!response.ok) {
         throw new Error(
-          typeof body?.message === "string"
-            ? body.message
-            : "Falha ao salvar ajuste de caixa.",
+          typeof body?.message === "string" ? body.message : "Falha ao salvar ajuste de caixa.",
         );
       }
-
       setCashModalOpen(false);
       setRefreshTick((current) => current + 1);
     } catch (nextError) {
       setCashError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Nao foi possivel registrar o ajuste.",
+        nextError instanceof Error ? nextError.message : "Nao foi possivel registrar o ajuste.",
       );
     } finally {
       setCashSaving(false);
@@ -881,7 +1051,9 @@ export function OverviewPageClient() {
       .catch((nextError) => {
         if (!active || controller.signal.aborted) return;
         console.error(nextError);
-        setError(nextError instanceof Error ? nextError.message : "Falha ao carregar a visao geral.");
+        setError(
+          nextError instanceof Error ? nextError.message : "Falha ao carregar a visao geral.",
+        );
       })
       .finally(() => {
         if (!active) return;
@@ -958,25 +1130,56 @@ export function OverviewPageClient() {
     },
   ];
 
+  // Loading skeleton
+  if (initialLoading) {
+    return (
+      <div className="w-full max-w-[1600px] mx-auto animate-pulse">
+        <div className="mb-7">
+          <div className="h-9 w-48 rounded-xl bg-slate-200" />
+          <div className="mt-2 h-5 w-80 rounded-lg bg-slate-100" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-40 rounded-[18px] bg-slate-200" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`w-full max-w-[1600px] mx-auto ${initialLoading ? "opacity-90" : ""}`}>
-      <section className="mb-7">
-        <div>
-          <h1 className="text-[clamp(2rem,1.2vw+1.2rem,2.45rem)] font-bold leading-[1.04] tracking-[-0.035em] text-slate-100">
-            Visao geral
-          </h1>
-          <p className="mt-2 max-w-[54rem] text-[0.96rem] leading-[1.6] text-slate-300">
-            Resumo do caixa, recebimentos e compromissos financeiros.
-          </p>
+      {/* ── PAGE HEADER ── */}
+      <section className="mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-[clamp(1.6rem,1.2vw+1rem,2.1rem)] font-bold leading-tight tracking-tight text-slate-800">
+              Visao geral
+            </h1>
+            <p className="mt-1.5 text-sm text-slate-500">
+              Resumo do caixa, recebimentos e compromissos financeiros.
+            </p>
+          </div>
+          {/* Date badge */}
+          <span className="hidden shrink-0 items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm sm:inline-flex">
+            {new Date().toLocaleDateString("pt-BR", {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
         </div>
       </section>
 
+      {/* Error banner */}
       {error ? (
-        <div className="mb-4 rounded-2xl border border-rose-400/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
           {error}
         </div>
       ) : null}
 
+      {/* ── ROW 1: KPI CARDS ── */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           action={{
@@ -985,7 +1188,7 @@ export function OverviewPageClient() {
             icon: <WalletIcon className="h-3.5 w-3.5" />,
             disabled: cashSaving,
           }}
-          icon={<WalletIcon className="h-[1.05rem] w-[1.05rem]" />}
+          icon={<WalletIcon className="h-5 w-5" />}
           label="Saldo em caixa"
           meta={`Ajustes: ${formatCurrency(payload?.cashAdjustment?.net)}`}
           note={overview?.cashBalance?.note || "Disponivel agora"}
@@ -993,15 +1196,15 @@ export function OverviewPageClient() {
           value={formatCurrency(overview?.cashBalance?.value)}
         />
         <MetricCard
-          icon={<ArrowUpRightIcon className="h-[1.05rem] w-[1.05rem]" />}
+          icon={<ArrowUpRightIcon className="h-5 w-5" />}
           label="Contas a receber"
-          meta={`Emprestimos (mes): ${formatCurrency(overview?.accountsReceivable?.loanValue)} | Financeiro (mes): ${formatCurrency(overview?.accountsReceivable?.financeValue)}`}
+          meta={`Emprestimos: ${formatCurrency(overview?.accountsReceivable?.loanValue)} | Financeiro: ${formatCurrency(overview?.accountsReceivable?.financeValue)}`}
           note={overview?.accountsReceivable?.note || "Emprestimos + Financeiro"}
           tone="receivable"
           value={formatCurrency(overview?.accountsReceivable?.value)}
         />
         <MetricCard
-          icon={<ArrowDownLeftIcon className="h-[1.05rem] w-[1.05rem]" />}
+          icon={<ArrowDownLeftIcon className="h-5 w-5" />}
           label="Contas a pagar"
           meta={`${toNumber(overview?.accountsPayable?.itemsCount)} lancamento(s) pendente(s)`}
           note={overview?.accountsPayable?.note || "Compromissos pendentes"}
@@ -1009,32 +1212,29 @@ export function OverviewPageClient() {
           value={formatCurrency(overview?.accountsPayable?.value)}
         />
         <MetricCard
-          icon={<TrendUpIcon className="h-[1.05rem] w-[1.05rem]" />}
+          icon={<TrendUpIcon className="h-5 w-5" />}
           label="Saldo previsto"
-          meta={`Entradas (mes): ${formatCurrency(overview?.projectedBalance?.receivableValue)} | Saidas (mes): ${formatCurrency(overview?.projectedBalance?.payableValue)}`}
+          meta={`Entradas: ${formatCurrency(overview?.projectedBalance?.receivableValue)} | Saidas: ${formatCurrency(overview?.projectedBalance?.payableValue)}`}
           note={overview?.projectedBalance?.note || "Apos entradas e saidas"}
           tone="projected"
           value={formatCurrency(overview?.projectedBalance?.value)}
         />
       </section>
 
+      {/* ── ROW 2: OPERATIONS + ALERTS ── */}
       <section className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_1.15fr_.8fr]">
         <OperationPanel
-          amountClassName="text-emerald-100"
+          amountClassName="text-emerald-600"
           emptyNote="Quando houver parcelas ou contas a receber no dia, elas aparecem aqui."
           emptyTitle="Sem recebimentos previstos para hoje."
           items={receiptsTodayItems}
-          secondaryTotalLabel={
-            overdueIncomingCount
-              ? `Atrasados (${overdueIncomingCount})`
-              : undefined
-          }
+          secondaryTotalLabel={overdueIncomingCount ? `Atrasados (${overdueIncomingCount})` : undefined}
           secondaryTotalValue={overdueIncomingCount ? overdueIncomingValue : undefined}
           title="Recebimentos de hoje"
           totalValue={incomingValue}
         />
         <OperationPanel
-          amountClassName="text-rose-100"
+          amountClassName="text-rose-500"
           emptyNote="Quando houver contas a pagar hoje ou vencidas, elas aparecem aqui."
           emptyTitle="Sem pagamentos para hoje ou vencidos."
           items={paymentsTodayItems}
@@ -1042,65 +1242,79 @@ export function OverviewPageClient() {
           title="Pagamentos de hoje"
           totalValue={outgoingValue}
         />
-        <article className="relative overflow-hidden rounded-2xl border border-slate-700/30 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)]">
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)] opacity-60" />
-          <div className="relative z-10 grid gap-4">
-            <div>
-              <h3 className="text-[1.06rem] font-bold tracking-[-0.02em] text-slate-100">Alertas financeiros</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-300">Leitura rapida dos compromissos e riscos do dia.</p>
-            </div>
-            <div className="grid gap-3">
-              {alerts.map((alert) => (
-                <FinancialAlert icon={alert.icon} key={alert.label} label={alert.label} tone={alert.tone} />
-              ))}
-            </div>
+
+        {/* Alerts card */}
+        <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h3 className="text-base font-bold text-slate-800">Alertas financeiros</h3>
+            <p className="mt-0.5 text-sm text-slate-500">Leitura rapida dos compromissos e riscos do dia.</p>
+          </div>
+          <div className="grid gap-2.5 p-4">
+            {alerts.map((alert) => (
+              <FinancialAlert icon={alert.icon} key={alert.label} label={alert.label} tone={alert.tone} />
+            ))}
           </div>
         </article>
       </section>
 
+      {/* ── ROW 3: CHART + DAILY SUMMARY ── */}
       <section className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_.75fr]">
-        <article className="relative overflow-hidden rounded-2xl border border-slate-700/30 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)]">
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)] opacity-60" />
-          <div className="relative z-10">
+        {/* Monthly flow chart */}
+        <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
+          <div className="border-b border-slate-100 px-5 py-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-[1.06rem] font-bold tracking-[-0.02em] text-slate-100">Fluxo mensal</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Leitura dos ultimos meses com recebido, a vencer e atrasado.</p>
+                <h3 className="text-base font-bold text-slate-800">Fluxo mensal</h3>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  Leitura dos ultimos meses com recebido, a vencer e atrasado.
+                </p>
               </div>
-              <span className="inline-flex items-center rounded-full border border-sky-400/15 bg-slate-900/60 px-3 py-1 text-[0.72rem] font-bold text-indigo-200">
+              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500">
                 Ultimos 6 meses
               </span>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-950/25 px-4 py-4">
-                <p className="text-[0.72rem] font-extrabold uppercase tracking-[0.12em] text-slate-400">Mes atual</p>
-                <p className="mt-2 text-[1.42rem] font-bold tracking-[-0.03em] text-slate-100">{currentPoint ? formatCurrency(currentValue) : "--"}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  {currentPoint ? `${formatMetricLabel(chart?.metric)} em ${currentPoint.label || "mes atual"}.` : "Sem dados no periodo atual."}
+          </div>
+          <div className="p-5">
+            {/* Mini stats row */}
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Mes atual</p>
+                <p className="mt-1.5 text-[1.35rem] font-bold tracking-tight text-slate-800">
+                  {currentPoint ? formatCurrency(currentValue) : "--"}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {currentPoint
+                    ? `${formatMetricLabel(chart?.metric)} em ${currentPoint.label || "mes atual"}.`
+                    : "Sem dados no periodo atual."}
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-950/25 px-4 py-4">
-                <p className="text-[0.72rem] font-extrabold uppercase tracking-[0.12em] text-slate-400">Comparativo</p>
-                <p className="mt-2 text-[1.42rem] font-bold tracking-[-0.03em] text-slate-100">{previousPoint ? formatCurrency(previousValue) : "--"}</p>
+              <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Comparativo</p>
+                <p className="mt-1.5 text-[1.35rem] font-bold tracking-tight text-slate-800">
+                  {previousPoint ? formatCurrency(previousValue) : "--"}
+                </p>
                 <p
-                  className={`mt-2 text-sm leading-6 ${
+                  className={`mt-1 text-xs font-semibold ${
                     flowInsight.tone === "positive"
-                      ? "text-emerald-300"
+                      ? "text-emerald-600"
                       : flowInsight.tone === "negative"
-                        ? "text-rose-300"
+                        ? "text-rose-500"
                         : "text-slate-400"
                   }`}
                 >
-                  {previousPoint ? `${flowInsight.text} sobre ${previousPoint.label}.` : "Sem base anterior para comparativo."}
+                  {previousPoint
+                    ? `${flowInsight.text} sobre ${previousPoint.label}.`
+                    : "Sem base anterior para comparativo."}
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-950/25 px-4 py-4">
-                <p className="text-[0.72rem] font-extrabold uppercase tracking-[0.12em] text-slate-400">Pendencias do mes</p>
-                <p className="mt-2 text-[1.42rem] font-bold tracking-[-0.03em] text-slate-100">{formatCurrency(pendingCurrentMonth)}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Total ainda nao recebido no mes atual.
+              <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Pendencias do mes</p>
+                <p className="mt-1.5 text-[1.35rem] font-bold tracking-tight text-slate-800">
+                  {formatCurrency(pendingCurrentMonth)}
                 </p>
-                <p className="text-sm leading-6 text-slate-400">A vencer: {formatCurrency(openCurrentMonth)} | Em atraso: {formatCurrency(overdueCurrentMonth)}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  A vencer: {formatCurrency(openCurrentMonth)} | Em atraso: {formatCurrency(overdueCurrentMonth)}
+                </p>
               </div>
             </div>
             <MonthlyFlowChart
@@ -1111,48 +1325,47 @@ export function OverviewPageClient() {
           </div>
         </article>
 
-        <article className="relative overflow-hidden rounded-2xl border border-slate-700/30 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)]">
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)] opacity-60" />
-          <div className="relative z-10">
-            <div>
-              <h3 className="text-[1.06rem] font-bold tracking-[-0.02em] text-slate-100">Resumo do dia</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-300">Entradas, saidas e projecao imediata do caixa.</p>
-            </div>
-            <div className="mt-5 grid gap-4">
-              <DailySummaryCard
-                icon={<ArrowUpRightIcon className="h-4 w-4" />}
-                meta={
-                  receiptsTodayItems.length
-                    ? `${receiptsTodayItems.length} ${receiptsTodayItems.length === 1 ? "entrada prevista para hoje." : "entradas previstas para hoje."}`
-                    : "Nenhuma entrada prevista para hoje."
-                }
-                title="Entradas previstas hoje"
-                tone="incoming"
-                value={formatCurrency(incomingValue)}
-              />
-              <DailySummaryCard
-                icon={<ArrowDownLeftIcon className="h-4 w-4" />}
-                meta={
-                  paymentsTodayItems.length
-                    ? `${paymentsTodayItems.length} ${paymentsTodayItems.length === 1 ? "saida prevista para hoje." : "saidas previstas para hoje."}`
-                    : "Nenhuma saida prevista para hoje."
-                }
-                title="Saidas previstas hoje"
-                tone="outgoing"
-                value={formatCurrency(outgoingValue)}
-              />
-              <DailySummaryCard
-                icon={<WalletIcon className="h-4 w-4" />}
-                meta={`Caixa atual ${formatCurrency(cashBalance)} + entradas - saidas do dia.`}
-                title="Saldo projetado do dia"
-                tone="projected"
-                value={formatCurrency(projectedDayValue)}
-              />
-            </div>
+        {/* Daily summary */}
+        <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h3 className="text-base font-bold text-slate-800">Resumo do dia</h3>
+            <p className="mt-0.5 text-sm text-slate-500">Entradas, saidas e projecao imediata do caixa.</p>
+          </div>
+          <div className="grid gap-3 p-5">
+            <DailySummaryCard
+              icon={<ArrowUpRightIcon className="h-4.5 w-4.5" />}
+              meta={
+                receiptsTodayItems.length
+                  ? `${receiptsTodayItems.length} ${receiptsTodayItems.length === 1 ? "entrada prevista para hoje." : "entradas previstas para hoje."}`
+                  : "Nenhuma entrada prevista para hoje."
+              }
+              title="Entradas previstas hoje"
+              tone="incoming"
+              value={formatCurrency(incomingValue)}
+            />
+            <DailySummaryCard
+              icon={<ArrowDownLeftIcon className="h-4.5 w-4.5" />}
+              meta={
+                paymentsTodayItems.length
+                  ? `${paymentsTodayItems.length} ${paymentsTodayItems.length === 1 ? "saida prevista para hoje." : "saidas previstas para hoje."}`
+                  : "Nenhuma saida prevista para hoje."
+              }
+              title="Saidas previstas hoje"
+              tone="outgoing"
+              value={formatCurrency(outgoingValue)}
+            />
+            <DailySummaryCard
+              icon={<WalletIcon className="h-4.5 w-4.5" />}
+              meta={`Caixa atual ${formatCurrency(cashBalance)} + entradas − saidas do dia.`}
+              title="Saldo projetado do dia"
+              tone="projected"
+              value={formatCurrency(projectedDayValue)}
+            />
           </div>
         </article>
       </section>
 
+      {/* ── ROW 4: RECENT MOVEMENTS ── */}
       <section className="mt-4">
         <RecentMovements
           items={payload?.recentMovements || []}
@@ -1165,6 +1378,7 @@ export function OverviewPageClient() {
         />
       </section>
 
+      {/* ── CASH ADJUSTMENT MODAL ── */}
       <ModalBase
         footer={
           <>
@@ -1241,101 +1455,11 @@ export function OverviewPageClient() {
         </div>
 
         {cashError ? (
-          <div className="mt-4 rounded-xl border border-rose-400/30 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
+          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-medium text-rose-700">
             {cashError}
           </div>
         ) : null}
       </ModalBase>
     </div>
-  );
-}
-
-function EmptyState({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-950/30 px-4 py-10 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-700/70 bg-slate-900/70 text-slate-400">
-        <CalendarCheckIcon className="h-6 w-6" />
-      </div>
-      <p className="mt-4 text-base font-semibold text-slate-100">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-400">{note}</p>
-    </div>
-  );
-}
-
-function OperationPanel({
-  title,
-  note,
-  totalValue,
-  secondaryTotalLabel,
-  secondaryTotalValue,
-  items,
-  emptyTitle,
-  emptyNote,
-  amountClassName,
-}: {
-  title: string;
-  note?: string;
-  totalValue: number;
-  secondaryTotalLabel?: string;
-  secondaryTotalValue?: number;
-  items: OperationItem[];
-  emptyTitle: string;
-  emptyNote: string;
-  amountClassName: string;
-}) {
-  return (
-    <article className="relative overflow-hidden rounded-2xl border border-slate-700/30 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)]">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)] opacity-60" />
-      <div className="relative z-10 flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-[1.06rem] font-bold tracking-[-0.02em] text-slate-100">{title}</h3>
-          {note ? <p className="mt-2 text-sm leading-6 text-slate-300">{note}</p> : null}
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <span className="inline-flex items-center rounded-full border border-sky-400/15 bg-slate-900/70 px-3 py-1 text-[0.72rem] font-bold text-indigo-200">
-            Total hoje: {formatCurrency(totalValue)}
-          </span>
-          {secondaryTotalLabel && typeof secondaryTotalValue === "number" && secondaryTotalValue > 0 ? (
-            <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[0.7rem] font-bold text-amber-100">
-              {secondaryTotalLabel}: {formatCurrency(secondaryTotalValue)}
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="relative z-10 mt-4 grid gap-3">
-        {items.length === 0 ? (
-          <EmptyState note={emptyNote} title={emptyTitle} />
-        ) : (
-          items.map((item, index) => (
-            <Link
-              className="rounded-2xl border border-slate-700/60 bg-slate-950/30 px-4 py-4 transition hover:-translate-y-0.5 hover:border-slate-500/50 hover:bg-slate-900/70"
-              href={normalizeHref(item.href)}
-              key={`${item.title || "item"}-${index}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="mb-2 flex flex-wrap gap-2">
-                    <span className="inline-flex min-h-[28px] items-center rounded-full border border-slate-600/60 bg-slate-900/80 px-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-slate-200">
-                      {item.typeLabel || "-"}
-                    </span>
-                    <span className="inline-flex min-h-[28px] items-center rounded-full border border-slate-700/60 bg-slate-950/70 px-3 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                      {item.moduleLabel || "-"}
-                    </span>
-                  </div>
-                  <p className="truncate text-base font-bold text-slate-50">{item.title || "-"}</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-400">{item.subtitle || "-"}</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className={`text-lg font-extrabold tracking-[-0.03em] ${amountClassName}`}>
-                    {formatCurrency(item.amount)}
-                  </p>
-                </div>
-              </div>
-            </Link>
-          ))
-        )}
-      </div>
-    </article>
   );
 }
