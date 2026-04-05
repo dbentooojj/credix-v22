@@ -370,14 +370,14 @@ export function ContasPagarClient() {
   const isEditing = Boolean(editingItem);
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto pb-20">
+    <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
       {/* Header */}
       <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Contas a Pagar</h1>
-          <p className="mt-1 text-sm text-slate-400">Gerencie despesas, vencimentos e pagamentos do seu negócio.</p>
+          <p className="mt-1.5 text-sm text-slate-400">Gerencie despesas, vencimentos e pagamentos do seu negócio.</p>
         </div>
-        <button onClick={openCreateModal} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:bg-blue-700">
+        <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-5 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98]">
           <Plus className="h-4 w-4" />
           Nova conta
         </button>
@@ -424,7 +424,7 @@ export function ContasPagarClient() {
       </section>
 
       {/* Tabela */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 sm:p-5 lg:p-6 shadow-xl">
+      <div className="rounded-2xl border border-slate-800/60 bg-slate-950/80 p-3 sm:p-5 lg:p-6 shadow-xl backdrop-blur-sm">
         <div className="mb-4 flex flex-wrap items-center gap-3 text-xs font-bold">
           <span className="text-red-400">{summary.overdue} vencida(s)</span>
           <span className="text-slate-600">•</span>
