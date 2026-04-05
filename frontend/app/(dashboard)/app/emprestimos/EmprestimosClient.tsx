@@ -452,52 +452,56 @@ export function EmprestimosClient() {
   }
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto pb-20">
+    <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
       <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Empréstimos</h1>
-          <p className="mt-1 text-sm text-slate-400">Acompanhe contratos, valores e status da carteira ativa.</p>
+          <p className="mt-1.5 text-sm text-slate-400">Acompanhe contratos, valores e status da carteira ativa.</p>
         </div>
         <div className="flex w-full flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
-          <button onClick={openSimulationModal} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-5 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700">
+          <button onClick={openSimulationModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-5 text-sm font-semibold text-slate-300 transition-all hover:bg-slate-700 active:scale-[0.98]">
             <FlaskConical className="h-4 w-4" /> Nova simulação
           </button>
-          <button onClick={openLoanModal} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:bg-blue-700">
+          <button onClick={openLoanModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-5 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98]">
             <Plus className="h-4 w-4" /> Novo empréstimo
           </button>
         </div>
       </section>
 
       {/* KPIs */}
-      <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
-          <Hash className="pointer-events-none absolute right-4 top-4 h-5 w-5 text-slate-500" />
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Qtd. empréstimos</p>
-          <p className="mt-3 text-[1.375rem] font-bold text-slate-100">{loading ? "..." : totalCount}</p>
-          <p className="mt-1.5 text-xs font-semibold text-slate-500">Na base de dados</p>
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-[#4F7EF7]" />
+          <Hash className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
+          <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Empréstimos</p>
+          <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : totalCount}</p>
+          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">Na base de dados</p>
         </div>
-        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
-          <Banknote className="pointer-events-none absolute right-4 top-4 h-5 w-5 text-slate-500" />
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Principal total</p>
-          <p className="mt-3 text-[1.375rem] font-bold text-slate-100">{loading ? "..." : formatCurrency(totalPrincipal)}</p>
-          <p className="mt-1.5 text-xs font-semibold text-slate-500">Capital emprestado</p>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500" />
+          <Banknote className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
+          <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Principal total</p>
+          <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : formatCurrency(totalPrincipal)}</p>
+          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">Capital emprestado</p>
         </div>
-        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
-          <BarChart3 className="pointer-events-none absolute right-4 top-4 h-5 w-5 text-slate-500" />
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Total contratado</p>
-          <p className="mt-3 text-[1.375rem] font-bold text-slate-100">{loading ? "..." : formatCurrency(totalContracted)}</p>
-          <p className="mt-1.5 text-xs font-semibold text-slate-500">Custo Efetivo + Juros</p>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-violet-500" />
+          <BarChart3 className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
+          <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Total contratado</p>
+          <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : formatCurrency(totalContracted)}</p>
+          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">Custo Efetivo + Juros</p>
         </div>
-        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
-          <CheckCircle2 className="pointer-events-none absolute right-4 top-4 h-5 w-5 text-slate-500" />
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Empréstimos ativos</p>
-          <p className="mt-3 text-[1.375rem] font-bold text-slate-100">{loading ? "..." : activeCount}</p>
-          <p className="mt-1.5 text-xs font-semibold text-slate-500">Contratos vigentes</p>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-sky-500" />
+          <CheckCircle2 className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
+          <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Ativos</p>
+          <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-sky-400">{loading ? "..." : activeCount}</p>
+          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">Contratos vigentes</p>
         </div>
       </div>
 
       {/* Filter and Table */}
-      <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950 p-4 sm:p-5 lg:p-6 shadow-xl">
+      <div className="mb-6 rounded-2xl border border-slate-800/60 bg-slate-950/80 p-3 sm:p-5 lg:p-6 shadow-xl backdrop-blur-sm">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-5">
           <div className="md:col-span-5">
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Buscar</label>
