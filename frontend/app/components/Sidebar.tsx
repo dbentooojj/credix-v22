@@ -129,10 +129,6 @@ export function Sidebar({
               </div>
             </section>
           )}
-
-          <div className="mt-auto border-t border-slate-100 px-3 pt-6">
-            <p className="text-[0.6rem] font-medium text-slate-400">Credix v1.0 - 2026</p>
-          </div>
         </div>
       </aside>
     </>

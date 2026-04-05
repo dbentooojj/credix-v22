@@ -5,6 +5,7 @@ import {
   PrismaClient,
   UserRole,
 } from "@prisma/client";
+import { ensureFinanceCategoryCatalogForUser } from "../src/lib/finance-categories";
 
 const prisma = new PrismaClient();
 
@@ -112,6 +113,8 @@ async function main() {
       ],
     });
   }
+
+  await ensureFinanceCategoryCatalogForUser(prisma, adminUser.id);
 
   console.log(`Admin seed concluido: ${email}`);
 }

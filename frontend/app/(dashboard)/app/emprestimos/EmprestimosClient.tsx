@@ -633,10 +633,10 @@ export function EmprestimosClient() {
 
       {/* ===== MODAL: NOVO EMPRÉSTIMO / NOVA SIMULAÇÃO ===== */}
       {showLoanModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm pt-8 overflow-y-auto" onClick={() => setShowLoanModal(false)}>
-          <div className="w-full max-w-[920px] mx-4 mb-8 rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-hidden bg-black/60 px-4 pb-4 pt-14 backdrop-blur-sm sm:pt-16" onClick={() => setShowLoanModal(false)}>
+          <div className="flex max-h-[calc(100vh-4.5rem)] w-full max-w-[840px] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl sm:max-h-[calc(100vh-5rem)]" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex items-start justify-between border-b border-slate-800 px-6 py-5">
+            <div className="shrink-0 flex items-start justify-between border-b border-slate-800 px-5 py-4">
               <div>
                 <h2 className="text-xl font-bold text-slate-100">{loanModalMode === "loan" ? "Novo emprestimo" : "Nova simulacao"}</h2>
                 <p className="mt-1 text-sm text-slate-400">{loanModalMode === "loan" ? "Defina as informações, condições e agenda do contrato." : "Monte a proposta, envie no WhatsApp e aprove para criar o emprestimo real."}</p>
@@ -645,13 +645,14 @@ export function EmprestimosClient() {
             </div>
 
             {/* Body: 2 columns */}
-            <div className="flex flex-col lg:flex-row">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="flex flex-col xl:flex-row">
               {/* Left: Form */}
-              <div className="flex-1 px-6 py-5 space-y-5">
+              <div className="flex-1 space-y-4 px-5 py-4">
                 {/* Informações Básicas */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Informacoes basicas</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Cliente</label>
                       <select className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" value={formClientId} onChange={(e) => setFormClientId(e.target.value)}>
@@ -669,7 +670,7 @@ export function EmprestimosClient() {
                 {/* Condições */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Condicoes</h3>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid gap-4 md:grid-cols-3">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Tipo de juros</label>
                       <select className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" value={formInterestType} onChange={(e) => setFormInterestType(e.target.value as "composto" | "simples" | "fixo")}>
@@ -735,7 +736,7 @@ export function EmprestimosClient() {
                 {/* Datas */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Datas</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Data de inicio</label>
                       <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formStartDate} onChange={(e) => { setFormStartDate(e.target.value); setFormFirstDue(addMonths(e.target.value, 1)); }} />
@@ -757,7 +758,7 @@ export function EmprestimosClient() {
                 {/* Previa das parcelas */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Previa das parcelas</h3>
-                  <div className="space-y-2 max-h-52 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                  <div className="space-y-2 max-h-44 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/40 p-3">
                     {loanSummary.plan.length === 0 ? (
                       <p className="text-xs text-slate-500">Preencha os campos para visualizar as parcelas.</p>
                     ) : (
@@ -779,7 +780,7 @@ export function EmprestimosClient() {
               </div>
 
               {/* Right: Resumo */}
-              <div className="w-full lg:w-[280px] border-t lg:border-t-0 lg:border-l border-slate-800 px-6 py-5">
+              <div className="w-full border-t border-slate-800 px-5 py-4 xl:w-[248px] xl:border-l xl:border-t-0">
                 <h3 className="text-base font-bold text-slate-100 mb-4">Resumo do emprestimo</h3>
                 <div className="space-y-3">
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.totalAmount)}</p></div>
@@ -793,9 +794,10 @@ export function EmprestimosClient() {
                 </div>
               </div>
             </div>
+            </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 border-t border-slate-800 px-6 py-4">
+            <div className="shrink-0 flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-3.5">
               {loanModalMode === "loan" ? (
                 <button onClick={handleSaveLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
                   {saving ? "Salvando..." : "Salvar empréstimo"}
@@ -817,7 +819,7 @@ export function EmprestimosClient() {
 
       {/* ===== MODAL: EXCLUIR EMPRÉSTIMO ===== */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
           <div className="w-full max-w-md mx-4 rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-slate-100">Confirmar exclusão</h2>
             <p className="mt-1 text-sm text-slate-400">Deseja excluir o empréstimo #{deletingLoan?.id}?</p>

@@ -16,20 +16,29 @@ import {
   Circle,
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
+import {
+  FinanceCategoryManagerModal,
+  FinanceCategoryPicker,
+  type FinanceCategoryMeta,
+  formatFinanceCategoryLabel,
+  useFinanceCategoryCatalog,
+} from "../../../components/FinanceCategoryControls";
 
 // --- TYPES ---
 type Transaction = {
   id: string | number;
   type?: string;
   description?: string;
+  categoryId?: string | number | null;
   category?: string;
+  categoryMeta?: FinanceCategoryMeta | null;
   amount?: number | string;
   date?: string;
   status?: string;
 };
 
 // --- HELPERS ---
-const SYSTEM_CATEGORIES = new Set(["emprestimo_parcela", "emprestimo_desembolso"]);
+const SYSTEM_CATEGORIES = new Set(["Recebimento de parcela", "Desembolso de emprestimo", "Ajuste de caixa"]);
 
 function parseDateOnly(value: any) {
   if (!value) return null;
@@ -105,7 +114,7 @@ function buildObservation(item: Transaction, ds: DisplayStatus) {
   if (ds.key === "paid") return "Pagamento registrado no sistema.";
   if (ds.key === "overdue" && dueDate) {
     const diff = Math.floor((today.getTime() - startOfDay(dueDate).getTime()) / 86400000);
-    return `Em atraso há ${diff} dia(s).`;
+    return `Em atraso hÃ¡ ${diff} dia(s).`;
   }
   if (ds.key === "due-today") return "Compromisso previsto para hoje.";
   if (ds.key === "scheduled") return "Pagamento agendado para esta data.";
@@ -121,7 +130,6 @@ export function ContasPagarClient() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [monthCursor, setMonthCursor] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -133,6 +141,7 @@ export function ContasPagarClient() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showCategoryManagerModal, setShowCategoryManagerModal] = useState(false);
   const [editingItem, setEditingItem] = useState<Transaction | null>(null);
   const [viewingItem, setViewingItem] = useState<Transaction | null>(null);
   const [deletingItem, setDeletingItem] = useState<Transaction | null>(null);
@@ -141,7 +150,7 @@ export function ContasPagarClient() {
 
   // Form fields
   const [formDescription, setFormDescription] = useState("");
-  const [formCategory, setFormCategory] = useState("");
+  const [formCategoryId, setFormCategoryId] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formDate, setFormDate] = useState("");
   const [formStatus, setFormStatus] = useState("pending");
@@ -149,6 +158,12 @@ export function ContasPagarClient() {
   const [formInstallmentCount, setFormInstallmentCount] = useState("4");
   const [formInstallmentAmountMode, setFormInstallmentAmountMode] = useState("total");
   const [formRecurringMonths, setFormRecurringMonths] = useState("12");
+  const {
+    categories,
+    createCategory,
+    updateCategory,
+    toggleArchive,
+  } = useFinanceCategoryCatalog("expense");
 
   const fetchData = useCallback(async () => {
     try {
@@ -168,7 +183,7 @@ export function ContasPagarClient() {
   function openCreateModal() {
     setEditingItem(null);
     setFormDescription("");
-    setFormCategory("");
+    setFormCategoryId("");
     setFormAmount("");
     setFormDate(toDateInputValue(new Date()));
     setFormStatus("pending");
@@ -182,7 +197,7 @@ export function ContasPagarClient() {
   function openEditModal(item: Transaction) {
     setEditingItem(item);
     setFormDescription(item.description || "");
-    setFormCategory(item.category || "");
+    setFormCategoryId(String(item.categoryId || item.categoryMeta?.id || ""));
     setFormAmount(String(Number(item.amount || 0)));
     setFormDate(item.date || "");
     setFormStatus(item.status || "pending");
@@ -201,7 +216,7 @@ export function ContasPagarClient() {
   }
 
   async function handleSave() {
-    if (!formDescription.trim() || !formCategory.trim() || !formAmount || !formDate) return;
+    if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate) return;
     setSaving(true);
     try {
       if (editingItem) {
@@ -212,7 +227,7 @@ export function ContasPagarClient() {
           body: JSON.stringify({
             type: "expense",
             description: formDescription.trim(),
-            category: formCategory.trim(),
+            categoryId: formCategoryId,
             amount: Number(formAmount),
             date: formDate,
             status: formStatus,
@@ -223,7 +238,7 @@ export function ContasPagarClient() {
         const body: any = {
           type: "expense",
           description: formDescription.trim(),
-          category: formCategory.trim(),
+          categoryId: formCategoryId,
           amount: Number(formAmount),
           date: formDate,
           status: formStatus,
@@ -312,16 +327,10 @@ export function ContasPagarClient() {
     if (search.trim()) {
       const s = search.toLowerCase();
       result = result.filter((t) =>
-        (t.description || "").toLowerCase().includes(s) || (t.category || "").toLowerCase().includes(s)
+        (t.description || "").toLowerCase().includes(s)
+        || (t.category || "").toLowerCase().includes(s)
+        || (t.categoryMeta?.name || "").toLowerCase().includes(s)
       );
-    }
-
-    if (statusFilter !== "all") {
-      result = result.filter((t) => {
-        const ds = t.displayStatus;
-        if (statusFilter === "pending") return ds.group === "pending";
-        return ds.group === statusFilter;
-      });
     }
 
     const order: Record<string, number> = { overdue: 0, "due-today": 1, scheduled: 2, pending: 3, paid: 4 };
@@ -335,7 +344,7 @@ export function ContasPagarClient() {
     });
 
     return result;
-  }, [monthItems, search, statusFilter]);
+  }, [monthItems, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPageSafe = Math.min(Math.max(1, page), totalPages);
@@ -350,14 +359,6 @@ export function ContasPagarClient() {
     setMonthCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1));
     setPage(1);
   }
-
-  const STATUS_CHIPS = [
-    { key: "all", label: "Todas" },
-    { key: "pending", label: "Pendentes" },
-    { key: "paid", label: "Pagas" },
-    { key: "overdue", label: "Vencidas" },
-    { key: "due-today", label: "Vencendo hoje" },
-  ];
 
   function getStatusIcon(key: string) {
     if (key === "paid") return <CheckCircle2 className="h-3.5 w-3.5" />;
@@ -375,7 +376,7 @@ export function ContasPagarClient() {
       <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Contas a Pagar</h1>
-          <p className="mt-1.5 text-sm text-slate-400">Gerencie despesas, vencimentos e pagamentos do seu negócio.</p>
+          <p className="mt-1.5 text-sm text-slate-400">Gerencie despesas, vencimentos e pagamentos do seu negÃ³cio.</p>
         </div>
         <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-5 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98]">
           <Plus className="h-4 w-4" />
@@ -390,7 +391,7 @@ export function ContasPagarClient() {
           <input
             type="text"
             className="w-full rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-            placeholder="Buscar por descrição ou categoria"
+            placeholder="Buscar por descriÃ§Ã£o ou categoria"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -406,30 +407,13 @@ export function ContasPagarClient() {
         </div>
       </section>
 
-      {/* Status Chips */}
-      <section className="mb-5 flex flex-wrap gap-2">
-        {STATUS_CHIPS.map((chip) => (
-          <button
-            key={chip.key}
-            onClick={() => { setStatusFilter(chip.key); setPage(1); }}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${
-              statusFilter === chip.key
-                ? "border-blue-500/60 bg-blue-500/20 text-blue-300"
-                : "border-slate-700 bg-slate-800/60 text-slate-400 hover:border-slate-600 hover:text-slate-300"
-            }`}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </section>
-
       {/* Tabela */}
       <div className="rounded-2xl border border-slate-800/60 bg-slate-950/80 p-3 sm:p-5 lg:p-6 shadow-xl backdrop-blur-sm">
         <div className="mb-4 flex flex-wrap items-center gap-3 text-xs font-bold">
           <span className="text-red-400">{summary.overdue} vencida(s)</span>
-          <span className="text-slate-600">•</span>
+          <span className="text-slate-600">â€¢</span>
           <span className="text-amber-400">{summary.dueToday} vence hoje</span>
-          <span className="text-slate-600">•</span>
+          <span className="text-slate-600">â€¢</span>
           <span className="text-blue-400">{summary.pending} pendente(s)</span>
         </div>
 
@@ -437,19 +421,19 @@ export function ContasPagarClient() {
           <table className="w-full text-left text-sm text-slate-300" style={{ minWidth: 900 }}>
             <thead className="bg-slate-900/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
               <tr>
-                <th className="px-4 py-3">Descrição</th>
+                <th className="px-4 py-3">DescriÃ§Ã£o</th>
                 <th className="px-4 py-3 text-right">Valor (R$)</th>
                 <th className="px-4 py-3">Vencimento</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Observação</th>
-                <th className="px-4 py-3 text-right">Ações</th>
+                <th className="px-4 py-3">ObservaÃ§Ã£o</th>
+                <th className="px-4 py-3 text-right">AÃ§Ãµes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
               {loading ? (
                 <tr><td colSpan={6} className="py-8 text-center text-slate-500">Carregando contas...</td></tr>
               ) : pageRows.length === 0 ? (
-                <tr><td colSpan={6} className="py-8 text-center text-slate-500">Nenhuma conta encontrada neste mês.</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-slate-500">Nenhuma conta encontrada neste mÃªs.</td></tr>
               ) : (
                 pageRows.map((item) => {
                   const ds = item.displayStatus;
@@ -457,8 +441,8 @@ export function ContasPagarClient() {
                   return (
                     <tr key={item.id} className="transition-colors hover:bg-slate-800/40">
                       <td className="px-4 py-4">
-                        <div className="font-semibold text-slate-100">{item.description || "Sem descrição"}</div>
-                        <div className="mt-1 text-xs text-slate-400">{item.category || "Sem categoria"}</div>
+                        <div className="font-semibold text-slate-100">{item.description || "Sem descriÃ§Ã£o"}</div>
+                        <div className="mt-1 text-xs text-slate-400">{formatFinanceCategoryLabel(item.categoryMeta, item.category)}</div>
                       </td>
                       <td className="px-4 py-4 text-right font-bold text-slate-100">{formatCurrency(item.amount)}</td>
                       <td className="px-4 py-4 text-slate-300 font-semibold">{formatDate(item.dueDate)}</td>
@@ -470,20 +454,20 @@ export function ContasPagarClient() {
                       </td>
                       <td className="px-4 py-4 text-xs text-slate-400 max-w-[200px]">{obs}</td>
                       <td className="px-4 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => openViewModal(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 transition-colors hover:bg-blue-500/20" title="Ver detalhes">
-                            <Eye className="h-4 w-4" />
-                          </button>
+                        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                           {ds.group !== "paid" && (
-                            <button onClick={() => handleComplete(item)} className="flex h-8 items-center justify-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/20" title="Marcar como paga">
+                            <button onClick={() => handleComplete(item)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-rose-500" title="Marcar como paga">
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               Pagar
                             </button>
                           )}
-                          <button onClick={() => openEditModal(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 transition-colors hover:bg-emerald-500/20" title="Editar">
+                          <button onClick={() => openViewModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900" title="Ver detalhes">
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => openEditModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100" title="Editar">
                             <Edit2 className="h-4 w-4" />
                           </button>
-                          <button onClick={() => openDeleteModal(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20" title="Excluir">
+                          <button onClick={() => openDeleteModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100" title="Excluir">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
@@ -499,7 +483,7 @@ export function ContasPagarClient() {
         {!loading && (
           <div className="mt-4 flex items-center justify-between border-t border-slate-800/60 pt-4">
             <p className="text-sm text-slate-400">
-              Mostrando <span className="text-slate-200">{filtered.length > 0 ? startIdx + 1 : 0}</span> até{" "}
+              Mostrando <span className="text-slate-200">{filtered.length > 0 ? startIdx + 1 : 0}</span> atÃ©{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filtered.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filtered.length}</span> contas
             </p>
@@ -507,7 +491,7 @@ export function ContasPagarClient() {
               <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 disabled:opacity-50">
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-sm font-medium text-slate-400">Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}</span>
+              <span className="text-sm font-medium text-slate-400">PÃ¡gina <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}</span>
               <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 disabled:opacity-50">
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -527,29 +511,36 @@ export function ContasPagarClient() {
           <>
             <ModalBtnGhost onClick={() => setShowFormModal(false)} disabled={saving}>Cancelar</ModalBtnGhost>
             <ModalBtnPrimary onClick={handleSave} disabled={saving}>
-              {saving ? "Salvando..." : isEditing ? "Salvar alterações" : "Salvar conta"}
+              {saving ? "Salvando..." : isEditing ? "Salvar alteraÃ§Ãµes" : "Salvar conta"}
             </ModalBtnPrimary>
           </>
         }
       >
         <div className="grid grid-cols-2 gap-4">
-          <ModalField label="Descrição" full>
-            <input className={modalInputClass} maxLength={300} placeholder="Ex: Aluguel do escritório" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} />
+          <ModalField label="DescriÃ§Ã£o" full>
+            <input className={modalInputClass} maxLength={300} placeholder="Ex: Aluguel do escritÃ³rio" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} />
           </ModalField>
           <ModalField label="Categoria">
-            <input className={modalInputClass} maxLength={120} placeholder="Ex: Aluguel" value={formCategory} onChange={(e) => setFormCategory(e.target.value)} />
+            <FinanceCategoryPicker
+              categories={categories}
+              fallbackLabel={editingItem?.category || ""}
+              onChange={(category) => setFormCategoryId(category.id)}
+              onCreateCategory={createCategory}
+              onManage={() => setShowCategoryManagerModal(true)}
+              valueCategoryId={formCategoryId}
+            />
           </ModalField>
           <ModalField label="Valor (R$)">
             <input className={modalInputClass} type="number" min="0.01" step="0.01" placeholder="0,00" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} />
           </ModalField>
           {!isEditing && (
-            <ModalField label="Tipo de lançamento" full>
+            <ModalField label="Tipo de lanÃ§amento" full>
               <select className={modalInputClass} value={formCreationMode} onChange={(e) => setFormCreationMode(e.target.value)}>
-                <option value="single">Único</option>
+                <option value="single">Ãšnico</option>
                 <option value="installments">Parcelado</option>
                 <option value="recurring_monthly">Recorrente mensal</option>
               </select>
-              <p className="mt-1 text-xs text-slate-500">Use parcelado para dividir em parcelas ou recorrente para lançamentos mensais.</p>
+              <p className="mt-1 text-xs text-slate-500">Use parcelado para dividir em parcelas ou recorrente para lanÃ§amentos mensais.</p>
             </ModalField>
           )}
           {!isEditing && formCreationMode === "installments" && (
@@ -573,7 +564,7 @@ export function ContasPagarClient() {
           <ModalField label="Data de vencimento">
             <input className={modalInputClass} type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} />
           </ModalField>
-          <ModalField label="Situação">
+          <ModalField label="SituaÃ§Ã£o">
             <select className={modalInputClass} value={formStatus} onChange={(e) => setFormStatus(e.target.value)}>
               <option value="pending">Pendente</option>
               <option value="scheduled">Agendada</option>
@@ -588,7 +579,7 @@ export function ContasPagarClient() {
         open={showViewModal}
         onClose={() => setShowViewModal(false)}
         title="Detalhes da conta"
-        subtitle="Visualize as informações desta conta."
+        subtitle="Visualize as informaÃ§Ãµes desta conta."
         footer={
           <>
             <ModalBtnGhost onClick={() => setShowViewModal(false)}>Fechar</ModalBtnGhost>
@@ -602,7 +593,7 @@ export function ContasPagarClient() {
           return (
             <div className="space-y-4">
               <div className="flex items-start justify-between rounded-xl border border-slate-700/50 bg-slate-800/40 p-4">
-                <p className="font-bold text-slate-100">{viewingItem.description || "Sem descrição"}</p>
+                <p className="font-bold text-slate-100">{viewingItem.description || "Sem descriÃ§Ã£o"}</p>
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ds.color}`}>
                   {ds.label}
                 </span>
@@ -610,7 +601,7 @@ export function ContasPagarClient() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Categoria</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-200">{viewingItem.category || "—"}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-200">{formatFinanceCategoryLabel(viewingItem.categoryMeta, viewingItem.category)}</p>
                 </div>
                 <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Valor</p>
@@ -621,7 +612,7 @@ export function ContasPagarClient() {
                   <p className="mt-1 text-sm font-semibold text-slate-200">{formatDate(parseDateOnly(viewingItem.date))}</p>
                 </div>
                 <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Observação</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">ObservaÃ§Ã£o</p>
                   <p className="mt-1 text-sm font-medium text-slate-300">{obs}</p>
                 </div>
               </div>
@@ -634,7 +625,7 @@ export function ContasPagarClient() {
       <ModalBase
         open={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
-        title="Confirmar exclusão"
+        title="Confirmar exclusÃ£o"
         subtitle={`Deseja excluir "${deletingItem?.description || "esta conta"}"?`}
         footer={
           <>
@@ -645,8 +636,18 @@ export function ContasPagarClient() {
           </>
         }
       >
-        <p className="text-sm text-slate-400">Esta ação não pode ser desfeita. A conta será removida permanentemente.</p>
+        <p className="text-sm text-slate-400">Esta aÃ§Ã£o nÃ£o pode ser desfeita. A conta serÃ¡ removida permanentemente.</p>
       </ModalBase>
+
+      <FinanceCategoryManagerModal
+        categories={categories}
+        onClose={() => setShowCategoryManagerModal(false)}
+        onToggleArchive={toggleArchive}
+        onUpdateCategory={updateCategory}
+        open={showCategoryManagerModal}
+        title="Gerenciar categorias de despesas"
+      />
     </div>
   );
 }
+

@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
+import { CashAdjustmentModalProvider } from "../components/CashAdjustmentModalProvider";
 import { Header } from "../components/Header";
 import { Sidebar } from "../components/Sidebar";
 
@@ -21,7 +22,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="dashboard-theme min-h-screen">
       <Header isOpen={isSidebarOpen} onMenuClick={handleMenuClick} />
 
-      <div className="relative z-10 flex pt-16 sm:pt-20">
+      <div className="relative flex pt-16 sm:pt-20">
         <Sidebar
           isCollapsed={isSidebarCollapsed}
           isOpen={isSidebarOpen}
@@ -33,7 +34,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             isSidebarCollapsed ? "lg:ml-0" : "lg:ml-[272px]"
           }`}
         >
-          {children}
+          <CashAdjustmentModalProvider>{children}</CashAdjustmentModalProvider>
         </main>
       </div>
     </div>

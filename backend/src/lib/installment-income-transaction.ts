@@ -12,6 +12,22 @@ export function buildInstallmentIncomeDescription(installmentId: number, loanId:
   return `Recebimento da parcela #${installmentId} do emprestimo #${loanId}`;
 }
 
+export function parseInstallmentIncomeDescription(description: string): {
+  installmentId: number;
+  loanId: number;
+} | null {
+  const match = description.match(/^Recebimento da parcela #(\d+) do emprestimo #(\d+)$/i);
+  if (!match) return null;
+
+  const installmentId = Number(match[1]);
+  const loanId = Number(match[2]);
+  if (!Number.isFinite(installmentId) || !Number.isFinite(loanId)) {
+    return null;
+  }
+
+  return { installmentId, loanId };
+}
+
 export function buildLoanDisbursementDescription(loanId: number): string {
   return `Desembolso do emprestimo #${loanId}`;
 }

@@ -1,7 +1,14 @@
-import { FinanceTransactionStatus, FinanceTransactionType } from "@prisma/client";
+import { FinanceTransactionStatus, FinanceTransactionType, Prisma } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
+import {
+  ensureFinanceCategoryCatalogForUser,
+  normalizeFinanceCategoryName,
+  resolveFinanceCategorySelection,
+  sanitizeFinanceCategoryEmoji,
+} from "../lib/finance-categories";
 import { prisma } from "../lib/prisma";
+import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
 
 const router = Router();
@@ -10,33 +17,81 @@ const transactionStatusSchema = z.enum(["completed", "scheduled", "pending"]);
 const transactionTypeSchema = z.enum(["income", "expense"]);
 const transactionInstallmentAmountModeSchema = z.enum(["total", "per_installment"]);
 const transactionCreationModeSchema = z.enum(["single", "installments", "recurring_monthly"]);
+const categoryIdSchema = z.union([z.number().int().positive(), z.string().trim().min(1)]);
+const categoryPayloadFieldsSchema = z.object({
+  category: z.string().trim().min(1).max(120).optional(),
+  categoryId: categoryIdSchema.optional(),
+});
 
-const transactionBaseSchema = z.object({
+const transactionBaseFieldsSchema = z.object({
   type: transactionTypeSchema,
   amount: z.number().positive(),
-  category: z.string().trim().min(1).max(120),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   description: z.string().trim().min(1).max(300),
   status: transactionStatusSchema,
 });
 
-const createTransactionSchema = transactionBaseSchema.extend({
+const createTransactionSchema = transactionBaseFieldsSchema
+  .merge(categoryPayloadFieldsSchema)
+  .extend({
   creationMode: transactionCreationModeSchema.optional(),
   installmentCount: z.number().int().min(1).max(120).optional(),
   installmentAmountMode: transactionInstallmentAmountModeSchema.optional(),
   recurringMonths: z.number().int().min(1).max(120).optional(),
-});
+  })
+  .refine((payload) => payload.category !== undefined || payload.categoryId !== undefined, {
+    message: "Categoria obrigatoria.",
+    path: ["category"],
+  });
 
-const updateTransactionSchema = transactionBaseSchema.partial().refine((payload) => {
+const updateTransactionSchema = transactionBaseFieldsSchema
+  .merge(categoryPayloadFieldsSchema)
+  .partial()
+  .refine((payload) => {
   return (
     payload.type !== undefined
     || payload.amount !== undefined
     || payload.category !== undefined
+    || payload.categoryId !== undefined
     || payload.date !== undefined
     || payload.description !== undefined
     || payload.status !== undefined
   );
 }, { message: "Nenhum campo para atualizar." });
+
+const financeCategoryQuerySchema = z.object({
+  type: transactionTypeSchema,
+  includeInactive: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((value) => value === true || value === "true"),
+});
+
+const financeCategoryCreateSchema = z.object({
+  type: transactionTypeSchema,
+  name: z.string().trim().min(1).max(120),
+  emoji: z.string().trim().max(16).optional(),
+});
+
+const financeCategoryUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  emoji: z.string().trim().max(16).optional(),
+}).refine((payload) => payload.name !== undefined || payload.emoji !== undefined, {
+  message: "Nenhum campo para atualizar.",
+});
+
+const financeCategoryArchiveSchema = z.object({
+  archived: z.boolean().optional().default(true),
+});
+
+const financeCategoryApiSelect = {
+  id: true,
+  name: true,
+  emoji: true,
+  type: true,
+  active: true,
+  isPreset: true,
+} as const;
 
 const batchCompleteSchema = z.object({
   ids: z.array(z.union([z.number().int().positive(), z.string().trim().min(1)])).min(1).max(500),
@@ -115,7 +170,234 @@ function readUserId(req: { user?: { sub?: string } }): number {
   return parsed;
 }
 
+function parseOptionalId(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new AppError("Identificador invalido.");
+  }
+  return Math.trunc(parsed);
+}
+
+function toApiCategory(category: {
+  id: number;
+  name: string;
+  emoji: string;
+  type: FinanceTransactionType;
+  active: boolean;
+  isPreset: boolean;
+} | null | undefined) {
+  if (!category) {
+    return null;
+  }
+
+  return {
+    id: String(category.id),
+    name: category.name,
+    emoji: category.emoji,
+    type: toApiType(category.type),
+    active: category.active,
+    isPreset: category.isPreset,
+  };
+}
+
+function toApiTransaction(row: {
+  id: number;
+  type: FinanceTransactionType;
+  amount: Prisma.Decimal | number;
+  category: string;
+  categoryId: number | null;
+  date: Date;
+  description: string;
+  status: FinanceTransactionStatus;
+  categoryRef?: {
+    id: number;
+    name: string;
+    emoji: string;
+    type: FinanceTransactionType;
+    active: boolean;
+    isPreset: boolean;
+  } | null;
+}) {
+  return {
+    id: String(row.id),
+    type: toApiType(row.type),
+    amount: Number(row.amount),
+    categoryId: row.categoryId ? String(row.categoryId) : null,
+    category: row.category,
+    categoryMeta: toApiCategory(row.categoryRef),
+    date: toDateOnlyIso(row.date),
+    description: row.description,
+    status: toApiStatus(row.status),
+  };
+}
+
 router.use(requireAuthApi);
+
+router.get("/categories", async (req, res) => {
+  const userId = readUserId(req);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ message: "Nao autenticado" });
+  }
+
+  const query = financeCategoryQuerySchema.parse(req.query);
+  const type = toPrismaType(query.type);
+
+  await ensureFinanceCategoryCatalogForUser(prisma, userId);
+
+  const rows = await prisma.financeCategory.findMany({
+    where: {
+      ownerUserId: userId,
+      type,
+      ...(query.includeInactive ? {} : { active: true }),
+    },
+    orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
+  });
+
+  return res.json({
+    data: rows.map((row) => toApiCategory(row)),
+  });
+});
+
+router.post("/categories", async (req, res) => {
+  const userId = readUserId(req);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ message: "Nao autenticado" });
+  }
+
+  const payload = financeCategoryCreateSchema.parse(req.body);
+  const type = toPrismaType(payload.type);
+
+  await ensureFinanceCategoryCatalogForUser(prisma, userId);
+
+  const normalizedName = normalizeFinanceCategoryName(payload.name);
+  const existing = await prisma.financeCategory.findUnique({
+    where: {
+      ownerUserId_type_normalizedName: {
+        ownerUserId: userId,
+        type,
+        normalizedName,
+      },
+    },
+  });
+
+  if (existing) {
+    const updated = existing.active
+      ? existing
+      : await prisma.financeCategory.update({
+        where: { id: existing.id },
+        data: {
+          active: true,
+          emoji: existing.isPreset ? existing.emoji : sanitizeFinanceCategoryEmoji(payload.emoji) || existing.emoji,
+        },
+      });
+
+    return res.status(200).json({ data: toApiCategory(updated) });
+  }
+
+  const lastCategory = await prisma.financeCategory.findFirst({
+    where: { ownerUserId: userId, type },
+    select: { sortOrder: true },
+    orderBy: [{ sortOrder: "desc" }, { id: "desc" }],
+  });
+
+  const created = await prisma.financeCategory.create({
+    data: {
+      ownerUserId: userId,
+      type,
+      name: payload.name.trim(),
+      normalizedName,
+      emoji: sanitizeFinanceCategoryEmoji(payload.emoji),
+      active: true,
+      isPreset: false,
+      sortOrder: (lastCategory?.sortOrder ?? 1000) + 10,
+    },
+  });
+
+  return res.status(201).json({ data: toApiCategory(created) });
+});
+
+router.patch("/categories/:id", async (req, res) => {
+  const userId = readUserId(req);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ message: "Nao autenticado" });
+  }
+
+  const categoryId = Number(req.params.id);
+  if (!Number.isFinite(categoryId)) {
+    return res.status(400).json({ message: "Identificador invalido." });
+  }
+
+  const payload = financeCategoryUpdateSchema.parse(req.body);
+  const existing = await prisma.financeCategory.findFirst({
+    where: { id: categoryId, ownerUserId: userId },
+  });
+
+  if (!existing) {
+    return res.status(404).json({ message: "Categoria nao encontrada." });
+  }
+
+  if (existing.isPreset) {
+    throw new AppError("Categorias padrao nao podem ser editadas manualmente.", 400);
+  }
+
+  const nextName = payload.name?.trim() ?? existing.name;
+  const nextNormalizedName = normalizeFinanceCategoryName(nextName);
+  const conflicting = await prisma.financeCategory.findUnique({
+    where: {
+      ownerUserId_type_normalizedName: {
+        ownerUserId: userId,
+        type: existing.type,
+        normalizedName: nextNormalizedName,
+      },
+    },
+  });
+
+  if (conflicting && conflicting.id !== existing.id) {
+    throw new AppError("Ja existe uma categoria com este nome.", 409);
+  }
+
+  const updated = await prisma.financeCategory.update({
+    where: { id: existing.id },
+    data: {
+      name: nextName,
+      normalizedName: nextNormalizedName,
+      emoji: payload.emoji !== undefined ? sanitizeFinanceCategoryEmoji(payload.emoji) : existing.emoji,
+    },
+  });
+
+  return res.json({ data: toApiCategory(updated) });
+});
+
+router.patch("/categories/:id/archive", async (req, res) => {
+  const userId = readUserId(req);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ message: "Nao autenticado" });
+  }
+
+  const categoryId = Number(req.params.id);
+  if (!Number.isFinite(categoryId)) {
+    return res.status(400).json({ message: "Identificador invalido." });
+  }
+
+  const payload = financeCategoryArchiveSchema.parse(req.body ?? {});
+  const existing = await prisma.financeCategory.findFirst({
+    where: { id: categoryId, ownerUserId: userId },
+  });
+
+  if (!existing) {
+    return res.status(404).json({ message: "Categoria nao encontrada." });
+  }
+
+  const updated = await prisma.financeCategory.update({
+    where: { id: existing.id },
+    data: {
+      active: !payload.archived,
+    },
+  });
+
+  return res.json({ data: toApiCategory(updated) });
+});
 
 router.get("/transactions", async (req, res) => {
   const userId = readUserId(req);
@@ -123,21 +405,18 @@ router.get("/transactions", async (req, res) => {
     return res.status(401).json({ message: "Nao autenticado" });
   }
 
+  await ensureFinanceCategoryCatalogForUser(prisma, userId);
+
   const rows = await prisma.financeTransaction.findMany({
     where: { ownerUserId: userId },
+    include: {
+      categoryRef: { select: financeCategoryApiSelect },
+    },
     orderBy: [{ date: "desc" }, { id: "desc" }],
   });
 
   return res.json({
-    data: rows.map((row) => ({
-      id: String(row.id),
-      type: toApiType(row.type),
-      amount: Number(row.amount),
-      category: row.category,
-      date: toDateOnlyIso(row.date),
-      description: row.description,
-      status: toApiStatus(row.status),
-    })),
+    data: rows.map((row) => toApiTransaction(row)),
   });
 });
 
@@ -148,6 +427,8 @@ router.post("/transactions", async (req, res) => {
   }
 
   const payload = createTransactionSchema.parse(req.body);
+  await ensureFinanceCategoryCatalogForUser(prisma, userId);
+
   const parsedInstallmentCount = Math.max(1, Math.trunc(payload.installmentCount ?? 1));
   const parsedRecurringMonths = Math.max(1, Math.trunc(payload.recurringMonths ?? 1));
   const creationMode = payload.creationMode
@@ -158,14 +439,28 @@ router.post("/transactions", async (req, res) => {
   const type = toPrismaType(payload.type);
   const status = toPrismaStatus(payload.status);
   const baseDate = parseDateOnly(payload.date);
+  const resolvedCategory = await resolveFinanceCategorySelection(prisma, {
+    ownerUserId: userId,
+    type,
+    categoryId: parseOptionalId(payload.categoryId),
+    categoryName: payload.category,
+  });
+
+  if (!resolvedCategory) {
+    throw new AppError("Categoria invalida para este lancamento.", 400);
+  }
 
   if (creationMode === "single") {
     const created = await prisma.financeTransaction.create({
+      include: {
+        categoryRef: { select: financeCategoryApiSelect },
+      },
       data: {
         ownerUserId: userId,
         type,
         amount: payload.amount,
-        category: payload.category,
+        categoryId: resolvedCategory.id,
+        category: resolvedCategory.name,
         date: baseDate,
         description: payload.description,
         status,
@@ -174,13 +469,7 @@ router.post("/transactions", async (req, res) => {
 
     return res.status(201).json({
       data: {
-        id: String(created.id),
-        type: toApiType(created.type),
-        amount: Number(created.amount),
-        category: created.category,
-        date: toDateOnlyIso(created.date),
-        description: created.description,
-        status: toApiStatus(created.status),
+        ...toApiTransaction(created),
         creationMode: "single",
         createdCount: 1,
       },
@@ -205,7 +494,8 @@ router.post("/transactions", async (req, res) => {
             ownerUserId: userId,
             type,
             amount: installmentAmounts[index] ?? 0,
-            category: payload.category,
+            categoryId: resolvedCategory.id,
+            category: resolvedCategory.name,
             date: addMonthsDateOnlyUtc(baseDate, index),
             description: buildInstallmentDescription(payload.description, index + 1, installmentCount),
             status,
@@ -242,7 +532,8 @@ router.post("/transactions", async (req, res) => {
           ownerUserId: userId,
           type,
           amount: recurringAmount,
-          category: payload.category,
+          categoryId: resolvedCategory.id,
+          category: resolvedCategory.name,
           date: addMonthsDateOnlyUtc(baseDate, index),
           description: payload.description,
           status,
@@ -342,21 +633,51 @@ router.patch("/transactions/:id", async (req, res) => {
   }
 
   const payload = updateTransactionSchema.parse(req.body);
+  await ensureFinanceCategoryCatalogForUser(prisma, userId);
 
   const existing = await prisma.financeTransaction.findFirst({
     where: { id: transactionId, ownerUserId: userId },
+    include: {
+      categoryRef: { select: financeCategoryApiSelect },
+    },
   });
 
   if (!existing) {
     return res.status(404).json({ message: "Transacao nao encontrada." });
   }
 
+  const nextType = payload.type ? toPrismaType(payload.type) : existing.type;
+  let nextCategoryId: number | null | undefined;
+  let nextCategoryName: string | undefined;
+
+  if (payload.categoryId !== undefined || payload.category !== undefined) {
+    const resolvedCategory = await resolveFinanceCategorySelection(prisma, {
+      ownerUserId: userId,
+      type: nextType,
+      categoryId: parseOptionalId(payload.categoryId),
+      categoryName: payload.category,
+    });
+
+    if (!resolvedCategory) {
+      throw new AppError("Categoria invalida para este lancamento.", 400);
+    }
+
+    nextCategoryId = resolvedCategory.id;
+    nextCategoryName = resolvedCategory.name;
+  } else if (payload.type !== undefined && existing.categoryRef && existing.categoryRef.type !== nextType) {
+    throw new AppError("Ao alterar o tipo do lancamento, selecione uma categoria compativel.", 400);
+  }
+
   const updated = await prisma.financeTransaction.update({
     where: { id: transactionId },
+    include: {
+      categoryRef: { select: financeCategoryApiSelect },
+    },
     data: {
-      type: payload.type ? toPrismaType(payload.type) : undefined,
+      type: payload.type ? nextType : undefined,
       amount: payload.amount,
-      category: payload.category,
+      categoryId: nextCategoryId,
+      category: nextCategoryName,
       date: payload.date ? parseDateOnly(payload.date) : undefined,
       description: payload.description,
       status: payload.status ? toPrismaStatus(payload.status) : undefined,
@@ -364,15 +685,7 @@ router.patch("/transactions/:id", async (req, res) => {
   });
 
   return res.json({
-    data: {
-      id: String(updated.id),
-      type: toApiType(updated.type),
-      amount: Number(updated.amount),
-      category: updated.category,
-      date: toDateOnlyIso(updated.date),
-      description: updated.description,
-      status: toApiStatus(updated.status),
-    },
+    data: toApiTransaction(updated),
   });
 });
 

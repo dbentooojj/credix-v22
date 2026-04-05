@@ -1,33 +1,76 @@
-'use client';
+﻿'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-
-import { 
-  TrendingUp, RefreshCw, CheckCircle2, 
-  AlertCircle, MessageCircle, X, Calendar,
-  Clock, AlertTriangle
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  MessageCircle,
+  RefreshCw,
+  TrendingUp,
+  X,
 } from 'lucide-react';
 
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
   BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
   Title,
   Tooltip,
-  Legend,
-  Filler,
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 
-ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement, BarElement,
-  Title, Tooltip, Legend, Filler
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
-interface DashboardPayload {
+type InsightTone = 'positive' | 'negative' | 'neutral';
+
+type KpiInsight = {
+  text: string;
+  tone: InsightTone;
+};
+
+type KpiCardData = {
+  currentValue: number;
+  previousValue: number;
+  series: Array<{ label: string; value: number }>;
+  insight?: KpiInsight;
+};
+
+type QueueItem = {
+  installmentId: number;
+  installmentNumber: number;
+  loanInstallmentsCount: number;
+  loanId: number;
+  debtorId: number;
+  debtorName: string;
+  phone: string;
+  paymentMethod: string;
+  amount: number;
+  dueDate: string;
+  dueRelative: string;
+  status: 'ATRASADA' | 'VENCE_HOJE' | 'EM_DIA';
+  statusLabel: string;
+  statusColor: 'red' | 'yellow' | 'green';
+  pixKey?: string | null;
+  paymentLink?: string | null;
+  virtualStatus?: 'PENDING' | 'OVERDUE';
+};
+
+type DashboardPayload = {
+  meta?: {
+    generatedAt?: string;
+    timezone?: string;
+    period?: string;
+    metric?: string;
+  };
   kpis: {
     cashBalance: number;
     cashAdjustmentNet: number;
@@ -43,9 +86,9 @@ interface DashboardPayload {
     totalOverdue: number;
   };
   dailySummary: {
-    dueToday: { count: number, totalValue: number },
-    overdue: { count: number, totalValue: number },
-    next7Days: { count: number, totalValue: number }
+    dueToday: { count: number; totalValue: number; href?: string };
+    overdue: { count: number; totalValue: number; href?: string };
+    next7Days: { count: number; totalValue: number; href?: string };
   };
   chart: {
     points: Array<{
@@ -56,19 +99,291 @@ interface DashboardPayload {
       open: number;
     }>;
   };
-  upcomingDue: any[];
-  overduePayments: any[];
-  kpiCards: any;
+  portfolio?: {
+    kpis?: {
+      openReceivableOverdue: number;
+      openReceivableFuture: number;
+      totalOpenReceivable: number;
+      receivedThisMonth: number;
+      totalReceived?: number;
+      profitThisMonth: number;
+      totalLoaned: number;
+      delinquencyRate: number;
+      roiRate: number;
+      profitTotal: number;
+      totalOverdue: number;
+    };
+    chart?: {
+      points: Array<{
+        label: string;
+        received: number;
+        value?: number;
+        overdue: number;
+        open: number;
+      }>;
+    };
+    kpiCards?: Record<string, KpiCardData | undefined>;
+  };
+  upcomingDue: QueueItem[];
+  overduePayments: QueueItem[];
+  kpiCards: Record<string, KpiCardData | undefined>;
+};
+
+type HealthMetrics = {
+  recoveryRate: number;
+  overdueCount: number;
+  riskContracts: number;
+  avgTicket: number;
+  avgInstallment: number;
+  totalOverdue: number;
+};
+
+const QUEUE_PAGE_SIZE = 4;
+
+function cn(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(' ');
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value || 0);
+}
+
+function formatPercent(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'percent',
+    minimumFractionDigits: 2,
+  }).format((value || 0) / 100);
+}
+
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value || 0);
+}
+
+function formatDateShort(isoDate: string) {
+  if (!isoDate) return '-';
+  const [year, month, day] = isoDate.split('-');
+  if (!day || !month) return isoDate;
+  return `${day}/${month}`;
+}
+
+function formatDateFull(isoDate: string) {
+  if (!isoDate) return '-';
+  const [year, month, day] = isoDate.split('-');
+  if (!day || !month || !year) return isoDate;
+  return `${day}/${month}/${year}`;
+}
+
+function formatPeriodLabel(period: string) {
+  return {
+    '3m': 'Ultimos 3 meses',
+    '6m': 'Ultimos 6 meses',
+    '12m': 'Ultimos 12 meses',
+  }[period] || 'Ultimos meses';
+}
+
+function buildDelta(current: number, previous: number) {
+  if (Math.abs(previous) < 0.00001) {
+    if (Math.abs(current) < 0.00001) {
+      return {
+        value: '0,00%',
+        tone: 'neutral' as const,
+        note: 'Sem variacao relevante.',
+      };
+    }
+
+    return {
+      value: 'Sem base',
+      tone: 'neutral' as const,
+      note: 'Ainda nao existe base anterior para comparar.',
+    };
+  }
+
+  const delta = ((current - previous) / Math.abs(previous)) * 100;
+  if (Math.abs(delta) < 0.005) {
+    return {
+      value: '0,00%',
+      tone: 'neutral' as const,
+      note: 'Mesmo ritmo do mes anterior.',
+    };
+  }
+
+  const deltaText = Math.abs(delta).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  return {
+    value: `${delta > 0 ? '+' : '-'}${deltaText}%`,
+    tone: delta > 0 ? ('positive' as const) : ('negative' as const),
+    note: delta > 0 ? 'Acima do mes anterior.' : 'Abaixo do mes anterior.',
+  };
+}
+
+function getToneTextClass(tone?: InsightTone) {
+  return {
+    positive: 'text-emerald-600',
+    negative: 'text-rose-500',
+    neutral: 'text-slate-500',
+  }[tone || 'neutral'];
+}
+
+function getHealthDescriptor(score: number) {
+  if (score >= 80) {
+    return {
+      label: 'Saudavel',
+      note: 'Boa recuperacao com pressao baixa de atraso.',
+      chip: 'border-emerald-200 bg-emerald-50 text-emerald-600',
+      bar: 'bg-emerald-500',
+      value: 'text-emerald-600',
+    };
+  }
+
+  if (score >= 60) {
+    return {
+      label: 'Estavel',
+      note: 'A carteira segue controlada, mas pede acompanhamento.',
+      chip: 'border-sky-200 bg-sky-50 text-sky-600',
+      bar: 'bg-sky-500',
+      value: 'text-sky-600',
+    };
+  }
+
+  if (score >= 40) {
+    return {
+      label: 'Atencao',
+      note: 'O atraso comeca a pressionar o fluxo esperado.',
+      chip: 'border-amber-200 bg-amber-50 text-amber-700',
+      bar: 'bg-amber-500',
+      value: 'text-amber-700',
+    };
+  }
+
+  return {
+    label: 'Critico',
+    note: 'A carteira exige cobranca ativa e revisao imediata.',
+    chip: 'border-rose-200 bg-rose-50 text-rose-600',
+    bar: 'bg-rose-500',
+    value: 'text-rose-600',
+  };
+}
+
+function getStatusPillClass(statusColor: QueueItem['statusColor']) {
+  return {
+    red: 'border-rose-200 bg-rose-50 text-rose-600',
+    yellow: 'border-amber-200 bg-amber-50 text-amber-700',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-600',
+  }[statusColor];
+}
+
+function SmallMetricCard({
+  label,
+  value,
+  note,
+  icon,
+  accent,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  icon: React.ReactNode;
+  accent: string;
+  valueClassName?: string;
+}) {
+  return (
+    <article className="self-start rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+          <p className={cn('mt-2.5 text-[1.75rem] font-bold tracking-tight text-slate-800', valueClassName)}>{value}</p>
+        </div>
+        <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl', accent)}>{icon}</span>
+      </div>
+      <p className="mt-2.5 text-sm text-slate-500">{note}</p>
+    </article>
+  );
+}
+
+function SupportMetricCard({
+  label,
+  value,
+  note,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+      <p className={cn('mt-2 text-[1.35rem] font-bold tracking-tight text-slate-800', valueClassName)}>{value}</p>
+      <p className="mt-1.5 text-sm text-slate-500">{note}</p>
+    </div>
+  );
+}
+
+function ActionCard({
+  label,
+  count,
+  value,
+  note,
+  cta,
+  icon,
+  toneClassName,
+  iconClassName,
+  onClick,
+}: {
+  label: string;
+  count: string;
+  value: string;
+  note: string;
+  cta: string;
+  icon: React.ReactNode;
+  toneClassName: string;
+  iconClassName: string;
+  onClick: () => void;
+}) {
+  return (
+    <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+          <p className={cn('mt-3 text-[2rem] font-bold leading-none tracking-tight', toneClassName)}>{count}</p>
+          <p className="mt-2 text-sm font-semibold text-slate-800">{value}</p>
+          <p className="mt-2 text-sm text-slate-500">{note}</p>
+        </div>
+        <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl', iconClassName)}>{icon}</span>
+      </div>
+      <button
+        className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-semibold text-slate-600 transition hover:border-[#4F7EF7]/30 hover:bg-[#4F7EF7]/5 hover:text-[#4F7EF7]"
+        onClick={onClick}
+        type="button"
+      >
+        {cta}
+        <ArrowRight className="h-4 w-4" />
+      </button>
+    </article>
+  );
 }
 
 export default function CarteiraDashboardClient() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardPayload | null>(null);
-  const [period, setPeriod] = useState('6m');
-  const [metric, setMetric] = useState('recebido');
+  const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m');
   const [chartView, setChartView] = useState<'line' | 'stacked'>('line');
   const [error, setError] = useState('');
-  const [paymentItem, setPaymentItem] = useState<any>(null);
+  const [paymentItem, setPaymentItem] = useState<QueueItem | null>(null);
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const [overduePage, setOverduePage] = useState(1);
+  const metric = 'recebido';
 
   const normalizeWhatsAppPhone = (rawPhone: string) => {
     const digits = String(rawPhone || '').replace(/\D/g, '');
@@ -79,16 +394,38 @@ export default function CarteiraDashboardClient() {
     return '';
   };
 
-  const handleWhatsApp = (item: any) => {
+  const handleWhatsApp = (item: QueueItem) => {
     const phone = normalizeWhatsAppPhone(item?.phone);
-    if (!phone) return alert('Cliente sem telefone válido para WhatsApp');
-    const text = `Olá, ${item.debtorName || ''}. Parcela em aberto: ${formatCurrency(item.amount)} (venc. ${formatDateShort(item.dueDate)}). Chave PIX: ${item.pixKey || 'não informado'}`;
+    if (!phone) {
+      alert('Cliente sem telefone valido para WhatsApp');
+      return;
+    }
+
+    const text = `Ola, ${item.debtorName || ''}. Parcela em aberto: ${formatCurrency(item.amount)} (venc. ${formatDateShort(item.dueDate)}). Chave PIX: ${item.pixKey || 'nao informado'}`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const fetchDashboard = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+      const response = await fetch(`/api/dashboard?period=${period}&metric=${metric}&tz=${tz}`);
+      if (!response.ok) throw new Error('Falha ao carregar dashboard');
+      const payload: DashboardPayload = await response.json();
+      setData(payload);
+    } catch (nextError: any) {
+      setError(nextError.message || 'Erro de conexao');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleMarkPaid = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!paymentItem) return;
+
     const fd = new FormData(e.currentTarget);
     const postData = {
       loanId: paymentItem.loanId,
@@ -96,154 +433,165 @@ export default function CarteiraDashboardClient() {
       amount: paymentItem.amount,
       paymentDate: fd.get('paymentDate'),
       method: fd.get('method'),
-      notes: `Atualizado via dashboard NextJS`,
+      notes: 'Atualizado via dashboard NextJS',
     };
+
     try {
       const res = await fetch('/api/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(postData)
+        body: JSON.stringify(postData),
       });
+
       if (!res.ok) throw new Error('Falha ao baixar parcela');
       setPaymentItem(null);
       fetchDashboard();
-    } catch (error) {
+    } catch {
       alert('Erro ao marcar pagamento.');
-    }
-  };
-  
-  const fetchDashboard = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
-      const response = await fetch(`/api/dashboard?period=${period}&metric=${metric}&tz=${tz}`);
-      if (!response.ok) throw new Error('Falha ao carregar dashboard');
-      const payload: DashboardPayload = await response.json();
-      setData(payload);
-    } catch (err: any) {
-      setError(err.message || 'Erro de conexão');
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDashboard();
-  }, [period, metric]);
+    void fetchDashboard();
+  }, [period]);
 
-  const formatCurrency = (val: number) => 
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+  useEffect(() => {
+    setUpcomingPage(1);
+    setOverduePage(1);
+  }, [data?.upcomingDue?.length, data?.overduePayments?.length]);
 
-  const formatPercent = (val: number) => 
-    new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2 }).format(val / 100);
-
-  const formatDateShort = (isoDate: string) => {
-    if (!isoDate) return '-';
-    const [year, month, day] = isoDate.split('-');
-    if (!day || !month) return isoDate;
-    return `${day}/${month}`;
+  const scrollToSection = (sectionId: string) => {
+    if (typeof document === 'undefined') return;
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const formatDateFull = (isoDate: string) => {
-    if (!isoDate) return '-';
-    try {
-      const [year, month, day] = isoDate.split('-');
-      return `${day}/${month}/${year}`;
-    } catch(e) {
-      return isoDate;
-    }
-  }
-
-  const kpis = data?.kpis || {} as any;
-  const overdueCount = data?.overduePayments?.length || 0;
-  const upcomingCount = data?.upcomingDue?.length || 0;
-  
-  const receivableBase = (kpis?.receivedThisMonth || 0) + (kpis?.totalOpenReceivable || 0);
-  const recoveryRate = receivableBase > 0 ? ((kpis?.receivedThisMonth || 0) / receivableBase) * 100 : 0;
-  const normalizedDelinquency = Math.max(0, Math.min(100, kpis?.delinquencyRate || 0));
+  const kpis = data?.portfolio?.kpis || data?.kpis || ({} as DashboardPayload['kpis']);
+  const kpiCards = data?.portfolio?.kpiCards || data?.kpiCards || {};
+  const chart = data?.portfolio?.chart || data?.chart;
+  const receivableBase = (kpis.receivedThisMonth || 0) + (kpis.totalOpenReceivable || 0);
+  const recoveryRate = receivableBase > 0 ? ((kpis.receivedThisMonth || 0) / receivableBase) * 100 : 0;
+  const normalizedDelinquency = Math.max(0, Math.min(100, kpis.delinquencyRate || 0));
   const healthScore = Math.round((Math.max(0, Math.min(recoveryRate, 100)) * 0.62) + ((100 - normalizedDelinquency) * 0.38));
+  const healthDescriptor = getHealthDescriptor(healthScore);
 
-  const allInstallments = useMemo(() => {
-    if (!data) return [];
-    const record: Record<string, any> = {};
-    (data.upcomingDue || []).forEach(i => {
-       record[i.installmentId] = { ...i, virtualStatus: 'PENDING' };
-    });
-    (data.overduePayments || []).forEach(i => {
-       record[i.installmentId] = { ...i, virtualStatus: 'OVERDUE' };
-    });
-    return Object.values(record).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  }, [data]);
+  const receivedKpi = kpiCards.receivedThisMonth;
+  const profitKpi = kpiCards.profitThisMonth;
+  const totalLoanedKpi = kpiCards.totalLoaned;
+  const receivedDelta = buildDelta(receivedKpi?.currentValue ?? kpis.receivedThisMonth ?? 0, receivedKpi?.previousValue ?? 0);
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center p-12 text-blue-400">
-        <RefreshCw className="w-8 h-8 animate-spin" />
-        <span className="ml-3 font-semibold">Carregando painel...</span>
-      </div>
-    );
-  }
+  const health = useMemo<HealthMetrics | null>(() => {
+    if (!data) return null;
 
-  if (error && !data) {
-    return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-700 shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
-        <AlertCircle className="w-6 h-6 mb-2" />
-        <p>{error}</p>
-        <button onClick={fetchDashboard} className="mt-4 rounded-xl border border-rose-200 bg-white px-4 py-2 font-medium text-rose-700 transition-colors hover:bg-rose-100">
-          Tentar Novamente
-        </button>
-      </div>
-    );
-  }
+    const upcoming = data.upcomingDue || [];
+    const overdue = data.overduePayments || [];
+    const overdueCount = overdue.length;
+    const riskContracts = overdue.length;
+    const totalOpenReceivable = kpis.totalOpenReceivable ?? 0;
+    const receivedThisMonth = kpis.receivedThisMonth ?? 0;
+    const totalLoaned = kpis.totalLoaned ?? 0;
+    const totalOverdue = kpis.openReceivableOverdue ?? kpis.totalOverdue ?? 0;
+    const receivablePool = receivedThisMonth + totalOpenReceivable;
+    const recovery = receivablePool > 0 ? (receivedThisMonth / receivablePool) * 100 : 0;
+    const loanIds = new Set([...upcoming, ...overdue].map((item) => Number(item.loanId || 0)).filter((id) => id > 0));
+    const installmentCount = upcoming.length + overdue.length;
+
+    return {
+      recoveryRate: recovery,
+      overdueCount,
+      riskContracts,
+      avgTicket: loanIds.size > 0 ? totalLoaned / loanIds.size : 0,
+      avgInstallment: installmentCount > 0 ? totalOpenReceivable / installmentCount : 0,
+      totalOverdue,
+    };
+  }, [data, kpis]);
+
+  const upcomingItems = data?.upcomingDue || [];
+  const overdueItems = data?.overduePayments || [];
+  const upcomingTotalPages = Math.max(1, Math.ceil(upcomingItems.length / QUEUE_PAGE_SIZE));
+  const overdueTotalPages = Math.max(1, Math.ceil(overdueItems.length / QUEUE_PAGE_SIZE));
+
+  const pagedUpcomingItems = useMemo(() => {
+    const start = (upcomingPage - 1) * QUEUE_PAGE_SIZE;
+    return upcomingItems.slice(start, start + QUEUE_PAGE_SIZE);
+  }, [upcomingItems, upcomingPage]);
+
+  const pagedOverdueItems = useMemo(() => {
+    const start = (overduePage - 1) * QUEUE_PAGE_SIZE;
+    return overdueItems.slice(start, start + QUEUE_PAGE_SIZE);
+  }, [overdueItems, overduePage]);
 
   const renderChart = () => {
-    if (!data?.chart?.points) return null;
-    
-    const labels = data.chart.points.map(p => p.label);
-    const receivedData = data.chart.points.map(p => p.received || p.value || 0);
-    const overdueData = data.chart.points.map(p => p.overdue || 0);
-    const openData = data.chart.points.map(p => p.open || 0);
+    if (!chart?.points) return null;
 
+    const labels = chart.points.map((point) => point.label);
+    const receivedData = chart.points.map((point) => point.received || point.value || 0);
+    const overdueData = chart.points.map((point) => point.overdue || 0);
+    const openData = chart.points.map((point) => point.open || 0);
+    const lastIndex = Math.max(0, labels.length - 1);
     const isStacked = chartView === 'stacked';
+
+    const currentMonthHighlightPlugin = {
+      id: 'current-month-highlight',
+      beforeDatasetsDraw(chart: any) {
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales?.x;
+        if (!ctx || !chartArea || !xScale || labels.length === 0) return;
+
+        const currentX = xScale.getPixelForValue(lastIndex);
+        const previousX = lastIndex > 0 ? xScale.getPixelForValue(lastIndex - 1) : chartArea.left;
+        const span = lastIndex > 0 ? currentX - previousX : chartArea.right - chartArea.left;
+        const bandWidth = Math.max(44, Math.min(88, span * 0.76));
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(37, 99, 235, 0.06)';
+        ctx.fillRect(currentX - bandWidth / 2, chartArea.top, bandWidth, chartArea.bottom - chartArea.top);
+        ctx.restore();
+      },
+    };
 
     const datasetsLine = [
       {
-        label: 'Atraso',
-        data: overdueData,
-        borderColor: '#f43f5e',
-        backgroundColor: 'rgba(244, 63, 94, 0.1)',
-        borderWidth: 2,
-        fill: true,
-        pointRadius: 2.5,
-        tension: 0.3,
-      },
-      {
         label: 'Recebido',
         data: receivedData,
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        borderWidth: 2,
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37, 99, 235, 0.12)',
+        borderWidth: 3,
         fill: true,
-        pointRadius: 2.5,
-        tension: 0.3,
+        tension: 0.35,
+        pointRadius: (context: any) => (context.dataIndex === lastIndex ? 5 : 3),
+        pointHoverRadius: 6,
+        pointBackgroundColor: (context: any) => (context.dataIndex === lastIndex ? '#1d4ed8' : '#2563eb'),
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: (context: any) => (context.dataIndex === lastIndex ? 3 : 2),
       },
       {
         label: 'Em aberto',
         data: openData,
-        borderColor: '#06b6d4',
-        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+        borderColor: '#22c55e',
+        backgroundColor: 'transparent',
         borderWidth: 2,
-        fill: true,
-        pointRadius: 2.5,
+        borderDash: [6, 6],
+        fill: false,
         tension: 0.3,
-      }
+        pointRadius: 0,
+      },
+      {
+        label: 'Em atraso',
+        data: overdueData,
+        borderColor: '#f43f5e',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        borderDash: [4, 6],
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0,
+      },
     ];
 
     const datasetsBar = [
-      { label: 'Recebido', data: receivedData, backgroundColor: '#10b981', borderRadius: 4 },
-      { label: 'Em aberto', data: openData, backgroundColor: '#06b6d4', borderRadius: 4 },
-      { label: 'Atraso', data: overdueData, backgroundColor: '#f43f5e', borderRadius: 4 }
+      { label: 'Recebido', data: receivedData, backgroundColor: '#2563eb', borderRadius: 10, maxBarThickness: 28 },
+      { label: 'Em aberto', data: openData, backgroundColor: '#22c55e', borderRadius: 10, maxBarThickness: 28 },
+      { label: 'Em atraso', data: overdueData, backgroundColor: '#f43f5e', borderRadius: 10, maxBarThickness: 28 },
     ];
 
     const chartData = {
@@ -254,453 +602,512 @@ export default function CarteiraDashboardClient() {
     const options: any = {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
       plugins: {
-        legend: { labels: { color: '#475569', font: { family: 'Inter' } } },
+        legend: { display: false },
         tooltip: {
           mode: 'index',
           intersect: false,
           backgroundColor: 'rgba(255, 255, 255, 0.98)',
           titleColor: '#0f172a',
-          bodyColor: '#475569',
-          borderColor: 'rgba(203, 213, 225, 0.9)',
+          bodyColor: '#334155',
+          borderColor: 'rgba(226, 232, 240, 0.95)',
           borderWidth: 1,
           padding: 12,
+          titleFont: { weight: '700' },
           callbacks: {
-            label: (context: any) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`
-          }
-        }
+            title: (items: any) => {
+              if (!items?.length) return '';
+              return `${items[0].label} • ${items[0].dataIndex === lastIndex ? 'mes atual' : 'historico'}`;
+            },
+            label: (context: any) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
+          },
+        },
       },
       scales: {
         x: {
           stacked: isStacked,
-          ticks: { color: '#64748b', font: { family: 'Inter' } },
-          grid: { color: 'rgba(226, 232, 240, 0.9)', drawBorder: false }
+          ticks: { color: '#64748b', font: { size: 11, weight: '600' } },
+          grid: { display: false, drawBorder: false },
+          border: { display: false },
         },
         y: {
           stacked: isStacked,
-          ticks: { 
-            color: '#64748b',
-            font: { family: 'Inter' },
-            callback: (value: number) => formatCurrency(value)
+          ticks: {
+            color: '#94a3b8',
+            font: { size: 11, weight: '600' },
+            callback: (value: number) => `R$ ${formatCompactNumber(Number(value))}`,
           },
-          grid: { color: 'rgba(226, 232, 240, 0.9)', drawBorder: false }
-        }
-      }
+          grid: { color: 'rgba(226, 232, 240, 0.8)', drawBorder: false },
+          border: { display: false },
+        },
+      },
     };
 
     if (isStacked) {
-      return <Bar data={chartData as any} options={options} />;
+      return <Bar data={chartData as any} options={options} plugins={[currentMonthHighlightPlugin]} />;
     }
-    return <Line data={chartData as any} options={options} />;
+
+    return <Line data={chartData as any} options={options} plugins={[currentMonthHighlightPlugin]} />;
   };
 
-  const getHealthMetrics = () => {
-    if (!data) return null;
-    const kpis = data.kpis;
-    const upcoming = data.upcomingDue || [];
-    const overdue = data.overduePayments || [];
-    const overdueCount = overdue.length;
-    const riskContracts = overdue.length;
+  if (loading && !data) {
+    return (
+      <div className="flex items-center justify-center p-12 text-blue-500">
+        <RefreshCw className="h-8 w-8 animate-spin" />
+        <span className="ml-3 font-semibold">Carregando painel...</span>
+      </div>
+    );
+  }
 
-    const totalOpenReceivable = kpis?.totalOpenReceivable ?? 0;
-    const receivedThisMonth = kpis?.receivedThisMonth ?? 0;
-    const totalLoaned = kpis?.totalLoaned ?? 0;
-    const openFuture = kpis?.openReceivableFuture ?? 0;
-    const totalOverdue = kpis?.openReceivableOverdue ?? kpis?.totalOverdue ?? 0;
-
-    const receivableBase = receivedThisMonth + totalOpenReceivable;
-    const recoveryRate = receivableBase > 0 ? (receivedThisMonth / receivableBase) * 100 : 0;
-    
-    const loanIds = new Set([...upcoming, ...overdue].map((item: any) => Number(item?.loanId || 0)).filter((id) => id > 0));
-    const installmentCount = upcoming.length + overdue.length;
-    
-    const avgTicket = loanIds.size > 0 ? totalLoaned / loanIds.size : 0;
-    const avgInstallment = installmentCount > 0 ? totalOpenReceivable / installmentCount : 0;
-
-    return {
-      recoveryRate,
-      overdueCount,
-      riskContracts,
-      avgTicket,
-      avgInstallment,
-      openFuture,
-      totalOverdue
-    };
-  };
-
-  const health = getHealthMetrics();
-  const panelClass = "relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.08)]";
-  const innerCardClass = "rounded-xl border border-slate-200/80 bg-slate-50";
+  if (error && !data) {
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-700 shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
+        <AlertCircle className="mb-2 h-6 w-6" />
+        <p>{error}</p>
+        <button
+          className="mt-4 rounded-xl border border-rose-200 bg-white px-4 py-2 font-medium text-rose-700 transition-colors hover:bg-rose-100"
+          onClick={fetchDashboard}
+          type="button"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto min-h-screen space-y-5 bg-transparent pb-24 font-sans sm:space-y-6 lg:pb-8">
-      
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
+    <div className="mx-auto min-h-screen w-full max-w-[1600px] space-y-6 bg-transparent pb-24 font-sans lg:pb-8">
+      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">Painel da Carteira</h2>
-          <p className="mt-1.5 text-sm text-slate-500">Acompanhe o fluxo financeiro em tempo real e antecipe recebimentos</p>
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400">Carteira de emprestimos</p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-800 sm:text-[2rem]">Painel da carteira</h2>
+          <p className="mt-1.5 max-w-2xl text-sm text-slate-500">
+            Tela operacional para acompanhar cobranca, vencimentos, retorno e pressao de risco da carteira.
+          </p>
         </div>
-        <div className="text-xs font-medium text-slate-500">
-          Atualizado: <span id="lastRefresh" className="text-slate-600">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-        </div>
-      </div>
+      </section>
 
-      {/* Grid de KPIs Principais */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4">
+      {error ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+          {error}
+        </div>
+      ) : null}
 
-        {/* Card: Total Recebido */}
-        <div className="relative flex min-h-[124px] flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-          <div className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
-          <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] font-semibold uppercase tracking-widest text-slate-500">Total recebido no mês</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <CheckCircle2 className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="mt-4">
-            <div className="text-[1.9rem] font-bold leading-none tracking-tight text-slate-800">{formatCurrency(kpis.receivedThisMonth || 0)}</div>
-            <p className="mt-2 text-[0.75rem] font-medium text-emerald-600">Proj.: {formatCurrency((kpis.receivedThisMonth || 0) * 1.05)}</p>
-          </div>
-        </div>
+      <section className="space-y-4">
+        <article className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#eef4ff_100%)] p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+          <div className="grid gap-5 xl:grid-cols-[1.35fr_.95fr] xl:items-start">
+            <div className="max-w-none">
+              <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400">Visao imediata da carteira</p>
+              <h3 className="mt-2 text-[1.15rem] font-bold text-slate-800">A receber</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Total aberto da carteira somando parcelas futuras e parcelas em atraso.
+              </p>
+              <p className="mt-6 text-[2.9rem] font-bold leading-none tracking-tight text-slate-900">
+                {formatCurrency(kpis.totalOpenReceivable || 0)}
+              </p>
+              <p className="mt-3 text-sm text-slate-500">
+                Caixa previsto da carteira ativa no curto prazo.
+              </p>
+            </div>
 
-        {/* Card: A Receber */}
-        <div className="relative flex min-h-[124px] flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-          <div className="absolute inset-x-0 top-0 h-1 bg-sky-500" />
-          <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] font-semibold uppercase tracking-widest text-slate-500">A receber</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
-              <AlertCircle className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="mt-4">
-            <div className="text-[1.9rem] font-bold leading-none tracking-tight text-slate-800">{formatCurrency(kpis.totalOpenReceivable || 0)}</div>
-            <p className={`mt-2 text-[0.75rem] font-medium ${kpis.openReceivableOverdue > 0 ? 'text-rose-500' : 'text-sky-600'}`}>
-              Futuras: {formatCurrency(kpis.openReceivableFuture || 0)} &bull; {kpis.openReceivableOverdue > 0 ? `Atrasadas: ${formatCurrency(kpis.openReceivableOverdue)}` : 'Sem inadimplência'}
-            </p>
-          </div>
-        </div>
-
-        {/* Card: Lucro do Mês */}
-        <div className="relative flex min-h-[124px] flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-          <div className="absolute inset-x-0 top-0 h-1 bg-violet-500" />
-          <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] font-semibold uppercase tracking-widest text-slate-500">Lucro do mês</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
-              <TrendingUp className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="mt-4">
-            <div className="text-[1.9rem] font-bold leading-none tracking-tight text-slate-800">{formatCurrency(kpis.profitThisMonth || 0)}</div>
-            <p className="mt-2 text-[0.75rem] font-medium text-violet-600">3M: sem histórico</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Strip de KPIs Secundários */}
-      <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200/70 shadow-[0_14px_34px_rgba(15,23,42,0.06)] lg:grid-cols-4">
-        <div className="flex min-h-[102px] flex-col justify-center bg-white p-4">
-          <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Total emprestado</p>
-          <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{formatCurrency(kpis.totalLoaned || 0)}</p>
-        </div>
-        <div className="flex min-h-[102px] flex-col justify-center bg-white p-4">
-          <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Retorno total</p>
-          <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{formatCurrency(kpis.profitTotal || 0)}</p>
-          <p className="text-slate-500 text-[0.72rem] font-medium mt-1">ROI: {formatPercent(kpis.roiRate || 0)}</p>
-        </div>
-        <div className="flex min-h-[102px] flex-col justify-center bg-white p-4">
-          <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Taxa de inadimplência</p>
-          <p className="text-[1.3rem] font-bold text-rose-500 tracking-tight">{formatPercent(kpis.delinquencyRate || 0)}</p>
-        </div>
-        <div className="flex min-h-[102px] flex-col justify-center bg-white p-4">
-          <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Health score</p>
-          <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{healthScore}<span className="text-slate-500 text-sm font-medium">/100</span></p>
-        </div>
-      </div>
-
-      {/* Action Center */}
-      <div className={`${panelClass} p-5 mb-6`}>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Resumo do Dia</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Vence hoje */}
-          <div className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition-colors hover:bg-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                <Clock className="h-4 w-4" />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
+                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">A vencer</p>
+                <p className="mt-2 text-[1.8rem] font-bold tracking-tight text-slate-800">
+                  {formatCurrency(kpis.openReceivableFuture || 0)}
+                </p>
+                <p className="mt-1.5 text-sm text-slate-500">Parcelas em dia aguardando vencimento.</p>
               </div>
-              <div>
-                <p className="text-[0.7rem] font-semibold text-slate-400 uppercase tracking-wider">Vence hoje</p>
-                <p className="text-xl font-bold text-slate-100 leading-tight">{data?.dailySummary?.dueToday?.count || 0}</p>
+
+              <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
+                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-rose-400">Em atraso</p>
+                <p className="mt-2 text-[1.8rem] font-bold tracking-tight text-rose-600">
+                  {formatCurrency(kpis.openReceivableOverdue || 0)}
+                </p>
+                <p className="mt-1.5 text-sm text-rose-500">Exige cobranca e acompanhamento mais proximo.</p>
               </div>
             </div>
-            <p className="text-sm font-semibold text-slate-300">{formatCurrency(data?.dailySummary?.dueToday?.totalValue || 0)}</p>
           </div>
+        </article>
 
-          {/* Em atraso */}
-          <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 flex items-center justify-between hover:bg-rose-500/15 transition-colors cursor-pointer">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-rose-500/15 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-4 h-4 text-red-400" />
-              </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <SmallMetricCard
+            accent="bg-emerald-50 text-emerald-600"
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            label="Recebido no mes"
+            note={receivedKpi?.insight?.text || 'Volume que ja retornou para o caixa neste mes.'}
+            value={formatCurrency(kpis.receivedThisMonth || 0)}
+          />
+          <SmallMetricCard
+            accent="bg-violet-50 text-violet-600"
+            icon={<TrendingUp className="h-4 w-4" />}
+            label="Lucro do mes"
+            note={profitKpi?.insight?.text || 'Resultado gerado pelas baixas do periodo atual.'}
+            value={formatCurrency(kpis.profitThisMonth || 0)}
+          />
+        </div>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        <SupportMetricCard
+          label="Total emprestado"
+          note={
+            totalLoanedKpi?.previousValue
+              ? `Base anterior: ${formatCurrency(totalLoanedKpi.previousValue)}`
+              : 'Capital total alocado na carteira.'
+          }
+          value={formatCurrency(kpis.totalLoaned || 0)}
+        />
+        <SupportMetricCard
+          label="Retorno total"
+          note={`ROI acumulado: ${formatPercent(kpis.roiRate || 0)}`}
+          value={formatCurrency(kpis.profitTotal || 0)}
+          valueClassName="text-[#4F7EF7]"
+        />
+        <SupportMetricCard
+          label="Taxa de inadimplencia"
+          note="Percentual do atraso sobre o total aberto da carteira."
+          value={formatPercent(kpis.delinquencyRate || 0)}
+          valueClassName="text-rose-600"
+        />
+      </section>
+
+      <section className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]">
+        <div className="mb-5 flex flex-col gap-1">
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400">Acoes do dia</p>
+          <h3 className="text-[1.15rem] font-bold text-slate-800">O que pede atencao agora</h3>
+          <p className="text-sm text-slate-500">Prioridades operacionais para baixar, cobrar e planejar os proximos dias.</p>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          <ActionCard
+            cta="Abrir fila"
+            count={String(data?.dailySummary?.dueToday?.count || 0)}
+            icon={<Clock className="h-5 w-5" />}
+            iconClassName="bg-blue-50 text-blue-600"
+            label="Vence hoje"
+            note="Parcelas prontas para baixa no dia."
+            onClick={() => scrollToSection('queue-upcoming')}
+            toneClassName="text-blue-600"
+            value={formatCurrency(data?.dailySummary?.dueToday?.totalValue || 0)}
+          />
+          <ActionCard
+            cta="Ir para cobrancas"
+            count={String(data?.dailySummary?.overdue?.count || 0)}
+            icon={<AlertTriangle className="h-5 w-5" />}
+            iconClassName="bg-rose-50 text-rose-600"
+            label="Em atraso"
+            note="Titulos que precisam de cobranca e baixa."
+            onClick={() => scrollToSection('queue-overdue')}
+            toneClassName="text-rose-600"
+            value={formatCurrency(data?.dailySummary?.overdue?.totalValue || 0)}
+          />
+          <ActionCard
+            cta="Planejar semana"
+            count={String(data?.dailySummary?.next7Days?.count || 0)}
+            icon={<Calendar className="h-5 w-5" />}
+            iconClassName="bg-amber-50 text-amber-700"
+            label="Proximos 7 dias"
+            note="Antecipe contatos e confirme entradas da semana."
+            onClick={() => scrollToSection('queue-upcoming')}
+            toneClassName="text-amber-700"
+            value={formatCurrency(data?.dailySummary?.next7Days?.totalValue || 0)}
+          />
+        </div>
+      </section>
+
+      {health ? (
+        <section className="grid gap-5 xl:grid-cols-[1.55fr_.95fr]">
+          <article className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-[0.7rem] font-semibold text-red-400 uppercase tracking-wider">Em atraso (mês)</p>
-                <p className="text-xl font-bold text-red-400 leading-tight">{data?.dailySummary?.overdue?.count || 0}</p>
+                <h3 className="text-[1.15rem] font-bold text-slate-800">Performance mensal da carteira</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Recebido como serie principal, com apoio de aberto e atraso por mes.
+                </p>
               </div>
-            </div>
-            <p className="text-sm font-semibold text-red-400">{formatCurrency(data?.dailySummary?.overdue?.totalValue || 0)}</p>
-          </div>
 
-          {/* Próximos 7 dias */}
-          <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 flex items-center justify-between hover:bg-sky-500/15 transition-colors cursor-pointer">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-sky-500/15 flex items-center justify-center flex-shrink-0">
-                <Calendar className="w-4 h-4 text-slate-400" />
-              </div>
-              <div>
-                <p className="text-[0.7rem] font-semibold text-slate-400 uppercase tracking-wider">Prox. 7 dias</p>
-                <p className="text-xl font-bold text-slate-100 leading-tight">{data?.dailySummary?.next7Days?.count || 0}</p>
-              </div>
-            </div>
-            <p className="text-sm font-semibold text-slate-300">{formatCurrency(data?.dailySummary?.next7Days?.totalValue || 0)}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Listas Operacionais */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
-        {/* Próximos Vencimentos */}
-        <div className={`${panelClass} p-5 flex flex-col`}>
-          <div className="mb-4">
-            <h3 className="text-base font-bold text-slate-100">Ação rápida: próximos vencimentos</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Lista operacional para marcar pagamento rápido.</p>
-          </div>
-          <div className="flex-1 flex flex-col justify-center min-h-[200px]">
-            {(data?.upcomingDue || []).length === 0 ? (
-              <div className="text-center py-10 text-slate-600">
-                <Calendar className="w-10 h-10 mx-auto mb-3 opacity-30" strokeWidth={1.5} />
-                <p className="text-sm">Nenhum vencimento em dia.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {(data?.upcomingDue || []).slice(0, 4).map((item, idx) => (
-                  <div key={`upc-${idx}`} className={`${innerCardClass} flex items-center justify-between p-3 transition-colors hover:bg-slate-100`}>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-200 truncate max-w-[180px]">{item.debtorName}</p>
-                      <p className="text-[0.7rem] text-slate-500 font-medium mt-0.5">Vence {formatDateShort(item.dueDate)}</p>
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                      <p className="font-semibold text-emerald-400 text-sm">{formatCurrency(item.amount)}</p>
-                      <button onClick={() => setPaymentItem({ ...item, virtualStatus: 'PENDING' })} className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors" title="Baixar">
-                        <CheckCircle2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-xs text-slate-500">
-            <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 transition hover:bg-slate-50 hover:text-slate-700">Anterior</button>
-            <span>{(data?.upcomingDue?.length || 0) > 0 ? `Página 1 de ${Math.ceil((data?.upcomingDue?.length || 0) / 4)}` : 'Sem registros'}</span>
-            <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 transition hover:bg-slate-50 hover:text-slate-700">Próxima</button>
-          </div>
-        </div>
-
-        {/* Pagamentos Atrasados */}
-        <div className={`${panelClass} p-5 flex flex-col`}>
-          <div className="mb-4">
-            <h3 className="text-base font-bold text-slate-100">Pagamentos atrasados</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Lista operacional para cobrança e baixa de atrasos.</p>
-          </div>
-          <div className="flex-1 flex flex-col justify-center min-h-[200px]">
-            {(data?.overduePayments || []).length === 0 ? (
-              <div className="text-center py-10 text-slate-600">
-                <CheckCircle2 className="w-10 h-10 mx-auto mb-3 opacity-30" strokeWidth={1.5} />
-                <p className="text-sm">Sem pagamentos atrasados.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {(data?.overduePayments || []).slice(0, 4).map((item, idx) => (
-                  <div key={`ovrd-${idx}`} className={`${innerCardClass} flex items-center justify-between p-3 transition-colors hover:bg-slate-100`}>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-200 truncate max-w-[180px]">{item.debtorName}</p>
-                      <p className="text-[0.7rem] text-rose-400 font-medium mt-0.5">Atrasado ({formatDateShort(item.dueDate)})</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-emerald-400 text-sm">{formatCurrency(item.amount)}</p>
-                      <button onClick={() => setPaymentItem({ ...item, virtualStatus: 'OVERDUE' })} className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors" title="Baixar">
-                        <CheckCircle2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleWhatsApp(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-[#25D366] hover:text-white" title="Cobrar no Wpp">
-                        <MessageCircle className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-xs text-slate-500">
-            <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 transition hover:bg-slate-50 hover:text-slate-700">Anterior</button>
-            <span>{(data?.overduePayments?.length || 0) > 0 ? `Página 1 de ${Math.ceil((data?.overduePayments?.length || 0) / 4)}` : 'Sem registros'}</span>
-            <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 transition hover:bg-slate-50 hover:text-slate-700">Próxima</button>
-          </div>
-        </div>
-      </div>
-
-      {/* Chart Section & Saúde da Carteira */}
-      {data && health && (
-        <section className="grid grid-cols-1 xl:grid-cols-12 gap-5 mb-8 w-full">
-          {/* Gráfico */}
-          <div className="xl:col-span-8">
-            <div className={`${panelClass} p-6 h-full`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div className="flex items-center gap-2.5">
-                  <TrendingUp className="text-indigo-400 w-5 h-5" />
-                  <h3 className="text-base font-bold text-slate-100">Performance mensal da carteira</h3>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-                    <button onClick={() => setChartView('line')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${chartView === 'line' ? 'bg-[#4F7EF7] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Linha</button>
-                    <button onClick={() => setChartView('stacked')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${chartView === 'stacked' ? 'bg-[#4F7EF7] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Barras</button>
-                  </div>
-                  <select 
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 outline-none focus:border-[#4F7EF7]"
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+                      chartView === 'line' ? 'bg-[#4F7EF7] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                    )}
+                    onClick={() => setChartView('line')}
+                    type="button"
                   >
-                    <option value="3m">3 meses</option>
-                    <option value="6m">6 meses</option>
-                    <option value="12m">12 meses</option>
-                  </select>
+                    Linha
+                  </button>
+                  <button
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+                      chartView === 'stacked' ? 'bg-[#4F7EF7] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                    )}
+                    onClick={() => setChartView('stacked')}
+                    type="button"
+                  >
+                    Barras
+                  </button>
                 </div>
+
+                <select
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 outline-none focus:border-[#4F7EF7]"
+                  onChange={(event) => setPeriod(event.target.value as '3m' | '6m' | '12m')}
+                  value={period}
+                >
+                  <option value="3m">3 meses</option>
+                  <option value="6m">6 meses</option>
+                  <option value="12m">12 meses</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4">
+                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Recebido no mes</p>
+                <p className="mt-2 text-[2rem] font-bold tracking-tight text-slate-800">
+                  {formatCurrency(receivedKpi?.currentValue ?? kpis.receivedThisMonth ?? 0)}
+                </p>
+                <p className={cn('mt-2 text-sm font-semibold', getToneTextClass(receivedKpi?.insight?.tone))}>
+                  {receivedKpi?.insight?.text || 'Sem insight adicional para o periodo.'}
+                </p>
               </div>
 
-              <div className={`${innerCardClass} mb-5 flex flex-col justify-between px-5 py-4 sm:flex-row sm:items-end`}>
-                <div>
-                  <p className="text-[0.68rem] font-bold uppercase tracking-widest text-slate-500 mb-1">Recebido no mês</p>
-                  <p className="text-2xl font-bold text-slate-100">{formatCurrency(data.kpis.receivedThisMonth || 0)}</p>
-                </div>
-                <div className="sm:text-right mt-3 sm:mt-0">
-                  <p className="text-[0.68rem] font-bold uppercase tracking-widest text-slate-500 mb-1">vs mês anterior</p>
-                  <p className="text-xl font-bold text-slate-500">--</p>
-                </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4">
+                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Variacao vs mes anterior</p>
+                <p className={cn('mt-2 text-[2rem] font-bold tracking-tight', getToneTextClass(receivedDelta.tone))}>
+                  {receivedDelta.value}
+                </p>
+                <p className={cn('mt-2 text-sm font-semibold', getToneTextClass(receivedDelta.tone))}>{receivedDelta.note}</p>
+                <p className="mt-1.5 text-sm text-slate-500">
+                  Atual: {formatCurrency(receivedKpi?.currentValue ?? kpis.receivedThisMonth ?? 0)} | Anterior:{' '}
+                  {formatCurrency(receivedKpi?.previousValue ?? 0)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-[24px] border border-slate-200/80 bg-slate-50/60 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Escala em R$</p>
+                <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600">
+                  {formatPeriodLabel(period)}
+                </span>
               </div>
 
-              <div className="relative h-[280px] w-full rounded-[18px] border border-slate-200 bg-slate-50 p-4">
-                {(!data.chart.points || data.chart.points.length === 0 || !data.chart.points.some(p => p.received > 0 || p.overdue > 0 || p.open > 0)) ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 z-10 rounded-xl">
-                    <TrendingUp className="w-10 h-10 opacity-20 mb-3" />
-                    <p className="font-semibold text-sm">Sem dados no período.</p>
+              <div className="relative h-[320px] w-full rounded-[20px] border border-slate-200 bg-white p-4">
+                {!chart?.points?.length || !chart.points.some((point) => point.received > 0 || point.overdue > 0 || point.open > 0) ? (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-[20px] text-center text-slate-500">
+                    <TrendingUp className="mb-3 h-10 w-10 opacity-20" />
+                    <p className="text-sm font-semibold">Sem dados no periodo.</p>
                   </div>
                 ) : null}
                 {renderChart()}
               </div>
+
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-blue-600">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" />
+                  Recebido
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-emerald-600">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]" />
+                  Em aberto
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 text-rose-600">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#f43f5e]" />
+                  Em atraso
+                </span>
+              </div>
             </div>
-          </div>
+          </article>
 
-          {/* Saúde da Carteira */}
-          <aside className="xl:col-span-4">
-            <div className={`${panelClass} p-6 h-full flex flex-col`}>
-              <h3 className="text-base font-bold text-slate-100 mb-6">Saúde da carteira</h3>
-
-              {/* Taxa de recuperação */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between text-[0.68rem] font-bold uppercase tracking-widest text-slate-500 mb-2">
-                  <span>Taxa de recuperação</span>
-                  <span className="text-slate-300">{(health?.recoveryRate || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}%</span>
+          <aside className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]">
+            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Indice de saude</p>
+                  <p className={cn('mt-3 text-[2.7rem] font-bold leading-none tracking-tight', healthDescriptor.value)}>
+                    {healthScore}
+                    <span className="ml-1 text-lg font-semibold text-slate-400">/100</span>
+                  </p>
+                  <p className="mt-3 text-sm text-slate-500">{healthDescriptor.note}</p>
                 </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${Math.max(0, Math.min(health?.recoveryRate || 0, 100))}%` }}></div>
-                </div>
+                <span className={cn('rounded-full border px-3 py-1.5 text-xs font-semibold', healthDescriptor.chip)}>
+                  {healthDescriptor.label}
+                </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className={`${innerCardClass} p-4`}>
-                  <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-2 leading-tight">Clientes<br/>Inadimplentes</p>
-                  <p className="text-2xl font-bold text-slate-100">{health?.overdueCount || 0}</p>
-                </div>
-                <div className={`${innerCardClass} p-4`}>
-                  <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-2 leading-tight">Contratos<br/>Em risco</p>
-                  <p className="text-2xl font-bold text-slate-100">{health?.riskContracts || 0}</p>
-                </div>
+              <div className="mt-5 h-2 rounded-full bg-slate-200">
+                <div className={cn('h-full rounded-full transition-all duration-500', healthDescriptor.bar)} style={{ width: `${Math.max(0, Math.min(healthScore, 100))}%` }} />
               </div>
+            </div>
 
-              <div className="mt-auto grid grid-cols-2 gap-x-4 gap-y-5 border-t border-slate-200 pt-5">
-                <div>
-                  <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-1">Ticket médio</p>
-                  <p className="font-semibold text-slate-100 text-sm">{formatCurrency(health?.avgTicket || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-1">Parcela média</p>
-                  <p className="font-semibold text-slate-100 text-sm">{formatCurrency(health?.avgInstallment || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-1">Recebíveis futuros</p>
-                  <p className="font-semibold text-emerald-400 text-sm">{formatCurrency(health?.openFuture || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-1">Exposição atraso</p>
-                  <p className="font-semibold text-rose-500 text-sm">{formatCurrency(health?.totalOverdue || 0)}</p>
-                </div>
-              </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+              <SupportMetricCard label="Taxa de recuperacao" note="Recebido no mes sobre a carteira em aberto." value={formatPercent(health.recoveryRate)} valueClassName="text-emerald-600" />
+              <SupportMetricCard label="Taxa de inadimplencia" note="Percentual da carteira atualmente atrasado." value={formatPercent(kpis.delinquencyRate || 0)} valueClassName="text-rose-600" />
+              <SupportMetricCard label="Clientes inadimplentes" note="Quantidade de titulos vencidos no radar." value={String(health.overdueCount)} />
+              <SupportMetricCard label="Contratos em risco" note="Contratos com atraso e pressao operacional." value={String(health.riskContracts)} />
+              <SupportMetricCard label="Exposicao em atraso" note="Volume financeiro pressionado pelo atraso." value={formatCurrency(health.totalOverdue)} valueClassName="text-rose-600" />
+              <SupportMetricCard label="Ticket medio" note="Media de capital por contrato ativo." value={formatCurrency(health.avgTicket)} />
+              <SupportMetricCard label="Parcela media" note="Media financeira por parcela aberta." value={formatCurrency(health.avgInstallment)} />
             </div>
           </aside>
         </section>
-      )}
+      ) : null}
 
-      {/* Modal Confirmar Pagamento */}
-      {paymentItem && (
+      <section className="grid gap-5 xl:grid-cols-2">
+        <article className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]" id="queue-upcoming">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-[1.15rem] font-bold text-slate-800">Proximos vencimentos</h3>
+              <p className="mt-1 text-sm text-slate-500">Fila operacional para baixa rapida e acompanhamento da semana.</p>
+            </div>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">
+              {upcomingItems.length} registro(s)
+            </span>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {pagedUpcomingItems.length === 0 ? (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-slate-500">
+                <Calendar className="mx-auto mb-3 h-10 w-10 opacity-30" strokeWidth={1.5} />
+                <p className="text-sm font-semibold">Nenhum vencimento em dia.</p>
+              </div>
+            ) : (
+              pagedUpcomingItems.map((item) => (
+                <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-slate-300 sm:flex-row sm:items-center sm:justify-between" key={`upcoming-${item.installmentId}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn('rounded-full border px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-[0.14em]', getStatusPillClass(item.statusColor))}>{item.statusLabel}</span>
+                      <span className="text-xs font-medium text-slate-400">{item.dueRelative}</span>
+                    </div>
+                    <p className="mt-3 truncate text-sm font-bold text-slate-800">{item.debtorName}</p>
+                    <p className="mt-1 text-xs text-slate-500">Parcela {item.installmentNumber}/{item.loanInstallmentsCount} • Vencimento {formatDateFull(item.dueDate)}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+                    <p className="text-lg font-bold tracking-tight text-slate-800">{formatCurrency(item.amount)}</p>
+                    <button className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-500 hover:text-white" onClick={() => setPaymentItem({ ...item, virtualStatus: 'PENDING' })} type="button">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Baixar
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4 text-sm text-slate-500">
+            <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={upcomingPage === 1} onClick={() => setUpcomingPage((current) => Math.max(1, current - 1))} type="button">Anterior</button>
+            <span>Pagina {upcomingPage} de {upcomingTotalPages}</span>
+            <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={upcomingPage >= upcomingTotalPages} onClick={() => setUpcomingPage((current) => Math.min(upcomingTotalPages, current + 1))} type="button">Proxima</button>
+          </div>
+        </article>
+
+        <article className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]" id="queue-overdue">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-[1.15rem] font-bold text-slate-800">Cobrancas em atraso</h3>
+              <p className="mt-1 text-sm text-slate-500">Fila de cobranca com baixa rapida e contato por WhatsApp.</p>
+            </div>
+            <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600">{overdueItems.length} registro(s)</span>
+          </div>
+          <div className="mt-5 space-y-3">
+            {pagedOverdueItems.length === 0 ? (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-slate-500">
+                <CheckCircle2 className="mx-auto mb-3 h-10 w-10 opacity-30" strokeWidth={1.5} />
+                <p className="text-sm font-semibold">Sem pagamentos atrasados.</p>
+              </div>
+            ) : (
+              pagedOverdueItems.map((item) => (
+                <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-slate-300 sm:flex-row sm:items-center sm:justify-between" key={`overdue-${item.installmentId}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn('rounded-full border px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-[0.14em]', getStatusPillClass(item.statusColor))}>{item.statusLabel}</span>
+                      <span className="text-xs font-medium text-rose-400">{item.dueRelative}</span>
+                    </div>
+                    <p className="mt-3 truncate text-sm font-bold text-slate-800">{item.debtorName}</p>
+                    <p className="mt-1 text-xs text-slate-500">Parcela {item.installmentNumber}/{item.loanInstallmentsCount} • Vencimento {formatDateFull(item.dueDate)}</p>
+                  </div>
+
+                  <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                    <p className="text-lg font-bold tracking-tight text-rose-600">{formatCurrency(item.amount)}</p>
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <button className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-500 hover:text-white" onClick={() => setPaymentItem({ ...item, virtualStatus: 'OVERDUE' })} type="button">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Baixar
+                      </button>
+                      <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-[#25D366] hover:bg-[#25D366] hover:text-white" onClick={() => handleWhatsApp(item)} type="button">
+                        <MessageCircle className="h-4 w-4" />
+                        Cobrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4 text-sm text-slate-500">
+            <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={overduePage === 1} onClick={() => setOverduePage((current) => Math.max(1, current - 1))} type="button">Anterior</button>
+            <span>Pagina {overduePage} de {overdueTotalPages}</span>
+            <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={overduePage >= overdueTotalPages} onClick={() => setOverduePage((current) => Math.min(overdueTotalPages, current + 1))} type="button">Proxima</button>
+          </div>
+        </article>
+      </section>
+
+      {paymentItem ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.18)]">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
-                <CheckCircle2 className="text-emerald-500 w-5 h-5"/> Confirmar Recebimento
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                Confirmar recebimento
               </h3>
-              <button onClick={() => setPaymentItem(null)} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
-                <X className="w-4 h-4" />
+              <button className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800" onClick={() => setPaymentItem(null)} type="button">
+                <X className="h-4 w-4" />
               </button>
             </div>
-            
-            <form className="p-5 space-y-4" onSubmit={handleMarkPaid}>
+
+            <form className="space-y-4 p-5" onSubmit={handleMarkPaid}>
               <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-semibold tracking-wider text-[0.65rem] uppercase">Cliente</span>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-slate-500">Cliente</span>
                   <span className="max-w-[150px] truncate font-semibold text-slate-700">{paymentItem.debtorName}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-slate-200 pt-3">
-                  <span className="text-slate-500 font-semibold tracking-wider text-[0.65rem] uppercase">Valor</span>
-                  <span className="font-black text-xl tracking-tight text-emerald-400">{formatCurrency(paymentItem.amount)}</span>
+                  <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-slate-500">Valor</span>
+                  <span className="text-xl font-black tracking-tight text-emerald-500">{formatCurrency(paymentItem.amount)}</span>
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-widest">Data efetiva de pagamento</label>
-                <input name="paymentDate" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                <label className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-500">Data efetiva de pagamento</label>
+                <input className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" defaultValue={new Date().toISOString().split('T')[0]} name="paymentDate" required type="date" />
               </div>
-              
+
               <div className="flex flex-col gap-1.5">
-                <label className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-widest">Método de baixa</label>
-                <select name="method" required className="appearance-none rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
-                  <option value="PIX">PIX Automático</option>
-                  <option value="DINHEIRO">Dinheiro Físico</option>
-                  <option value="TRANSFERENCIA">Transferência Bancária / TED</option>
+                <label className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-500">Metodo de baixa</label>
+                <select className="appearance-none rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" name="method" required>
+                  <option value="PIX">PIX automatico</option>
+                  <option value="DINHEIRO">Dinheiro fisico</option>
+                  <option value="TRANSFERENCIA">Transferencia bancaria / TED</option>
                 </select>
               </div>
 
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setPaymentItem(null)} className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50">
-                  Cancelar
-                </button>
-                <button type="submit" className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-emerald-600/20 text-sm active:scale-95">
-                  Confirmar Quitação
-                </button>
+                <button className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50" onClick={() => setPaymentItem(null)} type="button">Cancelar</button>
+                <button className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 active:scale-95" type="submit">Confirmar quitacao</button>
               </div>
             </form>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
-

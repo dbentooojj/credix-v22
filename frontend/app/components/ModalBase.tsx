@@ -3,6 +3,9 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
+const modalButtonBaseClass =
+  "inline-flex h-11 w-[160px] flex-none items-center justify-center whitespace-nowrap rounded-xl border px-4 py-2 text-center text-sm leading-none transition-all active:translate-y-px active:scale-[0.98] disabled:opacity-50";
+
 interface ModalBaseProps {
   open: boolean;
   onClose: () => void;
@@ -11,6 +14,9 @@ interface ModalBaseProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
 }
 
 export function ModalBase({
@@ -21,6 +27,9 @@ export function ModalBase({
   children,
   footer,
   size = "max-w-lg",
+  headerClassName = "",
+  bodyClassName = "",
+  footerClassName = "",
 }: ModalBaseProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +54,7 @@ export function ModalBase({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-slate-900/35 backdrop-blur-[6px] animate-fade-in"
@@ -56,7 +65,7 @@ export function ModalBase({
         ref={panelRef}
         className={`relative z-10 flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-slate-200 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.16)] animate-slide-up sm:max-h-[90vh] sm:rounded-2xl ${size}`}
       >
-        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+        <div className={`flex items-start justify-between border-b border-slate-100 px-5 py-3.5 sm:px-6 ${headerClassName}`}>
           <div className="min-w-0 pr-4">
             <h3 className="truncate text-lg font-bold text-slate-800">{title}</h3>
             {subtitle ? <p className="mt-1 line-clamp-2 text-sm text-slate-500">{subtitle}</p> : null}
@@ -71,10 +80,10 @@ export function ModalBase({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
+        <div className={`flex-1 overflow-y-auto px-5 py-4 sm:px-6 ${bodyClassName}`}>{children}</div>
 
         {footer ? (
-          <div className="safe-area-bottom flex items-center justify-end gap-3 border-t border-slate-100 px-5 py-4 sm:px-6">
+          <div className={`safe-area-bottom flex items-center justify-end gap-2.5 border-t border-slate-100 px-5 py-3.5 sm:px-6 ${footerClassName}`}>
             {footer}
           </div>
         ) : null}
@@ -87,14 +96,16 @@ export function ModalBtnGhost({
   children,
   onClick,
   disabled,
+  className = "",
 }: {
   children: ReactNode;
   onClick: () => void;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
     <button
-      className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 active:scale-[0.98] disabled:opacity-50"
+      className={`${modalButtonBaseClass} border-slate-200 bg-white font-semibold text-slate-600 shadow-none hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 ${className}`}
       disabled={disabled}
       onClick={onClick}
       type="button"
@@ -110,22 +121,24 @@ export function ModalBtnPrimary({
   disabled,
   type = "button",
   variant = "blue",
+  className = "",
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   type?: "button" | "submit";
   variant?: "blue" | "emerald" | "red";
+  className?: string;
 }) {
   const colors: Record<string, string> = {
-    blue: "bg-[#4F7EF7] hover:bg-[#3b6ef0] shadow-[0_4px_12px_rgba(79,126,247,0.35)]",
-    emerald: "bg-emerald-600 hover:bg-emerald-500 shadow-[0_4px_12px_rgba(5,150,105,0.25)]",
-    red: "bg-red-500 hover:bg-red-600 shadow-[0_4px_12px_rgba(239,68,68,0.25)]",
+    blue: "border-[#4F7EF7] bg-[#4F7EF7] hover:bg-[#3b6ef0] hover:border-[#3b6ef0]",
+    emerald: "border-emerald-600 bg-emerald-600 hover:bg-emerald-500 hover:border-emerald-500",
+    red: "border-red-500 bg-red-500 hover:bg-red-600 hover:border-red-600",
   };
 
   return (
     <button
-      className={`min-h-[44px] rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all active:translate-y-px active:scale-[0.98] disabled:opacity-50 ${colors[variant]}`}
+      className={`${modalButtonBaseClass} font-bold text-white shadow-none ${colors[variant]} ${className}`}
       disabled={disabled}
       onClick={onClick}
       type={type}

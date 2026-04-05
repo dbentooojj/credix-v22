@@ -3,13 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import {
-  ModalBase,
-  ModalBtnGhost,
-  ModalBtnPrimary,
-  ModalField,
-  modalInputClass,
-} from "../app/components/ModalBase";
+import { useCashAdjustmentModal } from "../app/components/CashAdjustmentModalProvider";
 import {
   AlertCircleIcon,
   ArrowDownLeftIcon,
@@ -157,24 +151,6 @@ function formatDateLong(value?: string) {
   }).format(date);
 }
 
-function toDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function parseCurrencyInput(value: string): number {
-  const trimmed = value.trim();
-  if (!trimmed) return Number.NaN;
-  const cleaned = trimmed.replace(/[^\d,.-]/g, "");
-  if (!cleaned) return Number.NaN;
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned;
-  return Number(normalized);
-}
-
 function formatMetricLabel(metric?: string) {
   return (
     {
@@ -185,18 +161,72 @@ function formatMetricLabel(metric?: string) {
   );
 }
 
+function buildFlowHeader(period?: string) {
+  const normalized = String(period || "")
+    .trim()
+    .toLowerCase();
+  const match = normalized.match(/^(\d+)([dmy])$/);
+
+  if (!match) {
+    return {
+      title: "Fluxo dos ultimos meses",
+      subtitle: "Recebido, a vencer e em atraso por mes.",
+    } as const;
+  }
+
+  const amount = Number(match[1]) || 0;
+  const unit = match[2];
+
+  if (unit === "m") {
+    return {
+      title: `Fluxo dos ultimos ${amount} ${amount === 1 ? "mes" : "meses"}`,
+      subtitle: "Recebido, a vencer e em atraso por mes.",
+    } as const;
+  }
+
+  if (unit === "d") {
+    return {
+      title: `Fluxo dos ultimos ${amount} ${amount === 1 ? "dia" : "dias"}`,
+      subtitle: "Recebido, a vencer e em atraso no periodo.",
+    } as const;
+  }
+
+  return {
+    title: `Fluxo dos ultimos ${amount} ${amount === 1 ? "ano" : "anos"}`,
+    subtitle: "Recebido, a vencer e em atraso por mes.",
+  } as const;
+}
+
 function buildInsight(currentValue: unknown, previousValue: unknown) {
   const current = toNumber(currentValue);
   const previous = toNumber(previousValue);
 
   if (Math.abs(previous) < 0.00001) {
-    if (Math.abs(current) < 0.00001) return { tone: "neutral", text: "0,00% vs mes ant." } as const;
-    return { tone: current >= 0 ? "positive" : "negative", text: "Sem base ant." } as const;
+    if (Math.abs(current) < 0.00001) {
+      return {
+        tone: "neutral",
+        headline: "0,00%",
+        summary: "Sem variacao relevante em relacao ao mes anterior.",
+        hasBaseline: false,
+      } as const;
+    }
+
+    return {
+      tone: current >= 0 ? "positive" : "negative",
+      headline: "Sem base",
+      summary: "Ainda nao existe um mes anterior com valor para comparar.",
+      hasBaseline: false,
+    } as const;
   }
 
   const percentage = ((current - previous) / Math.abs(previous)) * 100;
   if (Math.abs(percentage) < 0.005) {
-    return { tone: "neutral", text: "0,00% vs mes ant." } as const;
+    return {
+      tone: "neutral",
+      headline: "0,00%",
+      summary: "Mesmo ritmo do mes anterior.",
+      hasBaseline: true,
+    } as const;
   }
 
   const percentageText = Math.abs(percentage).toLocaleString("pt-BR", {
@@ -206,7 +236,9 @@ function buildInsight(currentValue: unknown, previousValue: unknown) {
 
   return {
     tone: percentage > 0 ? "positive" : "negative",
-    text: `${percentage > 0 ? "+" : "-"}${percentageText}% vs mes ant.`,
+    headline: `${percentage > 0 ? "+" : "-"}${percentageText}%`,
+    summary: percentage > 0 ? "acima do mes anterior" : "abaixo do mes anterior",
+    hasBaseline: true,
   } as const;
 }
 
@@ -504,6 +536,14 @@ function MonthlyFlowChart({
   const groupWidth = innerWidth / points.length;
   const barWidth = Math.max(10, groupWidth * 0.16);
   const barGap = Math.max(4, groupWidth * 0.08);
+  const currentIndex = Math.max(0, points.length - 1);
+  const currentBandX = left + groupWidth * currentIndex + groupWidth * 0.12;
+  const currentBandWidth = groupWidth * 0.76;
+  const legendItems = [
+    { label: "Recebido", color: "bg-[#4F7EF7]", chip: "bg-blue-50 text-blue-600 border-blue-100" },
+    { label: "Em aberto", color: "bg-sky-300", chip: "bg-sky-50 text-sky-600 border-sky-100" },
+    { label: "Atrasado", color: "bg-rose-300", chip: "bg-rose-50 text-rose-600 border-rose-100" },
+  ];
 
   // Build area path for received line
   const areaPoints = points.map((point, index) => {
@@ -522,10 +562,15 @@ function MonthlyFlowChart({
   const gridSteps = [0, 0.25, 0.5, 0.75, 1];
 
   return (
-    <div className="relative mt-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-4">
-      <p className="mb-2 text-[0.64rem] font-bold uppercase tracking-[0.12em] text-slate-400">Escala em R$</p>
+    <div className="relative mt-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/35 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[0.64rem] font-bold uppercase tracking-[0.12em] text-slate-400">Escala em R$</p>
+        <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[0.68rem] font-semibold text-blue-600">
+          Ultimo ponto: {points[currentIndex]?.label || "mes atual"}
+        </span>
+      </div>
       <svg
-        aria-label="Fluxo mensal"
+        aria-label="Fluxo dos ultimos meses"
         className="block h-[270px] w-full"
         role="img"
         viewBox={`0 0 ${width} ${height}`}
@@ -536,6 +581,18 @@ function MonthlyFlowChart({
             <stop offset="100%" stopColor="#4F7EF7" stopOpacity="0.01" />
           </linearGradient>
         </defs>
+
+        <rect
+          fill="rgba(79,126,247,0.06)"
+          height={innerHeight + 10}
+          rx="16"
+          width={currentBandWidth}
+          x={currentBandX}
+          y={top - 5}
+        />
+        <text fill="#4F7EF7" fontSize="10" fontWeight="700" textAnchor="middle" x={currentBandX + currentBandWidth / 2} y={12}>
+          MES ATUAL
+        </text>
 
         {/* Grid lines */}
         {gridSteps.map((step) => {
@@ -613,12 +670,22 @@ function MonthlyFlowChart({
         {areaPoints.map((p, index) => {
           const point = points[index];
           const receivedValue = toNumber(point?.received ?? point?.value);
+          const isCurrentPoint = index === currentIndex;
+          const markerY = Math.max(18, p.y - 16);
           return (
             <g key={`pt-${point?.label || index}`}>
               <title>
                 {point?.label || "--"} | Recebido: {formatCurrency(receivedValue)}
               </title>
-              <circle cx={p.cx} cy={p.y} fill="#4F7EF7" r="4" stroke="#fff" strokeWidth="2" />
+              {isCurrentPoint ? (
+                <>
+                  <rect fill="#ffffff" height="18" rx="9" stroke="#BFDBFE" width="48" x={p.cx - 24} y={markerY - 14} />
+                  <text fill="#2563EB" fontSize="9" fontWeight="700" textAnchor="middle" x={p.cx} y={markerY - 2}>
+                    ATUAL
+                  </text>
+                </>
+              ) : null}
+              <circle cx={p.cx} cy={p.y} fill="#4F7EF7" r={isCurrentPoint ? "5" : "4"} stroke="#fff" strokeWidth={isCurrentPoint ? "3" : "2"} />
               <text fill="#94A3B8" fontSize="11" textAnchor="middle" x={p.cx} y={height - 16}>
                 {point?.label || "--"}
               </text>
@@ -627,19 +694,16 @@ function MonthlyFlowChart({
         })}
       </svg>
 
-      <div className="mt-3 flex flex-wrap gap-4 text-xs font-semibold text-slate-500">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#4F7EF7]" />
-          Recebido
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
-          Em aberto
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
-          Atrasado
-        </span>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+        {legendItems.map((item) => (
+          <span
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 ${item.chip}`}
+            key={item.label}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
+            {item.label}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -871,14 +935,22 @@ function RecentMovements({
 /* ─────────────────────────────────────────
    EMPTY STATE
 ───────────────────────────────────────── */
-function EmptyState({ title, note }: { title: string; note: string }) {
+function EmptyState({
+  title,
+  note,
+  className = "",
+}: {
+  title: string;
+  note?: string;
+  className?: string;
+}) {
   return (
-    <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-10 text-center">
+    <div className={`rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-10 text-center ${className}`}>
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
         <CalendarCheckIcon className="h-5 w-5" />
       </div>
       <p className="mt-3 font-semibold text-slate-700">{title}</p>
-      <p className="mt-1 text-sm text-slate-500">{note}</p>
+      {note ? <p className="mt-1 text-sm text-slate-500">{note}</p> : null}
     </div>
   );
 }
@@ -904,7 +976,7 @@ function OperationPanel({
   secondaryTotalValue?: number;
   items: OperationItem[];
   emptyTitle: string;
-  emptyNote: string;
+  emptyNote?: string;
   amountClassName: string;
 }) {
   const pageSize = 4;
@@ -924,13 +996,13 @@ function OperationPanel({
   const pages = buildPaginationSequence(currentPage, totalPages);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
-      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
-        <div>
+    <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:flex xl:h-[430px] xl:flex-col">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h3 className="text-base font-bold text-slate-800">{title}</h3>
           {note ? <p className="mt-0.5 text-sm text-slate-500">{note}</p> : null}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <div className="flex flex-wrap items-start gap-1.5 sm:shrink-0 sm:flex-col sm:items-end">
           <span className="inline-flex items-center rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-bold text-[#4F7EF7]">
             Total: {formatCurrency(totalValue)}
           </span>
@@ -942,89 +1014,91 @@ function OperationPanel({
         </div>
       </div>
 
-      <div className="grid gap-2.5 p-4">
-        {items.length === 0 ? (
-          <EmptyState note={emptyNote} title={emptyTitle} />
-        ) : (
-          visibleItems.map((item, index) => (
-            <Link
-              className="rounded-xl border border-slate-200/80 bg-slate-50/50 px-4 py-3.5 transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
-              href={normalizeHref(item.href)}
-              key={`${item.title || "item"}-${startIndex + index}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="mb-1.5 flex flex-wrap gap-1.5">
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-slate-600">
-                      {item.typeLabel || "-"}
-                    </span>
-                    <span className="inline-flex items-center rounded-full bg-slate-50 border border-slate-200 px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-slate-500">
-                      {item.moduleLabel || "-"}
-                    </span>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="grid flex-1 min-h-0 gap-2.5 overflow-y-auto p-4">
+          {items.length === 0 ? (
+            <EmptyState className="flex h-full flex-col justify-center" note={emptyNote} title={emptyTitle} />
+          ) : (
+            visibleItems.map((item, index) => (
+              <Link
+                className="rounded-xl border border-slate-200/80 bg-slate-50/50 px-4 py-3.5 transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
+                href={normalizeHref(item.href)}
+                key={`${item.title || "item"}-${startIndex + index}`}
+              >
+                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1.5 flex flex-wrap gap-1.5">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-slate-600">
+                        {item.typeLabel || "-"}
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-slate-50 border border-slate-200 px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-slate-500">
+                        {item.moduleLabel || "-"}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold leading-5 text-slate-800 sm:truncate">{item.title || "-"}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{item.subtitle || "-"}</p>
                   </div>
-                  <p className="truncate text-sm font-semibold text-slate-800">{item.title || "-"}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{item.subtitle || "-"}</p>
+                  <div className="flex justify-end border-t border-slate-200/80 pt-2 sm:block sm:shrink-0 sm:border-t-0 sm:pt-0 sm:text-right">
+                    <p className={`text-base font-bold whitespace-nowrap ${amountClassName}`}>
+                      {formatCurrency(item.amount)}
+                    </p>
+                  </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className={`text-base font-bold ${amountClassName}`}>
-                    {formatCurrency(item.amount)}
-                  </p>
-                </div>
-              </div>
-            </Link>
-          ))
-        )}
-      </div>
-
-      {totalPages > 1 ? (
-        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500">
-            Mostrando {startItem}-{endItem} de {totalItems} itens
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7] disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((previous) => Math.max(1, previous - 1))}
-              type="button"
-            >
-              Anterior
-            </button>
-            {pages.map((page) =>
-              typeof page === "number" ? (
-                <button
-                  aria-current={page === currentPage ? "page" : undefined}
-                  className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border px-2.5 text-xs font-bold transition ${
-                    page === currentPage
-                      ? "border-[#4F7EF7] bg-[#4F7EF7] text-white shadow-[0_4px_12px_rgba(79,126,247,0.3)]"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7]"
-                  }`}
-                  key={`${title}-${page}`}
-                  onClick={() => setCurrentPage(page)}
-                  type="button"
-                >
-                  {page}
-                </button>
-              ) : (
-                <span
-                  className="inline-flex h-8 min-w-[2rem] items-center justify-center text-xs font-bold text-slate-400"
-                  key={`${title}-${page}`}
-                >
-                  ...
-                </span>
-              ),
-            )}
-            <button
-              className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7] disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage((previous) => Math.min(totalPages, previous + 1))}
-              type="button"
-            >
-              Proxima
-            </button>
-          </div>
+              </Link>
+            ))
+          )}
         </div>
-      ) : null}
+
+        {totalPages > 1 ? (
+          <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">
+              Mostrando {startItem}-{endItem} de {totalItems} itens
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7] disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((previous) => Math.max(1, previous - 1))}
+                type="button"
+              >
+                Anterior
+              </button>
+              {pages.map((page) =>
+                typeof page === "number" ? (
+                  <button
+                    aria-current={page === currentPage ? "page" : undefined}
+                    className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border px-2.5 text-xs font-bold transition ${
+                      page === currentPage
+                        ? "border-[#4F7EF7] bg-[#4F7EF7] text-white shadow-[0_4px_12px_rgba(79,126,247,0.3)]"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7]"
+                    }`}
+                    key={`${title}-${page}`}
+                    onClick={() => setCurrentPage(page)}
+                    type="button"
+                  >
+                    {page}
+                  </button>
+                ) : (
+                  <span
+                    className="inline-flex h-8 min-w-[2rem] items-center justify-center text-xs font-bold text-slate-400"
+                    key={`${title}-${page}`}
+                  >
+                    ...
+                  </span>
+                ),
+              )}
+              <button
+                className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7] disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((previous) => Math.min(totalPages, previous + 1))}
+                type="button"
+              >
+                Proxima
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -1039,66 +1113,14 @@ export function OverviewPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [pageLoading, setPageLoading] = useState(false);
-  const [cashModalOpen, setCashModalOpen] = useState(false);
-  const [cashType, setCashType] = useState<"income" | "expense">("income");
-  const [cashAmount, setCashAmount] = useState("");
-  const [cashDate, setCashDate] = useState(() => toDateInputValue(new Date()));
-  const [cashDescription, setCashDescription] = useState("");
-  const [cashSaving, setCashSaving] = useState(false);
-  const [cashError, setCashError] = useState<string | null>(null);
+  const { openCashAdjustmentModal: openGlobalCashAdjustmentModal } = useCashAdjustmentModal();
 
   function openCashAdjustmentModal() {
-    setCashType("income");
-    setCashAmount("");
-    setCashDate(toDateInputValue(new Date()));
-    setCashDescription("");
-    setCashError(null);
-    setCashModalOpen(true);
-  }
-
-  async function handleCashAdjustmentSave() {
-    const parsedAmount = parseCurrencyInput(cashAmount);
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setCashError("Informe um valor valido maior que zero.");
-      return;
-    }
-    if (!cashDate) {
-      setCashError("Informe uma data valida para o ajuste.");
-      return;
-    }
-    setCashSaving(true);
-    setCashError(null);
-    try {
-      const response = await fetch("/api/dashboard/cash-adjustments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          type: cashType,
-          amount: parsedAmount,
-          date: cashDate,
-          description: cashDescription.trim() || undefined,
-        }),
-      });
-      const body = await response.json().catch(() => null);
-      if (response.status === 401) {
-        window.location.href = "/login";
-        return;
-      }
-      if (!response.ok) {
-        throw new Error(
-          typeof body?.message === "string" ? body.message : "Falha ao salvar ajuste de caixa.",
-        );
-      }
-      setCashModalOpen(false);
-      setRefreshTick((current) => current + 1);
-    } catch (nextError) {
-      setCashError(
-        nextError instanceof Error ? nextError.message : "Nao foi possivel registrar o ajuste.",
-      );
-    } finally {
-      setCashSaving(false);
-    }
+    openGlobalCashAdjustmentModal({
+      onSuccess: () => {
+        setRefreshTick((current) => current + 1);
+      },
+    });
   }
 
   useEffect(() => {
@@ -1139,6 +1161,8 @@ export function OverviewPageClient() {
   const chartPoints = chart?.points || [];
   const currentPoint = chartPoints.length ? chartPoints[chartPoints.length - 1] : null;
   const previousPoint = chartPoints.length > 1 ? chartPoints[chartPoints.length - 2] : null;
+  const flowHeader = buildFlowHeader(chart?.period);
+  const metricLabel = formatMetricLabel(chart?.metric);
   const currentValue = toNumber(currentPoint?.received ?? currentPoint?.value);
   const previousValue = toNumber(previousPoint?.received ?? previousPoint?.value);
   const flowInsight = buildInsight(currentValue, previousValue);
@@ -1217,7 +1241,7 @@ export function OverviewPageClient() {
     <div className={`w-full max-w-[1600px] mx-auto pb-24 lg:pb-8 ${initialLoading ? "opacity-90" : ""}`}>
       {/* ── PAGE HEADER ── */}
       <section className="mb-6">
-        <div className="flex items-start justify-between gap-4">
+        <div>
           <div>
             <h1 className="text-2xl sm:text-[clamp(1.6rem,1.2vw+1rem,2.1rem)] font-bold leading-tight tracking-tight text-slate-800">
               Visao geral
@@ -1226,15 +1250,6 @@ export function OverviewPageClient() {
               Resumo do caixa, recebimentos e compromissos financeiros.
             </p>
           </div>
-          {/* Date badge */}
-          <span className="hidden shrink-0 items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm sm:inline-flex">
-            {new Date().toLocaleDateString("pt-BR", {
-              weekday: "short",
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })}
-          </span>
         </div>
       </section>
 
@@ -1246,13 +1261,12 @@ export function OverviewPageClient() {
       ) : null}
 
       {/* ── ROW 1: KPI CARDS ── */}
-      <section className="grid gap-3 sm:gap-4 grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           action={{
             label: "Ajustar caixa",
             onClick: openCashAdjustmentModal,
             icon: <WalletIcon className="h-3.5 w-3.5" />,
-            disabled: cashSaving,
           }}
           icon={<WalletIcon className="h-5 w-5" />}
           label="Saldo em caixa"
@@ -1288,10 +1302,9 @@ export function OverviewPageClient() {
       </section>
 
       {/* ── ROW 2: OPERATIONS + ALERTS ── */}
-      <section className="mt-3 sm:mt-4 grid gap-3 sm:gap-4 xl:grid-cols-[1.15fr_1.15fr_.8fr]">
+      <section className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-[1.15fr_1.15fr_.8fr] xl:items-stretch">
         <OperationPanel
           amountClassName="text-emerald-600"
-          emptyNote="Quando houver parcelas ou contas a receber no dia, elas aparecem aqui."
           emptyTitle="Sem recebimentos previstos para hoje."
           items={receiptsTodayItems}
           secondaryTotalLabel={overdueIncomingCount ? `Atrasados (${overdueIncomingCount})` : undefined}
@@ -1301,21 +1314,19 @@ export function OverviewPageClient() {
         />
         <OperationPanel
           amountClassName="text-rose-500"
-          emptyNote="Quando houver contas a pagar hoje ou vencidas, elas aparecem aqui."
           emptyTitle="Sem pagamentos para hoje ou vencidos."
           items={paymentsTodayItems}
-          note="Saidas financeiras previstas para hoje e vencidas."
           title="Pagamentos de hoje"
           totalValue={outgoingValue}
         />
 
         {/* Alerts card */}
-        <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
+        <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:flex xl:h-[430px] xl:flex-col">
           <div className="border-b border-slate-100 px-5 py-4">
             <h3 className="text-base font-bold text-slate-800">Alertas financeiros</h3>
             <p className="mt-0.5 text-sm text-slate-500">Leitura rapida dos compromissos e riscos do dia.</p>
           </div>
-          <div className="grid gap-2.5 p-4">
+          <div className="grid flex-1 content-start gap-2.5 overflow-y-auto p-4">
             {alerts.map((alert) => (
               <FinancialAlert icon={alert.icon} key={alert.label} label={alert.label} tone={alert.tone} />
             ))}
@@ -1324,40 +1335,39 @@ export function OverviewPageClient() {
       </section>
 
       {/* ── ROW 3: CHART + DAILY SUMMARY ── */}
-      <section className="mt-3 sm:mt-4 grid gap-3 sm:gap-4 xl:grid-cols-[1.45fr_.75fr]">
+      <section className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-[1.45fr_.75fr] xl:items-stretch">
         {/* Monthly flow chart */}
-        <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
+        <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:h-full">
           <div className="border-b border-slate-100 px-5 py-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-800">Fluxo mensal</h3>
-                <p className="mt-0.5 text-sm text-slate-500">
-                  Leitura dos ultimos meses com recebido, a vencer e atrasado.
-                </p>
-              </div>
-              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500">
-                Ultimos 6 meses
-              </span>
-            </div>
+            <h3 className="text-base font-bold text-slate-800">{flowHeader.title}</h3>
+            <p className="mt-0.5 text-sm text-slate-500">{flowHeader.subtitle}</p>
           </div>
           <div className="p-5">
             {/* Mini stats row */}
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
-                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Mes atual</p>
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">{metricLabel} no mes</p>
                 <p className="mt-1.5 text-[1.35rem] font-bold tracking-tight text-slate-800">
                   {currentPoint ? formatCurrency(currentValue) : "--"}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   {currentPoint
-                    ? `${formatMetricLabel(chart?.metric)} em ${currentPoint.label || "mes atual"}.`
+                    ? `${metricLabel} registrado em ${currentPoint.label || "mes atual"}.`
                     : "Sem dados no periodo atual."}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
-                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Comparativo</p>
-                <p className="mt-1.5 text-[1.35rem] font-bold tracking-tight text-slate-800">
-                  {previousPoint ? formatCurrency(previousValue) : "--"}
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Variacao vs mes anterior</p>
+                <p
+                  className={`mt-1.5 text-[1.35rem] font-bold tracking-tight ${
+                    flowInsight.tone === "positive"
+                      ? "text-emerald-600"
+                      : flowInsight.tone === "negative"
+                        ? "text-rose-500"
+                        : "text-slate-800"
+                  }`}
+                >
+                  {flowInsight.headline}
                 </p>
                 <p
                   className={`mt-1 text-xs font-semibold ${
@@ -1368,13 +1378,18 @@ export function OverviewPageClient() {
                         : "text-slate-400"
                   }`}
                 >
+                  {flowInsight.summary}
+                </p>
+                <p
+                  className="mt-1 text-xs text-slate-500"
+                >
                   {previousPoint
-                    ? `${flowInsight.text} sobre ${previousPoint.label}.`
-                    : "Sem base anterior para comparativo."}
+                    ? `${currentPoint?.label || "Mes atual"}: ${formatCurrency(currentValue)} | ${previousPoint.label || "Mes anterior"}: ${formatCurrency(previousValue)}`
+                    : "Quando houver dois meses no periodo, o comparativo aparece aqui."}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
-                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Pendencias do mes</p>
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Pendencias deste mes</p>
                 <p className="mt-1.5 text-[1.35rem] font-bold tracking-tight text-slate-800">
                   {formatCurrency(pendingCurrentMonth)}
                 </p>
@@ -1392,12 +1407,12 @@ export function OverviewPageClient() {
         </article>
 
         {/* Daily summary */}
-        <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
+        <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:flex xl:h-full xl:flex-col">
           <div className="border-b border-slate-100 px-5 py-4">
             <h3 className="text-base font-bold text-slate-800">Resumo do dia</h3>
             <p className="mt-0.5 text-sm text-slate-500">Entradas, saidas e projecao imediata do caixa.</p>
           </div>
-          <div className="grid gap-3 p-5">
+          <div className="grid gap-3 p-5 xl:flex-1 xl:auto-rows-fr">
             <DailySummaryCard
               icon={<ArrowUpRightIcon className="h-4.5 w-4.5" />}
               meta={
@@ -1445,87 +1460,6 @@ export function OverviewPageClient() {
       </section>
 
       {/* ── CASH ADJUSTMENT MODAL ── */}
-      <ModalBase
-        footer={
-          <>
-            <ModalBtnGhost
-              disabled={cashSaving}
-              onClick={() => {
-                if (cashSaving) return;
-                setCashModalOpen(false);
-              }}
-            >
-              Cancelar
-            </ModalBtnGhost>
-            <ModalBtnPrimary disabled={cashSaving} onClick={handleCashAdjustmentSave}>
-              {cashSaving ? "Salvando..." : "Salvar ajuste"}
-            </ModalBtnPrimary>
-          </>
-        }
-        onClose={() => {
-          if (cashSaving) return;
-          setCashModalOpen(false);
-        }}
-        open={cashModalOpen}
-        size="max-w-3xl"
-        subtitle="Registre entrada ou retirada para atualizar o saldo atual."
-        title="Ajustar caixa"
-      >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <ModalField label="Tipo">
-            <select
-              className={modalInputClass}
-              disabled={cashSaving}
-              onChange={(event) => setCashType(event.target.value as "income" | "expense")}
-              value={cashType}
-            >
-              <option value="income">Entrada</option>
-              <option value="expense">Retirada</option>
-            </select>
-          </ModalField>
-
-          <ModalField label="Valor (R$)">
-            <input
-              className={modalInputClass}
-              disabled={cashSaving}
-              inputMode="decimal"
-              maxLength={24}
-              onChange={(event) => setCashAmount(event.target.value)}
-              placeholder="0,00"
-              type="text"
-              value={cashAmount}
-            />
-          </ModalField>
-
-          <ModalField label="Data">
-            <input
-              className={modalInputClass}
-              disabled={cashSaving}
-              onChange={(event) => setCashDate(event.target.value)}
-              type="date"
-              value={cashDate}
-            />
-          </ModalField>
-
-          <ModalField label="Observacao">
-            <input
-              className={modalInputClass}
-              disabled={cashSaving}
-              maxLength={300}
-              onChange={(event) => setCashDescription(event.target.value)}
-              placeholder="Motivo do ajuste (opcional)"
-              type="text"
-              value={cashDescription}
-            />
-          </ModalField>
-        </div>
-
-        {cashError ? (
-          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-medium text-rose-700">
-            {cashError}
-          </div>
-        ) : null}
-      </ModalBase>
     </div>
   );
 }

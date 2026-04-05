@@ -59,12 +59,7 @@ export default function LoginPage() {
         <div className="absolute top-1/2 right-8 h-32 w-32 rounded-full bg-white/5" />
 
         {/* Logo */}
-        <div className="relative z-10 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M8 2C4.686 2 2 4.686 2 8s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6zm0 2a4 4 0 110 8A4 4 0 018 4zm0 1.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" fill="white"/>
-            </svg>
-          </span>
+        <div className="relative z-10 flex items-center">
           <span className="text-2xl font-bold text-white">
             Cred<span className="text-white/80">ix</span>
           </span>
@@ -101,12 +96,7 @@ export default function LoginPage() {
       {/* ── RIGHT PANEL (form) ── */}
       <div className="flex flex-1 flex-col items-center justify-center p-6 sm:p-10">
         {/* Mobile logo */}
-        <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#4F7EF7] shadow-[0_4px_12px_rgba(79,126,247,0.4)]">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M8 2C4.686 2 2 4.686 2 8s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6zm0 2a4 4 0 110 8A4 4 0 018 4zm0 1.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" fill="white"/>
-            </svg>
-          </span>
+        <div className="mb-8 flex items-center lg:hidden">
           <span className="text-2xl font-bold text-slate-800">
             Cred<span className="text-[#4F7EF7]">ix</span>
           </span>

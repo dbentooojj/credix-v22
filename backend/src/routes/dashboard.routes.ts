@@ -26,6 +26,7 @@ import {
   INSTALLMENT_PAYMENT_CATEGORY,
   LOAN_DISBURSEMENT_CATEGORY,
   buildInstallmentIncomeDescription,
+  parseInstallmentIncomeDescription,
 } from "../lib/installment-income-transaction";
 import { toSafeNumber } from "../lib/numbers";
 import { requireAuthApi } from "../middleware/auth";
@@ -475,8 +476,11 @@ router.get("/", async (req, res) => {
   const paymentMetaByInstallment = new Map<number, { amount: number; paymentDateIso: string; monthKey: string }>();
   const receivedByMonth = new Map<string, number>();
   const receivedByMonthAll = new Map<string, number>();
+  const portfolioReceivedByMonth = new Map<string, number>();
+  const portfolioReceivedByMonthAll = new Map<string, number>();
   const loanedByMonthAll = new Map<string, number>();
   const profitByMonthAll = new Map<string, number>();
+  const portfolioProfitByMonthAll = new Map<string, number>();
   const balanceByMonthAll = new Map<string, number>();
   const installmentIncomeTransactions = new Map<string, {
     amountSigned: number;
@@ -520,6 +524,48 @@ router.get("/", async (req, res) => {
         entry.monthKey,
         (profitByMonthAll.get(entry.monthKey) ?? 0) + entry.amountSigned,
       );
+    }
+  };
+
+  let portfolioTotalReceived = 0;
+  let portfolioReceivedThisMonth = 0;
+  let portfolioProfitTotal = 0;
+  let portfolioProfitThisMonth = 0;
+
+  const applyPortfolioReceipt = (entry: {
+    receivedAmount: number;
+    profitAmount: number;
+    monthKey: string;
+  }) => {
+    if (entry.receivedAmount > 0) {
+      portfolioTotalReceived += entry.receivedAmount;
+      portfolioReceivedByMonthAll.set(
+        entry.monthKey,
+        (portfolioReceivedByMonthAll.get(entry.monthKey) ?? 0) + entry.receivedAmount,
+      );
+
+      if (entry.monthKey === currentMonthKey) {
+        portfolioReceivedThisMonth += entry.receivedAmount;
+      }
+
+      if (monthKeySet.has(entry.monthKey)) {
+        portfolioReceivedByMonth.set(
+          entry.monthKey,
+          (portfolioReceivedByMonth.get(entry.monthKey) ?? 0) + entry.receivedAmount,
+        );
+      }
+    }
+
+    if (entry.profitAmount > 0) {
+      portfolioProfitTotal += entry.profitAmount;
+      portfolioProfitByMonthAll.set(
+        entry.monthKey,
+        (portfolioProfitByMonthAll.get(entry.monthKey) ?? 0) + entry.profitAmount,
+      );
+
+      if (entry.monthKey === currentMonthKey) {
+        portfolioProfitThisMonth += entry.profitAmount;
+      }
     }
   };
 
@@ -571,6 +617,12 @@ router.get("/", async (req, res) => {
 
       const installment = installmentById.get(payment.installmentId);
       if (!installment) {
+        applyPortfolioReceipt({
+          receivedAmount: paymentAmount,
+          profitAmount: 0,
+          monthKey: paymentMonthKey,
+        });
+
         applyLedgerEntry({
           type: "revenue",
           amountSigned: paymentAmount,
@@ -580,6 +632,12 @@ router.get("/", async (req, res) => {
       }
 
       const paymentSplit = resolveInstallmentPaymentSplit(installment, paymentAmount);
+      applyPortfolioReceipt({
+        receivedAmount: paymentAmount,
+        profitAmount: paymentSplit.interestAmount,
+        monthKey: paymentMonthKey,
+      });
+
       if (paymentSplit.interestAmount > 0) {
         applyLedgerEntry({
           type: "revenue",
@@ -595,6 +653,12 @@ router.get("/", async (req, res) => {
         });
       }
     } else {
+      applyPortfolioReceipt({
+        receivedAmount: paymentAmount,
+        profitAmount: 0,
+        monthKey: paymentMonthKey,
+      });
+
       applyLedgerEntry({
         type: "revenue",
         amountSigned: paymentAmount,
@@ -606,6 +670,26 @@ router.get("/", async (req, res) => {
   installmentIncomeTransactions.forEach((entry, description) => {
     if (processedInstallmentIncomeDescriptions.has(description)) {
       return;
+    }
+
+    const parsedInstallmentIncome = parseInstallmentIncomeDescription(description);
+    const installment = parsedInstallmentIncome
+      ? installmentById.get(parsedInstallmentIncome.installmentId) ?? null
+      : null;
+
+    if (installment) {
+      const paymentSplit = resolveInstallmentPaymentSplit(installment, entry.amountSigned);
+      applyPortfolioReceipt({
+        receivedAmount: entry.amountSigned,
+        profitAmount: paymentSplit.interestAmount,
+        monthKey: entry.monthKey,
+      });
+    } else {
+      applyPortfolioReceipt({
+        receivedAmount: entry.amountSigned,
+        profitAmount: 0,
+        monthKey: entry.monthKey,
+      });
     }
 
     applyLedgerEntry({
@@ -755,6 +839,7 @@ router.get("/", async (req, res) => {
   const totalToReceive = totalToReceiveOutstanding;
   const delinquencyRate = totalToReceive > 0 ? (totalOverdue / totalToReceive) * 100 : 0;
   const roiRate = totalLoaned > 0 ? (profitTotal / totalLoaned) * 100 : 0;
+  const portfolioRoiRate = totalLoaned > 0 ? (portfolioProfitTotal / totalLoaned) * 100 : 0;
   const cashBalance = ledgerCashBalance;
 
   const chartPoints = monthKeys.map((monthKey) => ({
@@ -762,6 +847,15 @@ router.get("/", async (req, res) => {
     label: monthLabel(monthKey),
     value: receivedByMonth.get(monthKey) ?? 0,
     received: receivedByMonth.get(monthKey) ?? 0,
+    overdue: overdueByMonth.get(monthKey) ?? 0,
+    open: openByMonth.get(monthKey) ?? 0,
+  }));
+
+  const portfolioChartPoints = monthKeys.map((monthKey) => ({
+    month: monthKey,
+    label: monthLabel(monthKey),
+    value: portfolioReceivedByMonth.get(monthKey) ?? 0,
+    received: portfolioReceivedByMonth.get(monthKey) ?? 0,
     overdue: overdueByMonth.get(monthKey) ?? 0,
     open: openByMonth.get(monthKey) ?? 0,
   }));
@@ -855,8 +949,10 @@ router.get("/", async (req, res) => {
     ?? computeSnapshotAt(getMonthEndIso(previousMonthKey));
 
   const receivedMonthlySeries = buildMonthlySeries(sparklineMonthKeys, receivedByMonthAll);
+  const portfolioReceivedMonthlySeries = buildMonthlySeries(sparklineMonthKeys, portfolioReceivedByMonthAll);
   const loanedMonthlyFlows = buildMonthlySeries(sparklineMonthKeys, loanedByMonthAll);
   const profitMonthlyFlows = buildMonthlySeries(sparklineMonthKeys, profitByMonthAll);
+  const portfolioProfitMonthlyFlows = buildMonthlySeries(sparklineMonthKeys, portfolioProfitByMonthAll);
   const balanceMonthlyFlows = buildMonthlySeries(sparklineMonthKeys, balanceByMonthAll);
   const totalToReceiveSeries = sparklineMonthKeys.map((monthKey) => sparklineSnapshotByMonth.get(monthKey)?.toReceive ?? 0);
   const totalOverdueSeries = sparklineMonthKeys.map((monthKey) => sparklineSnapshotByMonth.get(monthKey)?.overdue ?? 0);
@@ -865,10 +961,16 @@ router.get("/", async (req, res) => {
   ));
   const cashBalanceSeries = buildCumulativeSeriesFromFlows(cashBalance, balanceMonthlyFlows);
   const totalReceivedSeries = buildCumulativeSeriesFromFlows(totalReceived, receivedMonthlySeries);
+  const portfolioTotalReceivedSeries = buildCumulativeSeriesFromFlows(portfolioTotalReceived, portfolioReceivedMonthlySeries);
   const totalLoanedSeries = buildCumulativeSeriesFromFlows(totalLoaned, loanedMonthlyFlows);
   const profitTotalSeries = buildCumulativeSeriesFromFlows(profitTotal, profitMonthlyFlows);
+  const portfolioProfitTotalSeries = buildCumulativeSeriesFromFlows(portfolioProfitTotal, portfolioProfitMonthlyFlows);
   const roiRateSeries = totalLoanedSeries.map((loanedValue, index) => {
     const profitValue = profitTotalSeries[index] ?? 0;
+    return loanedValue > 0 ? (profitValue / loanedValue) * 100 : 0;
+  });
+  const portfolioRoiRateSeries = totalLoanedSeries.map((loanedValue, index) => {
+    const profitValue = portfolioProfitTotalSeries[index] ?? 0;
     return loanedValue > 0 ? (profitValue / loanedValue) * 100 : 0;
   });
   const epsilon = 0.00001;
@@ -949,7 +1051,11 @@ router.get("/", async (req, res) => {
   const projectedReceivedThisMonth = elapsedDays > 0
     ? (receivedThisMonth / elapsedDays) * daysInCurrentMonth
     : receivedThisMonth;
+  const projectedPortfolioReceivedThisMonth = elapsedDays > 0
+    ? (portfolioReceivedThisMonth / elapsedDays) * daysInCurrentMonth
+    : portfolioReceivedThisMonth;
   const previousMonthReceived = receivedByMonthAll.get(previousMonthKey) ?? 0;
+  const previousPortfolioMonthReceived = portfolioReceivedByMonthAll.get(previousMonthKey) ?? 0;
   const overdueSnapshot30Days = computeSnapshotAt(addDays(todayIso, -30));
   const overdue30DaysAgo = overdueSnapshot30Days.overdue;
 
@@ -957,12 +1063,25 @@ router.get("/", async (req, res) => {
   const previous3MonthProfitAverage = previous3MonthKeys.length
     ? previous3MonthKeys.reduce((sum, monthKey) => sum + (profitByMonthAll.get(monthKey) ?? 0), 0) / previous3MonthKeys.length
     : 0;
+  const previous3MonthPortfolioProfitAverage = previous3MonthKeys.length
+    ? previous3MonthKeys.reduce((sum, monthKey) => sum + (portfolioProfitByMonthAll.get(monthKey) ?? 0), 0) / previous3MonthKeys.length
+    : 0;
   const currentMonthProfit = profitByMonthAll.get(currentMonthKey) ?? 0;
   const previousMonthProfit = profitByMonthAll.get(previousMonthKey) ?? 0;
+  const currentPortfolioMonthProfit = portfolioProfitByMonthAll.get(currentMonthKey) ?? 0;
+  const previousPortfolioMonthProfit = portfolioProfitByMonthAll.get(previousMonthKey) ?? 0;
 
   const receivedProjectionInsight = buildProjectionInsight(projectedReceivedThisMonth, previousMonthReceived);
+  const portfolioReceivedProjectionInsight = buildProjectionInsight(
+    projectedPortfolioReceivedThisMonth,
+    previousPortfolioMonthReceived,
+  );
   const overdueLast30Insight = buildOverdueLast30Insight(totalOverdue, overdue30DaysAgo);
   const profitAverageInsight = buildProfitAverage3MInsight(currentMonthProfit, previous3MonthProfitAverage);
+  const portfolioProfitAverageInsight = buildProfitAverage3MInsight(
+    currentPortfolioMonthProfit,
+    previous3MonthPortfolioProfitAverage,
+  );
   const previousCashBalance = previousCumulativeValue(cashBalanceSeries);
   const cashAdjustmentInsight: KpiInsight | undefined = latestCashAdjustment
     ? (() => {
@@ -1031,6 +1150,58 @@ router.get("/", async (req, res) => {
       currentValue: totalReceived,
       previousValue: previousCumulativeValue(totalReceivedSeries),
       series: toSparklinePoints(sparklineMonthKeys, totalReceivedSeries),
+    },
+  };
+
+  const portfolioKpiCards = {
+    totalToReceive: {
+      currentValue: totalToReceive,
+      previousValue: previousSnapshot.toReceive,
+      series: toSparklinePoints(sparklineMonthKeys, totalToReceiveSeries),
+    },
+    totalOverdue: {
+      currentValue: totalOverdue,
+      previousValue: previousSnapshot.overdue,
+      series: toSparklinePoints(sparklineMonthKeys, totalOverdueSeries),
+      insight: overdueLast30Insight,
+    },
+    totalOpenReceivable: {
+      currentValue: totalOpenReceivable,
+      previousValue: previousSnapshot.openReceivable,
+      series: toSparklinePoints(sparklineMonthKeys, totalOpenReceivableSeries),
+    },
+    receivedThisMonth: {
+      currentValue: portfolioReceivedThisMonth,
+      previousValue: previousPortfolioMonthReceived,
+      series: toSparklinePoints(sparklineMonthKeys, portfolioReceivedMonthlySeries),
+      insight: portfolioReceivedProjectionInsight,
+    },
+    totalLoaned: {
+      currentValue: totalLoaned,
+      previousValue: previousCumulativeValue(totalLoanedSeries),
+      series: toSparklinePoints(sparklineMonthKeys, totalLoanedSeries),
+    },
+    profitThisMonth: {
+      currentValue: currentPortfolioMonthProfit,
+      previousValue: previousPortfolioMonthProfit,
+      series: toSparklinePoints(sparklineMonthKeys, portfolioProfitMonthlyFlows),
+      insight: portfolioProfitAverageInsight,
+    },
+    roiRate: {
+      currentValue: portfolioRoiRate,
+      previousValue: previousCumulativeValue(portfolioRoiRateSeries),
+      series: toSparklinePoints(sparklineMonthKeys, portfolioRoiRateSeries),
+    },
+    profitTotal: {
+      currentValue: portfolioProfitTotal,
+      previousValue: previousCumulativeValue(portfolioProfitTotalSeries),
+      series: toSparklinePoints(sparklineMonthKeys, portfolioProfitTotalSeries),
+      insight: portfolioProfitAverageInsight,
+    },
+    totalReceived: {
+      currentValue: portfolioTotalReceived,
+      previousValue: previousCumulativeValue(portfolioTotalReceivedSeries),
+      series: toSparklinePoints(sparklineMonthKeys, portfolioTotalReceivedSeries),
     },
   };
 
@@ -1270,6 +1441,25 @@ router.get("/", async (req, res) => {
       profitTotal,
       roiRate,
       delinquencyRate,
+    },
+    portfolio: {
+      kpis: {
+        totalLoaned,
+        totalOpenReceivable,
+        openReceivableFuture,
+        openReceivableOverdue,
+        totalOverdue,
+        totalReceived: portfolioTotalReceived,
+        receivedThisMonth: portfolioReceivedThisMonth,
+        profitThisMonth: currentPortfolioMonthProfit,
+        profitTotal: portfolioProfitTotal,
+        delinquencyRate,
+        roiRate: portfolioRoiRate,
+      },
+      chart: {
+        points: portfolioChartPoints,
+      },
+      kpiCards: portfolioKpiCards,
     },
     kpiCards,
     cashAdjustment: {
