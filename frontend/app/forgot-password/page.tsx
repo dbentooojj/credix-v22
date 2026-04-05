@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
   const hasMessage = status.type !== "idle" && status.message.trim().length > 0;
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-6 text-slate-100">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-6 text-slate-100 safe-area-top safe-area-bottom">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-32 -top-32 h-80 w-80 rounded-full bg-sky-500/15 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-indigo-500/20 blur-3xl" />
@@ -123,7 +123,7 @@ export default function ForgotPasswordPage() {
               </span>
               <input
                 autoComplete="email"
-                className="h-full flex-1 bg-transparent text-base font-medium text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                className="h-full flex-1 bg-transparent text-base font-medium text-slate-100 placeholder:text-slate-400 focus:outline-none min-h-[48px]"
                 id="email"
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="Email"
@@ -152,7 +152,7 @@ export default function ForgotPasswordPage() {
             )}
 
             <button
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-indigo-400/60 bg-[linear-gradient(135deg,#2f5fde,#2563eb)] text-sm font-semibold text-slate-50 shadow-[0_10px_24px_-16px_rgba(59,130,246,0.86),inset_0_1px_0_rgba(191,219,254,0.22)] transition hover:-translate-y-[1px] hover:shadow-[0_13px_26px_-16px_rgba(59,130,246,0.92),inset_0_1px_0_rgba(219,234,254,0.28)] disabled:translate-y-0 disabled:opacity-75 disabled:shadow-none"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#4F7EF7]/60 bg-[#4F7EF7] text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition-all hover:bg-[#3b6ef0] hover:-translate-y-[1px] hover:shadow-[0_6px_20px_rgba(79,126,247,0.5)] active:translate-y-0 disabled:translate-y-0 disabled:opacity-75 disabled:shadow-none min-h-[48px]"
               disabled={submitting}
               type="submit"
             >
