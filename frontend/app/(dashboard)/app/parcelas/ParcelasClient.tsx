@@ -367,49 +367,52 @@ export function ParcelasClient() {
   }
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto pb-20">
+    <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
       {/* Header */}
       <section className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Controle de Cobrança</h1>
-          <p className="mt-1 text-sm text-slate-400">Acompanhe pendências, atrasos e recebimentos com ação rápida.</p>
+          <p className="mt-1.5 text-sm text-slate-400">Acompanhe pendências, atrasos e recebimentos com ação rápida.</p>
         </div>
       </section>
 
       {/* KPIs */}
-      <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         {/* Recebido no mês */}
-        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500" />
           <div className="flex items-start justify-between">
-            <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Recebido no mês</p>
+            <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Recebido no mês</p>
             <CheckCircle2 className="h-5 w-5 text-emerald-500" />
           </div>
-          <p className="mt-3 text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : formatCurrency(kpis.receivedValue)}</p>
-          <p className="mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : formatCurrency(kpis.receivedValue)}</p>
+          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
             <CheckCircle2 className="inline h-3 w-3 mr-1 text-emerald-500" />
             {loading ? "..." : `${kpis.receivedCount} parcela(s) paga(s)`}
           </p>
         </div>
         {/* Total pendente */}
-        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-amber-500" />
           <div className="flex items-start justify-between">
-            <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Total pendente</p>
+            <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Total pendente</p>
             <Clock className="h-5 w-5 text-amber-500" />
           </div>
-          <p className="mt-3 text-[1.375rem] font-bold text-amber-400">{loading ? "..." : formatCurrency(kpis.pendingValue)}</p>
-          <p className="mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-amber-400">{loading ? "..." : formatCurrency(kpis.pendingValue)}</p>
+          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
             <Clock className="inline h-3 w-3 mr-1 text-amber-500" />
             {loading ? "..." : `${kpis.pendingCount} parcela(s) em aberto`}
           </p>
         </div>
         {/* Total atrasado */}
-        <div className="relative rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-red-500" />
           <div className="flex items-start justify-between">
-            <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Total atrasado</p>
+            <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Total atrasado</p>
             <AlertTriangle className="h-5 w-5 text-red-500" />
           </div>
-          <p className="mt-3 text-[1.375rem] font-bold text-red-400">{loading ? "..." : formatCurrency(kpis.overdueValue)}</p>
-          <p className="mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-red-400">{loading ? "..." : formatCurrency(kpis.overdueValue)}</p>
+          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
             <AlertTriangle className="inline h-3 w-3 mr-1 text-red-500" />
             {loading ? "..." : `${kpis.overdueCount} parcela(s) em atraso`}
           </p>
@@ -417,7 +420,7 @@ export function ParcelasClient() {
       </div>
 
       {/* Filtros */}
-      <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950 p-4 sm:p-5 lg:p-6 shadow-xl">
+      <div className="mb-6 rounded-2xl border border-slate-800/60 bg-slate-950/80 p-3 sm:p-5 lg:p-6 shadow-xl backdrop-blur-sm">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12 mb-5">
           <div className="md:col-span-2 xl:col-span-3">
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Buscar</label>
