@@ -333,13 +333,13 @@ export default function CarteiraDashboardClient() {
   const innerCardClass = "rounded-xl border border-slate-700/40 bg-slate-950/40";
 
   return (
-    <div className="space-y-6 pb-20 bg-transparent min-h-screen text-slate-100 font-sans w-full max-w-[1600px] mx-auto">
+    <div className="space-y-5 sm:space-y-6 pb-24 lg:pb-8 bg-transparent min-h-screen text-slate-100 font-sans w-full max-w-[1600px] mx-auto">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Painel da Carteira</h2>
-          <p className="mt-1 text-sm text-slate-400">Acompanhe o fluxo financeiro em tempo real e antecipe recebimentos</p>
+          <p className="mt-1.5 text-sm text-slate-400">Acompanhe o fluxo financeiro em tempo real e antecipe recebimentos</p>
         </div>
         <div className="text-xs text-slate-500 font-medium">
           Atualizado: <span id="lastRefresh" className="text-slate-400">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -347,7 +347,7 @@ export default function CarteiraDashboardClient() {
       </div>
 
       {/* Grid de KPIs Principais */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4">
 
         {/* Card: Total Recebido */}
         <div className="relative overflow-hidden rounded-2xl p-5 min-h-[124px] flex flex-col justify-between border border-emerald-400/30 bg-[linear-gradient(135deg,rgba(4,93,74,0.94),rgba(3,64,50,0.9))] shadow-[0_16px_34px_rgba(2,6,23,0.24)]">
@@ -389,7 +389,7 @@ export default function CarteiraDashboardClient() {
       </div>
 
       {/* Strip de KPIs Secundários */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-slate-700/30 bg-slate-800/20 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-slate-700/30 bg-slate-800/20 mb-6">
         <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Total emprestado</p>
           <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{formatCurrency(kpis.totalLoaned || 0)}</p>
