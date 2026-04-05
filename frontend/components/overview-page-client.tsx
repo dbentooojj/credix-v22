@@ -1148,12 +1148,12 @@ export function OverviewPageClient() {
   }
 
   return (
-    <div className={`w-full max-w-[1600px] mx-auto ${initialLoading ? "opacity-90" : ""}`}>
+    <div className={`w-full max-w-[1600px] mx-auto pb-24 lg:pb-8 ${initialLoading ? "opacity-90" : ""}`}>
       {/* ── PAGE HEADER ── */}
       <section className="mb-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[clamp(1.6rem,1.2vw+1rem,2.1rem)] font-bold leading-tight tracking-tight text-slate-800">
+            <h1 className="text-2xl sm:text-[clamp(1.6rem,1.2vw+1rem,2.1rem)] font-bold leading-tight tracking-tight text-slate-800">
               Visao geral
             </h1>
             <p className="mt-1.5 text-sm text-slate-500">
@@ -1180,7 +1180,7 @@ export function OverviewPageClient() {
       ) : null}
 
       {/* ── ROW 1: KPI CARDS ── */}
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:gap-4 grid-cols-2 xl:grid-cols-4">
         <MetricCard
           action={{
             label: "Ajustar caixa",
@@ -1222,7 +1222,7 @@ export function OverviewPageClient() {
       </section>
 
       {/* ── ROW 2: OPERATIONS + ALERTS ── */}
-      <section className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_1.15fr_.8fr]">
+      <section className="mt-3 sm:mt-4 grid gap-3 sm:gap-4 xl:grid-cols-[1.15fr_1.15fr_.8fr]">
         <OperationPanel
           amountClassName="text-emerald-600"
           emptyNote="Quando houver parcelas ou contas a receber no dia, elas aparecem aqui."
@@ -1258,7 +1258,7 @@ export function OverviewPageClient() {
       </section>
 
       {/* ── ROW 3: CHART + DAILY SUMMARY ── */}
-      <section className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_.75fr]">
+      <section className="mt-3 sm:mt-4 grid gap-3 sm:gap-4 xl:grid-cols-[1.45fr_.75fr]">
         {/* Monthly flow chart */}
         <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
           <div className="border-b border-slate-100 px-5 py-4">
@@ -1366,7 +1366,7 @@ export function OverviewPageClient() {
       </section>
 
       {/* ── ROW 4: RECENT MOVEMENTS ── */}
-      <section className="mt-4">
+      <section className="mt-3 sm:mt-4">
         <RecentMovements
           items={payload?.recentMovements || []}
           loading={pageLoading}
