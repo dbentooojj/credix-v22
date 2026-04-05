@@ -50,7 +50,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#F0F4FA]">
+    <div className="min-h-screen flex bg-[#F0F4FA] safe-area-top safe-area-bottom">
       {/* ── LEFT PANEL (decorative) ── */}
       <div className="hidden lg:flex lg:w-[46%] flex-col justify-between bg-[#4F7EF7] p-12 relative overflow-hidden">
         {/* Decorative circles */}
@@ -133,7 +133,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
-                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition min-h-[48px]"
                   placeholder="seu@email.com"
                 />
               </div>
@@ -152,7 +152,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-12 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-12 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition min-h-[48px]"
                   placeholder="••••••••"
                 />
                 <button
@@ -195,7 +195,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-[#4F7EF7] py-3 text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition hover:bg-[#3b6ef0] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-70"
+              className="w-full rounded-xl bg-[#4F7EF7] py-3 text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition-all hover:bg-[#3b6ef0] active:translate-y-px active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70 min-h-[48px]"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
