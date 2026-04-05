@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
         }
       })
       .catch(() => {
-        // Ignore session check failures – user permanece na pagina.
+        // Ignore session check failures.
       });
 
     return () => {
@@ -67,44 +67,46 @@ export default function ForgotPasswordPage() {
   const hasMessage = status.type !== "idle" && status.message.trim().length > 0;
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-6 text-slate-100 safe-area-top safe-area-bottom">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#F0F4FA] px-4 py-6 text-slate-800 safe-area-top safe-area-bottom">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-32 -top-32 h-80 w-80 rounded-full bg-sky-500/15 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-indigo-500/20 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(1200px_560px_at_8%_-18%,rgba(99,102,241,0.28),transparent_56%),radial-gradient(900px_420px_at_100%_-6%,rgba(37,99,235,0.22),transparent_60%),linear-gradient(165deg,#020617_0%,#020617_40%,#020617_100%)] opacity-80" />
+        <div className="absolute -left-24 -top-28 h-72 w-72 rounded-full bg-[#4F7EF7]/12 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-sky-300/20 blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(900px_460px_at_10%_-6%,rgba(79,126,247,0.18),transparent_58%),radial-gradient(760px_420px_at_100%_0%,rgba(125,165,255,0.16),transparent_52%)]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-[460px]">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <span className="inline-flex select-none flex-col leading-none" aria-label="Credix">
-            <span className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              <span className="text-white">Cred</span>
-              <span className="text-[#D8AF2F]">ix</span>
+          <div className="inline-flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#4F7EF7] shadow-[0_6px_18px_rgba(79,126,247,0.28)]">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 2C4.686 2 2 4.686 2 8s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6zm0 2a4 4 0 110 8A4 4 0 018 4zm0 1.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" fill="white" />
+              </svg>
             </span>
-            <span className="mt-1 text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-slate-300/90">
-              Gerenciamento inteligente
+            <span className="text-3xl font-bold tracking-tight">
+              <span className="text-slate-800">Cred</span>
+              <span className="text-[#4F7EF7]">ix</span>
             </span>
-          </span>
+          </div>
 
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-400/30 bg-slate-900/70 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-sky-200">
-            <span className="inline-flex h-3 w-3 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(16,185,129,0.35)]" />
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#4F7EF7]/15 bg-white/90 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-[#4F7EF7] shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+            <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_0_6px_rgba(16,185,129,0.14)]" />
             Recuperacao segura de acesso
           </div>
         </div>
 
-        <div className="rounded-[22px] border border-slate-700/60 bg-[linear-gradient(145deg,rgba(15,23,42,0.96),rgba(15,23,42,0.9))] p-6 shadow-[0_26px_70px_rgba(2,6,23,0.85)] backdrop-blur-lg sm:p-7">
+        <div className="rounded-[24px] border border-slate-200/80 bg-white/96 p-6 shadow-[0_24px_64px_rgba(15,23,42,0.12)] backdrop-blur-lg sm:p-7">
           <div className="mb-6 space-y-2 text-center">
-            <h1 className="text-[1.6rem] font-semibold tracking-[-0.03em] text-slate-50">
+            <h1 className="text-[1.6rem] font-semibold tracking-[-0.03em] text-slate-800">
               Recuperar senha
             </h1>
-            <p className="text-sm leading-6 text-slate-300">
+            <p className="text-sm leading-6 text-slate-500">
               Informe seu e-mail cadastrado e, se encontrarmos uma conta, enviaremos um link
               seguro para redefinicao de senha.
             </p>
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
-            <label className="flex h-14 w-full items-center gap-3 rounded-xl border border-slate-600/70 bg-slate-900/70 px-4 text-sm shadow-[0_0_0_1px_rgba(15,23,42,0.9)] transition focus-within:border-indigo-400 focus-within:shadow-[0_0_0_1px_rgba(129,140,248,0.9)]">
+            <label className="flex h-14 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-sm shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition focus-within:border-[#4F7EF7] focus-within:shadow-[0_0_0_3px_rgba(79,126,247,0.12)]">
               <span className="sr-only">Email</span>
               <span className="flex h-5 w-5 items-center justify-center text-slate-400">
                 <svg
@@ -123,7 +125,7 @@ export default function ForgotPasswordPage() {
               </span>
               <input
                 autoComplete="email"
-                className="h-full flex-1 bg-transparent text-base font-medium text-slate-100 placeholder:text-slate-400 focus:outline-none min-h-[48px]"
+                className="h-full min-h-[48px] flex-1 bg-transparent text-base font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none"
                 id="email"
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="Email"
@@ -138,21 +140,21 @@ export default function ForgotPasswordPage() {
                 className={[
                   "rounded-xl border px-3 py-2 text-sm",
                   status.type === "success"
-                    ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
-                    : "border-rose-400/40 bg-rose-500/10 text-rose-100",
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-rose-200 bg-rose-50 text-rose-700",
                 ].join(" ")}
               >
                 {status.message}
               </div>
             ) : (
-              <p className="text-[0.78rem] leading-5 text-slate-400">
+              <p className="text-[0.78rem] leading-5 text-slate-500">
                 Voce recebera um e-mail apenas se o endereco informado estiver cadastrado na
                 plataforma.
               </p>
             )}
 
             <button
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#4F7EF7]/60 bg-[#4F7EF7] text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition-all hover:bg-[#3b6ef0] hover:-translate-y-[1px] hover:shadow-[0_6px_20px_rgba(79,126,247,0.5)] active:translate-y-0 disabled:translate-y-0 disabled:opacity-75 disabled:shadow-none min-h-[48px]"
+              className="flex h-12 min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition-all hover:-translate-y-[1px] hover:bg-[#3b6ef0] hover:shadow-[0_6px_20px_rgba(79,126,247,0.5)] active:translate-y-0 disabled:translate-y-0 disabled:opacity-75 disabled:shadow-none"
               disabled={submitting}
               type="submit"
             >
@@ -186,7 +188,7 @@ export default function ForgotPasswordPage() {
 
           <div className="mt-5 text-center">
             <Link
-              className="inline-flex items-center gap-2 text-sm italic text-slate-300 transition hover:text-slate-50"
+              className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-slate-800"
               href="/login"
             >
               <span className="inline-flex h-4 w-4 items-center justify-center">
@@ -208,13 +210,11 @@ export default function ForgotPasswordPage() {
             </Link>
           </div>
 
-          <p className="mt-4 text-center text-[0.78rem] text-slate-500">
-            &copy; 2026 Credix. Mantemos seus dados de acesso sempre protegidos. Desenvolvido com
-            carinho para Diogo.
+          <p className="mt-4 text-center text-[0.78rem] text-slate-400">
+            &copy; 2026 Credix. Mantemos seus dados de acesso sempre protegidos.
           </p>
         </div>
       </div>
     </div>
   );
 }
-

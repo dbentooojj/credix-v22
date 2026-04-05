@@ -1,12 +1,12 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
-import { Mail, User, ShieldCheck, HelpCircle } from "lucide-react";
 import { Suspense } from "react";
+import { Mail, User, ShieldCheck, HelpCircle } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function ContaPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-[1000px] text-slate-400 p-6">Carregando conta...</div>}>
+    <Suspense fallback={<div className="mx-auto max-w-[1000px] p-6 text-slate-500">Carregando conta...</div>}>
       <ContaPageContent />
     </Suspense>
   );
@@ -23,64 +23,54 @@ function ContaPageContent() {
 
   const tabs = [
     { key: "profile", label: "Meu perfil", icon: User },
-    { key: "security", label: "Segurança", icon: ShieldCheck },
+    { key: "security", label: "Seguranca", icon: ShieldCheck },
     { key: "help", label: "Ajuda", icon: HelpCircle },
   ];
 
+  const inputClass =
+    "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 transition focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15";
+
   return (
-    <div className="mx-auto max-w-[1000px] w-full">
-      {/* Page Header */}
+    <div className="mx-auto w-full max-w-[1000px]">
       <div className="mb-6 lg:mb-8">
-        <h1 className="text-2xl font-bold text-slate-100 sm:text-3xl tracking-tight">Conta</h1>
-        <p className="mt-1.5 text-sm text-slate-400">Gerencie perfil, segurança e suporte.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">Conta</h1>
+        <p className="mt-1.5 text-sm text-slate-500">Gerencie perfil, seguranca e suporte.</p>
       </div>
 
       <div className="flex flex-col gap-6">
-        {/* Tab Navigation */}
-        <nav className="flex flex-row gap-2 overflow-x-auto pb-2 scrollbar-none items-center" role="tablist">
+        <nav className="scrollbar-none flex flex-row items-center gap-2 overflow-x-auto pb-2" role="tablist">
           {tabs.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
+              aria-selected={currentTab === key}
+              className={`inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-full border px-5 py-2.5 text-sm font-medium transition-all ${
+                currentTab === key
+                  ? "border-[#4F7EF7]/60 bg-[#4F7EF7] text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)]"
+                  : "border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 active:scale-95"
+              }`}
               onClick={() => setTab(key)}
               role="tab"
-              aria-selected={currentTab === key}
-              className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all whitespace-nowrap border min-h-[44px] ${
-                currentTab === key
-                  ? "bg-[#4F7EF7] border-[#4F7EF7]/60 text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)]"
-                  : "bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-slate-100 hover:border-slate-700 active:scale-95"
-              }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="h-4 w-4" />
               {label}
             </button>
           ))}
         </nav>
 
-        {/* Tab Content */}
-        <div className="rounded-2xl border border-slate-800/60 bg-slate-900/50 p-5 sm:p-6 md:p-8 backdrop-blur-sm">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] sm:p-6 md:p-8">
           {currentTab === "profile" && (
             <div className="animate-fade-in">
-              <div className="flex items-start gap-4 mb-8">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-lg font-bold text-white shadow-lg shadow-blue-500/20">
-                  A
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-100">Meu Perfil</h2>
-                  <p className="mt-1 text-sm text-slate-400">Dados cadastrais e informações pessoais.</p>
-                </div>
-              </div>
-              
-              <div className="space-y-5 max-w-lg">
+              <div className="max-w-lg space-y-5">
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Nome completo</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition" placeholder="Seu nome..." />
+                  <input type="text" className={inputClass} placeholder="Seu nome..." />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">E-mail</label>
-                  <input type="email" className="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition" placeholder="seu@email.com" />
+                  <input type="email" className={inputClass} placeholder="seu@email.com" />
                 </div>
-                <button className="rounded-xl bg-[#4F7EF7] px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition hover:bg-[#3b6ef0] active:translate-y-px min-h-[44px]">
-                  Salvar alterações
+                <button className="min-h-[44px] rounded-xl bg-[#4F7EF7] px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition hover:bg-[#3b6ef0] active:translate-y-px">
+                  Salvar alteracoes
                 </button>
               </div>
             </div>
@@ -88,30 +78,20 @@ function ContaPageContent() {
 
           {currentTab === "security" && (
             <div className="animate-fade-in">
-              <div className="flex items-start gap-4 mb-8">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-lg font-bold text-white shadow-lg shadow-amber-500/20">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-100">Segurança</h2>
-                  <p className="mt-1 text-sm text-slate-400">Gerencie sua senha e sessões ativas.</p>
-                </div>
-              </div>
-              
-              <div className="space-y-5 max-w-lg">
+              <div className="max-w-lg space-y-5">
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Senha atual</label>
-                  <input type="password" className="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition" placeholder="••••••••" />
+                  <input type="password" className={inputClass} placeholder="••••••••" />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Nova senha</label>
-                  <input type="password" className="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition" placeholder="••••••••" />
+                  <input type="password" className={inputClass} placeholder="••••••••" />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Confirmar nova senha</label>
-                  <input type="password" className="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#4F7EF7] focus:outline-none focus:ring-2 focus:ring-[#4F7EF7]/15 transition" placeholder="••••••••" />
+                  <input type="password" className={inputClass} placeholder="••••••••" />
                 </div>
-                <button className="rounded-xl bg-[#4F7EF7] px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition hover:bg-[#3b6ef0] active:translate-y-px min-h-[44px]">
+                <button className="min-h-[44px] rounded-xl bg-[#4F7EF7] px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition hover:bg-[#3b6ef0] active:translate-y-px">
                   Atualizar senha
                 </button>
               </div>
@@ -120,38 +100,28 @@ function ContaPageContent() {
 
           {currentTab === "help" && (
             <div className="animate-fade-in">
-              <div className="flex items-start gap-4 mb-8">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-lg font-bold text-white shadow-lg shadow-emerald-500/20">
-                  <HelpCircle className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-100">Ajuda</h2>
-                  <p className="mt-1 text-sm text-slate-400">Contato rápido. Escolha um canal:</p>
-                </div>
-              </div>
-              
               <div className="grid gap-4 sm:grid-cols-2">
-                <a 
+                <a
+                  className="group flex flex-col rounded-2xl border border-slate-200 bg-slate-50/80 p-5 transition-all hover:border-slate-300 hover:bg-white hover:shadow-lg hover:shadow-blue-500/5 active:scale-[0.98]"
                   href="mailto:usecredix@gmail.com"
-                  className="group flex flex-col rounded-2xl border border-slate-800/60 bg-slate-800/30 p-5 transition-all hover:bg-slate-800/60 hover:border-slate-700 hover:shadow-lg hover:shadow-blue-500/5 active:scale-[0.98]"
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#4F7EF7] shadow-[0_4px_12px_rgba(79,126,247,0.35)]">
                       <Mail className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-slate-200 group-hover:text-white transition-colors">E-mail</h3>
-                      <p className="mt-0.5 text-sm font-medium text-slate-400 group-hover:text-slate-300 transition-colors">usecredix@gmail.com</p>
+                      <h3 className="font-semibold text-slate-800">E-mail</h3>
+                      <p className="mt-0.5 text-sm font-medium text-slate-500">usecredix@gmail.com</p>
                     </div>
                   </div>
-                  <p className="mt-4 text-xs text-slate-500 group-hover:text-slate-400 transition-colors">Clique para enviar mensagem</p>
+                  <p className="mt-4 text-xs text-slate-500">Clique para enviar mensagem</p>
                 </a>
 
-                <a 
+                <a
+                  className="group flex flex-col rounded-2xl border border-slate-200 bg-slate-50/80 p-5 transition-all hover:border-slate-300 hover:bg-white hover:shadow-lg hover:shadow-emerald-500/5 active:scale-[0.98]"
                   href="https://wa.me/5547999600742"
-                  target="_blank"
                   rel="noopener noreferrer"
-                  className="group flex flex-col rounded-2xl border border-slate-800/60 bg-slate-800/30 p-5 transition-all hover:bg-slate-800/60 hover:border-slate-700 hover:shadow-lg hover:shadow-emerald-500/5 active:scale-[0.98]"
+                  target="_blank"
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 shadow-[0_4px_12px_rgba(5,150,105,0.35)]">
@@ -160,11 +130,11 @@ function ContaPageContent() {
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-slate-200 group-hover:text-white transition-colors">WhatsApp</h3>
-                      <p className="mt-0.5 text-sm font-medium text-slate-400 group-hover:text-slate-300 transition-colors">+55 47 99960-0742</p>
+                      <h3 className="font-semibold text-slate-800">WhatsApp</h3>
+                      <p className="mt-0.5 text-sm font-medium text-slate-500">+55 47 99960-0742</p>
                     </div>
                   </div>
-                  <p className="mt-4 text-xs text-slate-500 group-hover:text-slate-400 transition-colors">Clique para abrir conversa</p>
+                  <p className="mt-4 text-xs text-slate-500">Clique para abrir conversa</p>
                 </a>
               </div>
             </div>

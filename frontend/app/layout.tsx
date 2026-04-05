@@ -23,7 +23,7 @@ type RootLayoutProps = {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} text-slate-100 antialiased`}>{children}</body>
+      <body className={`${inter.className} bg-[#F0F4FA] text-slate-800 antialiased`}>{children}</body>
     </html>
   );
 }

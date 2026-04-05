@@ -12,6 +12,20 @@ const config: Config = {
           shadow: "rgba(79, 126, 247, 0.35)",
           glow: "rgba(79, 126, 247, 0.4)",
         },
+        surface: {
+          DEFAULT: "#FFFFFF",
+          muted: "#F7F9FC",
+          page: "#F0F4FA",
+        },
+        ink: {
+          DEFAULT: "#0f172a",
+          soft: "#475569",
+          muted: "#64748b",
+        },
+        line: {
+          DEFAULT: "rgba(203, 213, 225, 0.7)",
+          soft: "rgba(226, 232, 240, 0.8)",
+        },
         brand: {
           gold: "#D8AF2F",
         },
@@ -24,6 +38,7 @@ const config: Config = {
         "card-hover": "0 4px 20px rgba(15, 23, 42, 0.10)",
         "primary-glow": "0 4px 14px rgba(79, 126, 247, 0.4)",
         "primary-sm": "0 4px 12px rgba(79, 126, 247, 0.35)",
+        panel: "0 14px 34px rgba(15, 23, 42, 0.08)",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "sans-serif"],

@@ -187,10 +187,10 @@ export default function CarteiraDashboardClient() {
 
   if (error && !data) {
     return (
-      <div className="p-6 bg-red-950/40 border border-red-500/30 rounded-xl text-red-300">
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-700 shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
         <AlertCircle className="w-6 h-6 mb-2" />
         <p>{error}</p>
-        <button onClick={fetchDashboard} className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors font-medium">
+        <button onClick={fetchDashboard} className="mt-4 rounded-xl border border-rose-200 bg-white px-4 py-2 font-medium text-rose-700 transition-colors hover:bg-rose-100">
           Tentar Novamente
         </button>
       </div>
@@ -255,14 +255,14 @@ export default function CarteiraDashboardClient() {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#94a3b8', font: { family: 'Inter' } } },
+        legend: { labels: { color: '#475569', font: { family: 'Inter' } } },
         tooltip: {
           mode: 'index',
           intersect: false,
-          backgroundColor: 'rgba(15, 23, 42, 0.95)',
-          titleColor: '#fff',
-          bodyColor: '#cbd5e1',
-          borderColor: 'rgba(51, 65, 85, 0.5)',
+          backgroundColor: 'rgba(255, 255, 255, 0.98)',
+          titleColor: '#0f172a',
+          bodyColor: '#475569',
+          borderColor: 'rgba(203, 213, 225, 0.9)',
           borderWidth: 1,
           padding: 12,
           callbacks: {
@@ -274,7 +274,7 @@ export default function CarteiraDashboardClient() {
         x: {
           stacked: isStacked,
           ticks: { color: '#64748b', font: { family: 'Inter' } },
-          grid: { color: 'rgba(51, 65, 85, 0.2)', drawBorder: false }
+          grid: { color: 'rgba(226, 232, 240, 0.9)', drawBorder: false }
         },
         y: {
           stacked: isStacked,
@@ -283,7 +283,7 @@ export default function CarteiraDashboardClient() {
             font: { family: 'Inter' },
             callback: (value: number) => formatCurrency(value)
           },
-          grid: { color: 'rgba(51, 65, 85, 0.2)', drawBorder: false }
+          grid: { color: 'rgba(226, 232, 240, 0.9)', drawBorder: false }
         }
       }
     };
@@ -329,20 +329,20 @@ export default function CarteiraDashboardClient() {
   };
 
   const health = getHealthMetrics();
-  const panelClass = "relative overflow-hidden rounded-2xl border border-slate-700/30 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] shadow-[0_10px_30px_rgba(2,6,23,0.28)]";
-  const innerCardClass = "rounded-xl border border-slate-700/40 bg-slate-950/40";
+  const panelClass = "relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.08)]";
+  const innerCardClass = "rounded-xl border border-slate-200/80 bg-slate-50";
 
   return (
-    <div className="space-y-5 sm:space-y-6 pb-24 lg:pb-8 bg-transparent min-h-screen text-slate-100 font-sans w-full max-w-[1600px] mx-auto">
+    <div className="w-full max-w-[1600px] mx-auto min-h-screen space-y-5 bg-transparent pb-24 font-sans sm:space-y-6 lg:pb-8">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Painel da Carteira</h2>
-          <p className="mt-1.5 text-sm text-slate-400">Acompanhe o fluxo financeiro em tempo real e antecipe recebimentos</p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">Painel da Carteira</h2>
+          <p className="mt-1.5 text-sm text-slate-500">Acompanhe o fluxo financeiro em tempo real e antecipe recebimentos</p>
         </div>
-        <div className="text-xs text-slate-500 font-medium">
-          Atualizado: <span id="lastRefresh" className="text-slate-400">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+        <div className="text-xs font-medium text-slate-500">
+          Atualizado: <span id="lastRefresh" className="text-slate-600">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
       </div>
 
@@ -350,60 +350,69 @@ export default function CarteiraDashboardClient() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4">
 
         {/* Card: Total Recebido */}
-        <div className="relative overflow-hidden rounded-2xl p-5 min-h-[124px] flex flex-col justify-between border border-emerald-400/30 bg-[linear-gradient(135deg,rgba(4,93,74,0.94),rgba(3,64,50,0.9))] shadow-[0_16px_34px_rgba(2,6,23,0.24)]">
+        <div className="relative flex min-h-[124px] flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-emerald-500" />
           <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] text-slate-200 font-semibold tracking-widest uppercase">Total recebido no mês</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-200/80" />
+            <span className="text-[0.75rem] font-semibold uppercase tracking-widest text-slate-500">Total recebido no mês</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+              <CheckCircle2 className="h-4 w-4" />
+            </span>
           </div>
-          <div className="mt-3">
-            <div className="text-[1.9rem] text-slate-50 font-bold leading-none tracking-tight">{formatCurrency(kpis.receivedThisMonth || 0)}</div>
-            <p className="mt-2 text-[0.75rem] font-medium text-emerald-100/75">Proj.: {formatCurrency((kpis.receivedThisMonth || 0) * 1.05)}</p>
+          <div className="mt-4">
+            <div className="text-[1.9rem] font-bold leading-none tracking-tight text-slate-800">{formatCurrency(kpis.receivedThisMonth || 0)}</div>
+            <p className="mt-2 text-[0.75rem] font-medium text-emerald-600">Proj.: {formatCurrency((kpis.receivedThisMonth || 0) * 1.05)}</p>
           </div>
         </div>
 
         {/* Card: A Receber */}
-        <div className="relative overflow-hidden rounded-2xl p-5 min-h-[124px] flex flex-col justify-between border border-sky-400/30 bg-[linear-gradient(135deg,rgba(14,41,105,0.94),rgba(13,30,77,0.9))] shadow-[0_16px_34px_rgba(2,6,23,0.24)]">
+        <div className="relative flex min-h-[124px] flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-sky-500" />
           <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] text-slate-200 font-semibold tracking-widest uppercase">A receber</span>
-            <AlertCircle className="w-4 h-4 text-sky-200/80" />
+            <span className="text-[0.75rem] font-semibold uppercase tracking-widest text-slate-500">A receber</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+              <AlertCircle className="h-4 w-4" />
+            </span>
           </div>
-          <div className="mt-3">
-            <div className="text-[1.9rem] text-slate-50 font-bold leading-none tracking-tight">{formatCurrency(kpis.totalOpenReceivable || 0)}</div>
-            <p className={`mt-2 text-[0.75rem] font-medium ${kpis.openReceivableOverdue > 0 ? 'text-rose-300' : 'text-sky-100/75'}`}>
+          <div className="mt-4">
+            <div className="text-[1.9rem] font-bold leading-none tracking-tight text-slate-800">{formatCurrency(kpis.totalOpenReceivable || 0)}</div>
+            <p className={`mt-2 text-[0.75rem] font-medium ${kpis.openReceivableOverdue > 0 ? 'text-rose-500' : 'text-sky-600'}`}>
               Futuras: {formatCurrency(kpis.openReceivableFuture || 0)} &bull; {kpis.openReceivableOverdue > 0 ? `Atrasadas: ${formatCurrency(kpis.openReceivableOverdue)}` : 'Sem inadimplência'}
             </p>
           </div>
         </div>
 
         {/* Card: Lucro do Mês */}
-        <div className="relative overflow-hidden rounded-2xl p-5 min-h-[124px] flex flex-col justify-between border border-violet-400/20 bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] shadow-[0_16px_34px_rgba(2,6,23,0.24)]">
+        <div className="relative flex min-h-[124px] flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-violet-500" />
           <div className="flex items-start justify-between">
-            <span className="text-[0.75rem] text-slate-200 font-semibold tracking-widest uppercase">Lucro do mês</span>
-            <TrendingUp className="w-4 h-4 text-violet-200/80" />
+            <span className="text-[0.75rem] font-semibold uppercase tracking-widest text-slate-500">Lucro do mês</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+              <TrendingUp className="h-4 w-4" />
+            </span>
           </div>
-          <div className="mt-3">
-            <div className="text-[1.9rem] text-slate-50 font-bold leading-none tracking-tight">{formatCurrency(kpis.profitThisMonth || 0)}</div>
-            <p className="mt-2 text-[0.75rem] font-medium text-slate-500">3M: sem histórico</p>
+          <div className="mt-4">
+            <div className="text-[1.9rem] font-bold leading-none tracking-tight text-slate-800">{formatCurrency(kpis.profitThisMonth || 0)}</div>
+            <p className="mt-2 text-[0.75rem] font-medium text-violet-600">3M: sem histórico</p>
           </div>
         </div>
       </div>
 
       {/* Strip de KPIs Secundários */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-slate-700/30 bg-slate-800/20 mb-6">
-        <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
+      <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200/70 shadow-[0_14px_34px_rgba(15,23,42,0.06)] lg:grid-cols-4">
+        <div className="flex min-h-[102px] flex-col justify-center bg-white p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Total emprestado</p>
           <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{formatCurrency(kpis.totalLoaned || 0)}</p>
         </div>
-        <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
+        <div className="flex min-h-[102px] flex-col justify-center bg-white p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Retorno total</p>
           <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{formatCurrency(kpis.profitTotal || 0)}</p>
           <p className="text-slate-500 text-[0.72rem] font-medium mt-1">ROI: {formatPercent(kpis.roiRate || 0)}</p>
         </div>
-        <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
+        <div className="flex min-h-[102px] flex-col justify-center bg-white p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Taxa de inadimplência</p>
           <p className="text-[1.3rem] font-bold text-rose-500 tracking-tight">{formatPercent(kpis.delinquencyRate || 0)}</p>
         </div>
-        <div className="flex min-h-[102px] flex-col justify-center bg-[linear-gradient(180deg,rgba(10,18,34,0.96),rgba(9,16,30,0.84))] p-4">
+        <div className="flex min-h-[102px] flex-col justify-center bg-white p-4">
           <p className="text-slate-500 text-[0.72rem] font-semibold tracking-widest uppercase mb-1.5">Health score</p>
           <p className="text-[1.3rem] font-bold text-slate-100 tracking-tight">{healthScore}<span className="text-slate-500 text-sm font-medium">/100</span></p>
         </div>
@@ -414,10 +423,10 @@ export default function CarteiraDashboardClient() {
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Resumo do Dia</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Vence hoje */}
-          <div className="rounded-xl border border-slate-700/40 bg-slate-950/45 p-4 flex items-center justify-between hover:bg-slate-900/80 transition-colors cursor-pointer">
+          <div className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition-colors hover:bg-slate-100">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-800/90 flex items-center justify-center flex-shrink-0">
-                <Clock className="w-4 h-4 text-slate-400" />
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                <Clock className="h-4 w-4" />
               </div>
               <div>
                 <p className="text-[0.7rem] font-semibold text-slate-400 uppercase tracking-wider">Vence hoje</p>
@@ -474,7 +483,7 @@ export default function CarteiraDashboardClient() {
             ) : (
               <div className="space-y-2">
                 {(data?.upcomingDue || []).slice(0, 4).map((item, idx) => (
-                  <div key={`upc-${idx}`} className={`${innerCardClass} flex items-center justify-between p-3 hover:bg-slate-900/70 transition-colors`}>
+                  <div key={`upc-${idx}`} className={`${innerCardClass} flex items-center justify-between p-3 transition-colors hover:bg-slate-100`}>
                     <div>
                       <p className="text-sm font-semibold text-slate-200 truncate max-w-[180px]">{item.debtorName}</p>
                       <p className="text-[0.7rem] text-slate-500 font-medium mt-0.5">Vence {formatDateShort(item.dueDate)}</p>
@@ -490,10 +499,10 @@ export default function CarteiraDashboardClient() {
               </div>
             )}
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
-            <button className="rounded-lg border border-slate-700 px-3 py-1.5 hover:bg-slate-800 hover:text-slate-300 transition">Anterior</button>
+          <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-xs text-slate-500">
+            <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 transition hover:bg-slate-50 hover:text-slate-700">Anterior</button>
             <span>{(data?.upcomingDue?.length || 0) > 0 ? `Página 1 de ${Math.ceil((data?.upcomingDue?.length || 0) / 4)}` : 'Sem registros'}</span>
-            <button className="rounded-lg border border-slate-700 px-3 py-1.5 hover:bg-slate-800 hover:text-slate-300 transition">Próxima</button>
+            <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 transition hover:bg-slate-50 hover:text-slate-700">Próxima</button>
           </div>
         </div>
 
@@ -512,7 +521,7 @@ export default function CarteiraDashboardClient() {
             ) : (
               <div className="space-y-2">
                 {(data?.overduePayments || []).slice(0, 4).map((item, idx) => (
-                  <div key={`ovrd-${idx}`} className={`${innerCardClass} flex items-center justify-between p-3 hover:bg-slate-900/70 transition-colors`}>
+                  <div key={`ovrd-${idx}`} className={`${innerCardClass} flex items-center justify-between p-3 transition-colors hover:bg-slate-100`}>
                     <div>
                       <p className="text-sm font-semibold text-slate-200 truncate max-w-[180px]">{item.debtorName}</p>
                       <p className="text-[0.7rem] text-rose-400 font-medium mt-0.5">Atrasado ({formatDateShort(item.dueDate)})</p>
@@ -522,7 +531,7 @@ export default function CarteiraDashboardClient() {
                       <button onClick={() => setPaymentItem({ ...item, virtualStatus: 'OVERDUE' })} className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors" title="Baixar">
                         <CheckCircle2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleWhatsApp(item)} className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-[#25D366] hover:text-white transition-colors" title="Cobrar no Wpp">
+                      <button onClick={() => handleWhatsApp(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-[#25D366] hover:text-white" title="Cobrar no Wpp">
                         <MessageCircle className="w-4 h-4" />
                       </button>
                     </div>
@@ -531,10 +540,10 @@ export default function CarteiraDashboardClient() {
               </div>
             )}
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
-            <button className="rounded-lg border border-slate-700 px-3 py-1.5 hover:bg-slate-800 hover:text-slate-300 transition">Anterior</button>
+          <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-xs text-slate-500">
+            <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 transition hover:bg-slate-50 hover:text-slate-700">Anterior</button>
             <span>{(data?.overduePayments?.length || 0) > 0 ? `Página 1 de ${Math.ceil((data?.overduePayments?.length || 0) / 4)}` : 'Sem registros'}</span>
-            <button className="rounded-lg border border-slate-700 px-3 py-1.5 hover:bg-slate-800 hover:text-slate-300 transition">Próxima</button>
+            <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 transition hover:bg-slate-50 hover:text-slate-700">Próxima</button>
           </div>
         </div>
       </div>
@@ -551,12 +560,12 @@ export default function CarteiraDashboardClient() {
                   <h3 className="text-base font-bold text-slate-100">Performance mensal da carteira</h3>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex bg-slate-900 rounded-lg border border-slate-700/60 p-1">
-                    <button onClick={() => setChartView('line')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${chartView === 'line' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}>Linha</button>
-                    <button onClick={() => setChartView('stacked')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${chartView === 'stacked' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}>Barras</button>
+                  <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                    <button onClick={() => setChartView('line')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${chartView === 'line' ? 'bg-[#4F7EF7] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Linha</button>
+                    <button onClick={() => setChartView('stacked')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${chartView === 'stacked' ? 'bg-[#4F7EF7] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Barras</button>
                   </div>
                   <select 
-                    className="bg-slate-900 border border-slate-700/60 text-slate-300 text-xs font-medium rounded-lg py-2 px-3 outline-none focus:border-indigo-500"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 outline-none focus:border-[#4F7EF7]"
                     value={period}
                     onChange={(e) => setPeriod(e.target.value)}
                   >
@@ -567,7 +576,7 @@ export default function CarteiraDashboardClient() {
                 </div>
               </div>
 
-              <div className={`${innerCardClass} px-5 py-4 mb-5 flex flex-col sm:flex-row sm:items-end justify-between`}>
+              <div className={`${innerCardClass} mb-5 flex flex-col justify-between px-5 py-4 sm:flex-row sm:items-end`}>
                 <div>
                   <p className="text-[0.68rem] font-bold uppercase tracking-widest text-slate-500 mb-1">Recebido no mês</p>
                   <p className="text-2xl font-bold text-slate-100">{formatCurrency(data.kpis.receivedThisMonth || 0)}</p>
@@ -578,7 +587,7 @@ export default function CarteiraDashboardClient() {
                 </div>
               </div>
 
-              <div className="h-[280px] w-full relative rounded-[18px] border border-slate-700/40 bg-slate-950/35 p-4">
+              <div className="relative h-[280px] w-full rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                 {(!data.chart.points || data.chart.points.length === 0 || !data.chart.points.some(p => p.received > 0 || p.overdue > 0 || p.open > 0)) ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 z-10 rounded-xl">
                     <TrendingUp className="w-10 h-10 opacity-20 mb-3" />
@@ -601,7 +610,7 @@ export default function CarteiraDashboardClient() {
                   <span>Taxa de recuperação</span>
                   <span className="text-slate-300">{(health?.recoveryRate || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}%</span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${Math.max(0, Math.min(health?.recoveryRate || 0, 100))}%` }}></div>
                 </div>
               </div>
@@ -617,7 +626,7 @@ export default function CarteiraDashboardClient() {
                 </div>
               </div>
 
-              <div className="mt-auto grid grid-cols-2 gap-x-4 gap-y-5 border-t border-slate-800 pt-5">
+              <div className="mt-auto grid grid-cols-2 gap-x-4 gap-y-5 border-t border-slate-200 pt-5">
                 <div>
                   <p className="text-[0.62rem] font-bold uppercase tracking-widest text-slate-500 mb-1">Ticket médio</p>
                   <p className="font-semibold text-slate-100 text-sm">{formatCurrency(health?.avgTicket || 0)}</p>
@@ -642,24 +651,24 @@ export default function CarteiraDashboardClient() {
 
       {/* Modal Confirmar Pagamento */}
       {paymentItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700/60 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-800 flex justify-between items-center">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.18)]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
                 <CheckCircle2 className="text-emerald-500 w-5 h-5"/> Confirmar Recebimento
               </h3>
-              <button onClick={() => setPaymentItem(null)} className="p-1.5 text-slate-500 hover:bg-slate-800 hover:text-white rounded-lg transition-colors">
+              <button onClick={() => setPaymentItem(null)} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
                 <X className="w-4 h-4" />
               </button>
             </div>
             
             <form className="p-5 space-y-4" onSubmit={handleMarkPaid}>
-              <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm flex flex-col gap-3">
+              <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500 font-semibold tracking-wider text-[0.65rem] uppercase">Cliente</span>
-                  <span className="font-semibold text-slate-200 truncate max-w-[150px]">{paymentItem.debtorName}</span>
+                  <span className="max-w-[150px] truncate font-semibold text-slate-700">{paymentItem.debtorName}</span>
                 </div>
-                <div className="flex justify-between items-center pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-between border-t border-slate-200 pt-3">
                   <span className="text-slate-500 font-semibold tracking-wider text-[0.65rem] uppercase">Valor</span>
                   <span className="font-black text-xl tracking-tight text-emerald-400">{formatCurrency(paymentItem.amount)}</span>
                 </div>
@@ -667,12 +676,12 @@ export default function CarteiraDashboardClient() {
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-widest">Data efetiva de pagamento</label>
-                <input name="paymentDate" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white font-medium focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none" />
+                <input name="paymentDate" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
               </div>
               
               <div className="flex flex-col gap-1.5">
                 <label className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-widest">Método de baixa</label>
-                <select name="method" required className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white font-medium focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none appearance-none">
+                <select name="method" required className="appearance-none rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
                   <option value="PIX">PIX Automático</option>
                   <option value="DINHEIRO">Dinheiro Físico</option>
                   <option value="TRANSFERENCIA">Transferência Bancária / TED</option>
@@ -680,7 +689,7 @@ export default function CarteiraDashboardClient() {
               </div>
 
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setPaymentItem(null)} className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold transition-colors border border-slate-700 text-sm">
+                <button type="button" onClick={() => setPaymentItem(null)} className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50">
                   Cancelar
                 </button>
                 <button type="submit" className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-emerald-600/20 text-sm active:scale-95">
@@ -694,3 +703,4 @@ export default function CarteiraDashboardClient() {
     </div>
   );
 }
+

@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  BarChart3, 
-  Briefcase, 
-  CreditCard, 
-  FileText, 
-  LayoutDashboard, 
-  TrendingDown, 
-  TrendingUp, 
-  Users 
+import {
+  BarChart3,
+  Briefcase,
+  CreditCard,
+  FileText,
+  LayoutDashboard,
+  TrendingDown,
+  TrendingUp,
+  Users,
 } from "lucide-react";
 
 export function Sidebar({
@@ -23,100 +23,94 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
+  const showReportsNav = process.env.NEXT_PUBLIC_SHOW_REPORTS_NAV === "true";
 
   const isLinkActive = (path: string) => pathname.startsWith(path);
-  const showReportsNav = process.env.NEXT_PUBLIC_SHOW_REPORTS_NAV === 'true';
 
-  const linkClass = (path: string, color?: 'emerald' | 'rose') => {
+  const linkClass = (path: string, color?: "emerald" | "rose") => {
     const active = isLinkActive(path);
-    const base = "group flex items-center gap-3 w-full min-h-[44px] px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 border select-none";
-    
+    const base =
+      "group flex w-full min-h-[44px] select-none items-center gap-3 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition-all duration-200";
+
     if (active) {
-      return `${base} bg-gradient-to-br from-blue-600/40 to-indigo-800/30 border-blue-400/30 text-white shadow-[0_8px_16px_-8px_rgba(37,99,235,0.6),inset_0_1px_0_rgba(255,255,255,0.08)]`;
+      return `${base} border-[#4F7EF7]/20 bg-[#EEF4FF] text-[#4F7EF7] shadow-[0_8px_18px_rgba(79,126,247,0.12)]`;
     }
 
-    const unactiveColors = color === 'emerald' 
-      ? "text-emerald-400 hover:text-emerald-300" 
-      : color === 'rose' 
-        ? "text-rose-400 hover:text-rose-300" 
-        : "text-slate-300 hover:text-slate-50";
+    const tone =
+      color === "emerald"
+        ? "text-emerald-700 hover:text-emerald-700"
+        : color === "rose"
+          ? "text-rose-600 hover:text-rose-700"
+          : "text-slate-600 hover:text-slate-900";
 
-    return `${base} border-transparent hover:bg-slate-900/90 hover:border-blue-500/20 active:scale-[0.98] ${unactiveColors}`;
+    return `${base} border-transparent hover:border-slate-200 hover:bg-slate-50 active:scale-[0.98] ${tone}`;
   };
 
-  const iconClass = (path: string, color?: 'emerald' | 'rose') => {
-    const active = isLinkActive(path);
-    if (active) return "text-blue-200";
-    
-    if (color === 'emerald') return "text-emerald-500 group-hover:text-emerald-300";
-    if (color === 'rose') return "text-rose-500 group-hover:text-rose-300";
-    
-    return "text-slate-500 group-hover:text-blue-100";
+  const iconClass = (path: string, color?: "emerald" | "rose") => {
+    if (isLinkActive(path)) return "text-[#4F7EF7]";
+    if (color === "emerald") return "text-emerald-500 group-hover:text-emerald-600";
+    if (color === "rose") return "text-rose-500 group-hover:text-rose-600";
+    return "text-slate-400 group-hover:text-slate-600";
   };
 
   return (
     <>
-      {/* Overlay for mobile */}
-      <div 
-        className={`fixed inset-0 z-30 bg-slate-950/80 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        onClick={onClose}
+      <div
         aria-hidden="true"
+        className={`fixed inset-0 z-30 bg-slate-900/30 backdrop-blur-sm transition-opacity duration-300 lg:hidden ${isOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        onClick={onClose}
       />
 
-      {/* Sidebar */}
-      <aside 
-        className={`fixed top-16 sm:top-20 left-0 h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] w-[272px] z-40 bg-gradient-to-b from-slate-950/[0.98] to-slate-900/[0.98] border-r border-blue-500/10 shadow-[inset_-1px_0_0_rgba(255,255,255,0.02)] transition-transform duration-300 will-change-transform ${
+      <aside
+        aria-label="Menu principal"
+        className={`fixed left-0 top-16 z-40 h-[calc(100vh-4rem)] w-[272px] border-r border-slate-200/80 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition-transform duration-300 will-change-transform sm:top-20 sm:h-[calc(100vh-5rem)] ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         } ${isCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"}`}
         role="navigation"
-        aria-label="Menu principal"
       >
         <div className="h-full overflow-y-auto overflow-x-hidden p-4 pb-8 scrollbar-none">
-          {/* Visão Geral */}
           <section className="mb-6">
-            <Link href="/app/visao-geral" className={linkClass("/app/visao-geral")} onClick={onClose}>
-              <LayoutDashboard className={`w-[18px] h-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/visao-geral")}`} />
-              <span className="truncate">Visão geral</span>
+            <Link className={linkClass("/app/visao-geral")} href="/app/visao-geral" onClick={onClose}>
+              <LayoutDashboard className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/visao-geral")}`} />
+              <span className="truncate">Visao geral</span>
             </Link>
           </section>
 
-          {/* Empréstimos */}
           <section className="mb-6">
-            <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-500/80">
-              Empréstimos
+            <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+              Emprestimos
             </h3>
             <div className="flex flex-col gap-1">
-              <Link href="/app/carteira" className={linkClass("/app/carteira")} onClick={onClose}>
-                <Briefcase className={`w-[18px] h-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/carteira")}`} />
+              <Link className={linkClass("/app/carteira")} href="/app/carteira" onClick={onClose}>
+                <Briefcase className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/carteira")}`} />
                 <span className="truncate">Carteira</span>
               </Link>
-              <Link href="/app/clientes" className={linkClass("/app/clientes")} onClick={onClose}>
-                <Users className={`w-[18px] h-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/clientes")}`} />
+              <Link className={linkClass("/app/clientes")} href="/app/clientes" onClick={onClose}>
+                <Users className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/clientes")}`} />
                 <span className="truncate">Clientes</span>
               </Link>
-              <Link href="/app/emprestimos" className={linkClass("/app/emprestimos")} onClick={onClose}>
-                <CreditCard className={`w-[18px] h-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/emprestimos")}`} />
-                <span className="truncate">Empréstimos</span>
+              <Link className={linkClass("/app/emprestimos")} href="/app/emprestimos" onClick={onClose}>
+                <CreditCard className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/emprestimos")}`} />
+                <span className="truncate">Emprestimos</span>
               </Link>
-              <Link href="/app/parcelas" className={linkClass("/app/parcelas")} onClick={onClose}>
-                <BarChart3 className={`w-[18px] h-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/parcelas")}`} />
+              <Link className={linkClass("/app/parcelas")} href="/app/parcelas" onClick={onClose}>
+                <BarChart3 className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/parcelas")}`} />
                 <span className="truncate">Parcelas</span>
               </Link>
             </div>
           </section>
 
-          {/* Financeiro */}
           <section className="mb-6">
-            <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-500/80">
+            <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-400">
               Financeiro
             </h3>
             <div className="flex flex-col gap-1">
-              <Link href="/app/pagar" className={linkClass("/app/pagar", "rose")} onClick={onClose}>
-                <TrendingDown className={`w-[18px] h-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/pagar", "rose")}`} />
+              <Link className={linkClass("/app/pagar", "rose")} href="/app/pagar" onClick={onClose}>
+                <TrendingDown className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/pagar", "rose")}`} />
                 <span className="truncate">Contas a pagar</span>
               </Link>
-              <Link href="/app/receber" className={linkClass("/app/receber", "emerald")} onClick={onClose}>
-                <TrendingUp className={`w-[18px] h-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/receber", "emerald")}`} />
+              <Link className={linkClass("/app/receber", "emerald")} href="/app/receber" onClick={onClose}>
+                <TrendingUp className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/receber", "emerald")}`} />
                 <span className="truncate">Contas a receber</span>
               </Link>
             </div>
@@ -124,23 +118,20 @@ export function Sidebar({
 
           {showReportsNav && (
             <section className="mb-6">
-              <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-500/80">
-                Análises
+              <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                Analises
               </h3>
               <div className="flex flex-col gap-1">
-                <Link href="/app/relatorios" className={linkClass("/app/relatorios")} onClick={onClose}>
-                  <FileText className={`w-[18px] h-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/relatorios")}`} />
-                  <span className="truncate">Relatórios</span>
+                <Link className={linkClass("/app/relatorios")} href="/app/relatorios" onClick={onClose}>
+                  <FileText className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/relatorios")}`} />
+                  <span className="truncate">Relatorios</span>
                 </Link>
               </div>
             </section>
           )}
 
-          {/* Spacer + Branding */}
-          <div className="mt-auto pt-6 border-t border-slate-800/60 px-3">
-            <p className="text-[0.6rem] font-medium text-slate-600">
-              Credix v1.0 &mdash; 2026
-            </p>
+          <div className="mt-auto border-t border-slate-100 px-3 pt-6">
+            <p className="text-[0.6rem] font-medium text-slate-400">Credix v1.0 - 2026</p>
           </div>
         </div>
       </aside>

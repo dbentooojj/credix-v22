@@ -907,6 +907,22 @@ function OperationPanel({
   emptyNote: string;
   amountClassName: string;
 }) {
+  const pageSize = 4;
+  const totalItems = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage((previous) => Math.min(previous, totalPages));
+  }, [totalPages]);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const visibleItems = items.slice(startIndex, endIndex);
+  const startItem = totalItems === 0 ? 0 : startIndex + 1;
+  const endItem = totalItems === 0 ? 0 : Math.min(totalItems, endIndex);
+  const pages = buildPaginationSequence(currentPage, totalPages);
+
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)]">
       <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
@@ -930,11 +946,11 @@ function OperationPanel({
         {items.length === 0 ? (
           <EmptyState note={emptyNote} title={emptyTitle} />
         ) : (
-          items.map((item, index) => (
+          visibleItems.map((item, index) => (
             <Link
               className="rounded-xl border border-slate-200/80 bg-slate-50/50 px-4 py-3.5 transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
               href={normalizeHref(item.href)}
-              key={`${item.title || "item"}-${index}`}
+              key={`${item.title || "item"}-${startIndex + index}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -959,6 +975,56 @@ function OperationPanel({
           ))
         )}
       </div>
+
+      {totalPages > 1 ? (
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-500">
+            Mostrando {startItem}-{endItem} de {totalItems} itens
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7] disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((previous) => Math.max(1, previous - 1))}
+              type="button"
+            >
+              Anterior
+            </button>
+            {pages.map((page) =>
+              typeof page === "number" ? (
+                <button
+                  aria-current={page === currentPage ? "page" : undefined}
+                  className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border px-2.5 text-xs font-bold transition ${
+                    page === currentPage
+                      ? "border-[#4F7EF7] bg-[#4F7EF7] text-white shadow-[0_4px_12px_rgba(79,126,247,0.3)]"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7]"
+                  }`}
+                  key={`${title}-${page}`}
+                  onClick={() => setCurrentPage(page)}
+                  type="button"
+                >
+                  {page}
+                </button>
+              ) : (
+                <span
+                  className="inline-flex h-8 min-w-[2rem] items-center justify-center text-xs font-bold text-slate-400"
+                  key={`${title}-${page}`}
+                >
+                  ...
+                </span>
+              ),
+            )}
+            <button
+              className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#4F7EF7]/40 hover:text-[#4F7EF7] disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((previous) => Math.min(totalPages, previous + 1))}
+              type="button"
+            >
+              Proxima
+            </button>
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
