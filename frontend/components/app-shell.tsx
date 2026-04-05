@@ -123,10 +123,10 @@ function itemIsActive(pathname: string, href: string) {
 
 function itemClassName(isActive: boolean, tone?: NavItem["tone"]) {
   return [
-    "group flex min-h-[42px] items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-150",
+    "group flex min-h-[44px] items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-200 select-none",
     isActive
-      ? "bg-[#4F7EF7] text-white shadow-[0_4px_12px_rgba(79,126,247,0.35)]"
-      : "text-slate-500 hover:bg-slate-100 hover:text-slate-800",
+      ? "bg-[#4F7EF7] text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)]"
+      : "text-slate-500 hover:bg-slate-100 hover:text-slate-800 active:scale-[0.98]",
     tone === "danger" && !isActive ? "text-red-500 hover:text-red-600" : "",
     tone === "success" && !isActive ? "text-emerald-600 hover:text-emerald-700" : "",
   ].join(" ");
@@ -398,7 +398,7 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* ── MAIN CONTENT ── */}
         <div className={`transition-[padding] duration-200 ${desktopSidebarCollapsed ? "lg:pl-0" : "lg:pl-60"}`}>
-          <main className="relative z-10 min-h-[calc(100vh-4rem)] p-4 sm:p-6 lg:p-8">
+          <main className="relative z-10 min-h-[calc(100vh-4rem)] p-3 sm:p-5 lg:p-6 xl:p-8 pb-24 lg:pb-8">
             {children}
           </main>
         </div>
