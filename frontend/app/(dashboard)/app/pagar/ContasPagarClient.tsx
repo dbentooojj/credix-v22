@@ -23,6 +23,7 @@ import {
   formatFinanceCategoryLabel,
   useFinanceCategoryCatalog,
 } from "../../../components/FinanceCategoryControls";
+import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
 
 // --- TYPES ---
 type Transaction = {
@@ -198,7 +199,7 @@ export function ContasPagarClient() {
     setEditingItem(item);
     setFormDescription(item.description || "");
     setFormCategoryId(String(item.categoryId || item.categoryMeta?.id || ""));
-    setFormAmount(String(Number(item.amount || 0)));
+    setFormAmount(formatCurrencyInputFromNumber(item.amount || 0));
     setFormDate(item.date || "");
     setFormStatus(item.status || "pending");
     setFormCreationMode("single");
@@ -216,7 +217,8 @@ export function ContasPagarClient() {
   }
 
   async function handleSave() {
-    if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate) return;
+    const parsedAmount = parseCurrencyInput(formAmount);
+    if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return;
     setSaving(true);
     try {
       if (editingItem) {
@@ -228,7 +230,7 @@ export function ContasPagarClient() {
             type: "expense",
             description: formDescription.trim(),
             categoryId: formCategoryId,
-            amount: Number(formAmount),
+            amount: parsedAmount,
             date: formDate,
             status: formStatus,
           }),
@@ -239,7 +241,7 @@ export function ContasPagarClient() {
           type: "expense",
           description: formDescription.trim(),
           categoryId: formCategoryId,
-          amount: Number(formAmount),
+          amount: parsedAmount,
           date: formDate,
           status: formStatus,
           creationMode: formCreationMode,
@@ -531,7 +533,7 @@ export function ContasPagarClient() {
             />
           </ModalField>
           <ModalField label="Valor (R$)">
-            <input className={modalInputClass} type="number" min="0.01" step="0.01" placeholder="0,00" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} />
+            <input className={modalInputClass} inputMode="decimal" maxLength={24} type="text" placeholder="0,00" value={formAmount} onChange={(e) => setFormAmount(formatCurrencyInput(e.target.value))} />
           </ModalField>
           {!isEditing && (
             <ModalField label="Tipo de lanÃ§amento" full>

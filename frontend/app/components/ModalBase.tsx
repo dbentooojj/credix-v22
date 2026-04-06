@@ -4,7 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 const modalButtonBaseClass =
-  "inline-flex h-11 w-[160px] flex-none items-center justify-center whitespace-nowrap rounded-xl border px-4 py-2 text-center text-sm leading-none transition-all active:translate-y-px active:scale-[0.98] disabled:opacity-50";
+  "inline-flex h-11 w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border px-4 py-2 text-center text-sm leading-none transition-all active:translate-y-px active:scale-[0.98] disabled:opacity-50 sm:w-[160px]";
 
 interface ModalBaseProps {
   open: boolean;
@@ -83,8 +83,13 @@ export function ModalBase({
         <div className={`flex-1 overflow-y-auto px-5 py-4 sm:px-6 ${bodyClassName}`}>{children}</div>
 
         {footer ? (
-          <div className={`safe-area-bottom flex items-center justify-end gap-2.5 border-t border-slate-100 px-5 py-3.5 sm:px-6 ${footerClassName}`}>
-            {footer}
+          <div
+            className={`shrink-0 border-t border-slate-100 px-5 pt-4 sm:px-6 ${footerClassName}`}
+            style={{ paddingBottom: "calc(1rem + var(--safe-area-bottom))" }}
+          >
+            <div className="ml-auto flex w-full flex-col-reverse items-stretch gap-2.5 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+              {footer}
+            </div>
           </div>
         ) : null}
       </div>

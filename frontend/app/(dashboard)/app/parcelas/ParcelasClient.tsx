@@ -15,6 +15,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
+import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
 
 // --- TYPES ---
 type Debtor = {
@@ -161,7 +162,7 @@ export function ParcelasClient() {
   function openPayModal(inst: any) {
     setSelectedInst(inst);
     setPayDate(toDateInputValue(new Date()));
-    setPayAmount(String(inst.amount || 0));
+    setPayAmount(formatCurrencyInputFromNumber(inst.amount || 0));
     setPayMethod("PIX");
     setPayNotes("");
     setShowPayModal(true);
@@ -178,7 +179,8 @@ export function ParcelasClient() {
   }
 
   async function handlePay() {
-    if (!selectedInst || !payDate || !payAmount) return;
+    const parsedAmount = parseCurrencyInput(payAmount);
+    if (!selectedInst || !payDate || !payAmount || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return;
     setActionLoading(true);
     try {
       await fetch("/api/payments", {
@@ -187,7 +189,7 @@ export function ParcelasClient() {
         body: JSON.stringify({
           loanId: Number(selectedInst.loan_id),
           installmentId: Number(selectedInst.id),
-          amount: Number(payAmount),
+          amount: parsedAmount,
           paymentDate: payDate,
           method: payMethod,
           notes: payNotes.trim() || undefined,
@@ -613,7 +615,7 @@ export function ParcelasClient() {
         footer={<><ModalBtnGhost onClick={() => setShowPayModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={handlePay} disabled={actionLoading}>{actionLoading ? "Salvando..." : "Confirmar pagamento"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
-          <ModalField label="Valor (R$)"><input className={modalInputClass} type="number" min="0.01" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} /></ModalField>
+          <ModalField label="Valor (R$)"><input className={modalInputClass} inputMode="decimal" maxLength={24} type="text" value={payAmount} onChange={(e) => setPayAmount(formatCurrencyInput(e.target.value))} /></ModalField>
           <ModalField label="Data do pagamento"><input className={modalInputClass} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></ModalField>
           <ModalField label="Método de pagamento">
             <select className={modalInputClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>

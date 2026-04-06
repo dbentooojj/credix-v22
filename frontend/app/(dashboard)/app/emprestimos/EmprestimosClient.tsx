@@ -5,12 +5,12 @@ import {
   Hash,
   Banknote,
   BarChart3,
+  Calendar,
   CheckCircle2,
   Filter,
   ChevronLeft,
   ChevronRight,
   Eye,
-  Edit2,
   Trash2,
   ArrowUpDown,
   Plus,
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
 import { calculateLoanPreview } from "../../../../utils/loanCalculator";
+import { formatCurrencyInput, parseCurrencyInput } from "../../../../utils/currencyInput";
 
 // --- TYPES ---
 type Debtor = {
@@ -144,6 +145,7 @@ export function EmprestimosClient() {
   const [formStartDate, setFormStartDate] = useState("");
   const [formFirstDue, setFormFirstDue] = useState("");
   const [formObservations, setFormObservations] = useState("");
+  const [formCustomDueDates, setFormCustomDueDates] = useState<string[]>([]);
 
   function toDateInput(d: Date) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -156,6 +158,41 @@ export function EmprestimosClient() {
     const ny = Math.floor((y * 12 + mo) / 12), nm = ((y * 12 + mo) % 12 + 12) % 12;
     const ld = new Date(ny, nm + 1, 0).getDate();
     return `${ny}-${String(nm + 1).padStart(2, "0")}-${String(Math.min(d, ld)).padStart(2, "0")}`;
+  }
+
+  function isIsoDateString(value: string) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+  }
+
+  function mergeDueDates(firstDueDate: string, installmentsCount: number, customDueDates: string[]) {
+    return Array.from({ length: Math.max(0, installmentsCount) }, (_, index) => {
+      const fallbackDate = addMonths(firstDueDate, index);
+      const customDate = customDueDates[index];
+      return isIsoDateString(customDate) ? customDate : fallbackDate;
+    });
+  }
+
+  function getDueDatesValidationMessage(startDate: string, dueDates: string[]) {
+    if (!dueDates.length) return null;
+
+    let previousDate = startDate;
+    for (let index = 0; index < dueDates.length; index += 1) {
+      const currentDate = dueDates[index];
+      if (!isIsoDateString(currentDate)) {
+        return `Informe uma data valida para a parcela #${index + 1}.`;
+      }
+
+      if (previousDate && currentDate <= previousDate) {
+        if (index === 0) {
+          return "O primeiro vencimento precisa ser posterior a data de inicio.";
+        }
+        return `A parcela #${index + 1} precisa vencer depois da parcela #${index}.`;
+      }
+
+      previousDate = currentDate;
+    }
+
+    return null;
   }
 
   const fetchData = useCallback(async () => {
@@ -177,6 +214,44 @@ export function EmprestimosClient() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // --- Cálculo dinâmico do resumo ---
+  const baseLoanCalculation = useMemo(() => {
+    return calculateLoanPreview({
+      principal: formPrincipal,
+      monthlyRate: formRate,
+      fixedAddition: formFixedAddition,
+      installments: formInstallments,
+      maxInstallment: formMaxInstallment,
+      useMaxInstallment: formCalcByInstallment,
+      interestType: formInterestType,
+      startDate: formStartDate,
+      firstDueDate: formFirstDue,
+    });
+  }, [
+    formPrincipal,
+    formRate,
+    formFixedAddition,
+    formInstallments,
+    formMaxInstallment,
+    formCalcByInstallment,
+    formInterestType,
+    formStartDate,
+    formFirstDue,
+  ]);
+
+  const previewDueDates = useMemo(() => {
+    const firstDueDate = baseLoanCalculation.values.firstDueDate || formFirstDue;
+    return mergeDueDates(firstDueDate, baseLoanCalculation.values.installments, formCustomDueDates);
+  }, [
+    baseLoanCalculation.values.firstDueDate,
+    baseLoanCalculation.values.installments,
+    formCustomDueDates,
+    formFirstDue,
+  ]);
+
+  const dueDatesValidationMessage = useMemo(() => {
+    return getDueDatesValidationMessage(baseLoanCalculation.values.startDate || formStartDate, previewDueDates);
+  }, [baseLoanCalculation.values.startDate, formStartDate, previewDueDates]);
+
   const loanSummary = useMemo(() => {
     const calculation = calculateLoanPreview({
       principal: formPrincipal,
@@ -188,6 +263,7 @@ export function EmprestimosClient() {
       interestType: formInterestType,
       startDate: formStartDate,
       firstDueDate: formFirstDue,
+      dueDates: previewDueDates,
     });
 
     return {
@@ -215,6 +291,7 @@ export function EmprestimosClient() {
     formInterestType,
     formStartDate,
     formFirstDue,
+    previewDueDates,
   ]);
 
   function buildLoanSimulationPayload() {
@@ -223,16 +300,19 @@ export function EmprestimosClient() {
     const installmentsCount = Math.max(1, loanSummary.installmentsCount || Math.trunc(Number(formInstallments) || 0));
     const fallbackDueDates = Array.from({ length: installmentsCount }, (_, index) => addMonths(safeFirstDueDate, index));
     const dueDates = loanSummary.dueDates.length > 0 ? loanSummary.dueDates : fallbackDueDates;
+    const firstDueDate = dueDates[0] || safeFirstDueDate;
+    const principalAmount = parseCurrencyInput(formPrincipal);
+    const fixedFeeAmount = parseCurrencyInput(formFixedAddition);
 
     return {
       clientId: Number(formClientId),
-      principalAmount: Number(formPrincipal) || 0,
+      principalAmount: Number.isFinite(principalAmount) ? principalAmount : 0,
       interestType: formInterestType,
       interestRate: formInterestType === "fixo" ? 0 : (Number(formRate) || 0),
-      fixedFeeAmount: formInterestType === "fixo" ? (Number(formFixedAddition) || 0) : 0,
+      fixedFeeAmount: formInterestType === "fixo" && Number.isFinite(fixedFeeAmount) ? fixedFeeAmount : 0,
       installmentsCount,
       startDate: safeStartDate,
-      firstDueDate: safeFirstDueDate,
+      firstDueDate,
       dueDates,
       observations: formObservations,
       _preview: {
@@ -243,18 +323,19 @@ export function EmprestimosClient() {
   }
 
   const canSubmitLoan = useMemo(() => {
-    const principal = Number(formPrincipal) || 0;
+    const principal = parseCurrencyInput(formPrincipal);
     const rate = Number(formRate) || 0;
-    const fixedAddition = Number(formFixedAddition) || 0;
+    const fixedAddition = parseCurrencyInput(formFixedAddition);
 
-    if (!formClientId || principal <= 0) return false;
+    if (!formClientId || !Number.isFinite(principal) || principal <= 0) return false;
     if (!formStartDate || !formFirstDue) return false;
     if (loanSummary.installmentsCount <= 0) return false;
     if (loanSummary.autoInstallmentError) return false;
     if (loanSummary.autoInstallmentPending) return false;
+    if (dueDatesValidationMessage) return false;
 
     if (formInterestType === "fixo") {
-      return fixedAddition >= 0;
+      return Number.isFinite(fixedAddition) && fixedAddition >= 0;
     }
     return rate > 0;
   }, [
@@ -268,6 +349,7 @@ export function EmprestimosClient() {
     loanSummary.installmentsCount,
     loanSummary.autoInstallmentError,
     loanSummary.autoInstallmentPending,
+    dueDatesValidationMessage,
   ]);
 
   // --- Modal handlers ---
@@ -278,6 +360,25 @@ export function EmprestimosClient() {
     setFormInterestType("composto"); setFormCalcByInstallment(false);
     setFormStartDate(today); setFormFirstDue(addMonths(today, 1));
     setFormObservations("");
+    setFormCustomDueDates([]);
+  }
+
+  function clearCustomDueDates() {
+    setFormCustomDueDates([]);
+  }
+
+  function applyInstallmentDueDate(index: number, value: string) {
+    if (!isIsoDateString(value)) return;
+
+    setFormCustomDueDates((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+
+    if (index === 0) {
+      setFormFirstDue(value);
+    }
   }
 
   function openLoanModal() {
@@ -662,7 +763,7 @@ export function EmprestimosClient() {
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Valor principal (R$)</label>
-                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" type="number" min="0.01" step="0.01" placeholder="R$ 0,00" value={formPrincipal} onChange={(e) => setFormPrincipal(e.target.value)} />
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" inputMode="decimal" maxLength={24} type="text" placeholder="0,00" value={formPrincipal} onChange={(e) => setFormPrincipal(formatCurrencyInput(e.target.value))} />
                     </div>
                   </div>
                 </div>
@@ -683,14 +784,16 @@ export function EmprestimosClient() {
                       <label className="mb-1 block text-xs font-semibold text-slate-400">{formInterestType === "fixo" ? "Acrescimo fixo (R$)" : "Taxa mensal (%)*"}</label>
                       <input
                         className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                        type="number"
+                        inputMode={formInterestType === "fixo" ? "decimal" : "decimal"}
+                        maxLength={formInterestType === "fixo" ? 24 : undefined}
+                        type={formInterestType === "fixo" ? "text" : "number"}
                         min="0"
                         step="0.01"
                         placeholder={formInterestType === "fixo" ? "Ex: 500" : "Ex: 8"}
                         value={formInterestType === "fixo" ? formFixedAddition : formRate}
                         onChange={(e) => {
                           if (formInterestType === "fixo") {
-                            setFormFixedAddition(e.target.value);
+                            setFormFixedAddition(formatCurrencyInput(e.target.value));
                             return;
                           }
                           setFormRate(e.target.value);
@@ -701,15 +804,17 @@ export function EmprestimosClient() {
                       <label className="mb-1 block text-xs font-semibold text-slate-400">{formCalcByInstallment ? "Valor da parcela (R$)" : "Parcelas*"}</label>
                       <input
                         className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                        type="number"
+                        inputMode={formCalcByInstallment ? "decimal" : "numeric"}
+                        maxLength={formCalcByInstallment ? 24 : undefined}
+                        type={formCalcByInstallment ? "text" : "number"}
                         min={formCalcByInstallment ? "0.01" : "1"}
                         max={formCalcByInstallment ? undefined : "96"}
                         step={formCalcByInstallment ? "0.01" : "1"}
-                        placeholder={formCalcByInstallment ? "Ex: 750" : ""}
+                        placeholder={formCalcByInstallment ? "0,00" : ""}
                         value={formCalcByInstallment ? formMaxInstallment : formInstallments}
                         onChange={(e) => {
                           if (formCalcByInstallment) {
-                            setFormMaxInstallment(e.target.value);
+                            setFormMaxInstallment(formatCurrencyInput(e.target.value));
                             return;
                           }
                           setFormInstallments(e.target.value);
@@ -739,11 +844,11 @@ export function EmprestimosClient() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Data de inicio</label>
-                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formStartDate} onChange={(e) => { setFormStartDate(e.target.value); setFormFirstDue(addMonths(e.target.value, 1)); }} />
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formStartDate} onChange={(e) => { setFormStartDate(e.target.value); setFormFirstDue(addMonths(e.target.value, 1)); clearCustomDueDates(); }} />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">1o vencimento</label>
-                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formFirstDue} onChange={(e) => setFormFirstDue(e.target.value)} />
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formFirstDue} onChange={(e) => { setFormFirstDue(e.target.value); clearCustomDueDates(); }} />
                     </div>
                   </div>
                 </div>
@@ -757,7 +862,18 @@ export function EmprestimosClient() {
 
                 {/* Previa das parcelas */}
                 <div>
-                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Previa das parcelas</h3>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Previa das parcelas</h3>
+                    {formCustomDueDates.some((date) => isIsoDateString(date)) ? (
+                      <button
+                        className="text-[11px] font-semibold text-blue-400 transition-colors hover:text-blue-300"
+                        onClick={clearCustomDueDates}
+                        type="button"
+                      >
+                        Restaurar agenda padrao
+                      </button>
+                    ) : null}
+                  </div>
                   <div className="space-y-2 max-h-44 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/40 p-3">
                     {loanSummary.plan.length === 0 ? (
                       <p className="text-xs text-slate-500">Preencha os campos para visualizar as parcelas.</p>
@@ -768,14 +884,33 @@ export function EmprestimosClient() {
                             <p className="text-sm font-semibold text-slate-200">Parcela #{item.installmentNumber}</p>
                             <p className="text-base font-bold text-slate-100">{formatCurrency(item.amount)}</p>
                           </div>
-                          <p className="mt-1 text-xs text-slate-400">
-                            Vencimento: {item.dueDate ? new Intl.DateTimeFormat("pt-BR").format(new Date(item.dueDate + "T12:00:00")) : "--/--/----"}
-                          </p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <p className="text-xs text-slate-400">
+                              Vencimento: {item.dueDate ? new Intl.DateTimeFormat("pt-BR").format(new Date(item.dueDate + "T12:00:00")) : "--/--/----"}
+                            </p>
+                            <label
+                              className="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-blue-500 hover:text-blue-300"
+                              title={`Editar vencimento da parcela #${item.installmentNumber}`}
+                            >
+                              <Calendar className="h-3.5 w-3.5" />
+                              <input
+                                className="absolute inset-0 cursor-pointer opacity-0"
+                                onChange={(event) => applyInstallmentDueDate(item.installmentNumber - 1, event.target.value)}
+                                type="date"
+                                value={item.dueDate || ""}
+                              />
+                            </label>
+                          </div>
                           <p className="mt-1 text-xs text-slate-500">Juros: {formatCurrency(item.interestAmount)}</p>
                         </div>
                       ))
                     )}
                   </div>
+                  {dueDatesValidationMessage ? (
+                    <p className="mt-2 text-xs font-medium text-red-400">{dueDatesValidationMessage}</p>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-500">Voce pode ajustar o vencimento de cada parcela diretamente na previa.</p>
+                  )}
                 </div>
               </div>
 
@@ -788,7 +923,7 @@ export function EmprestimosClient() {
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Parcelas</p><p className="text-sm font-bold text-slate-100">{loanSummary.installments}</p></div>
                   <hr className="border-slate-800" />
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Taxa</p><p className="text-sm font-bold text-slate-100">{loanSummary.rateLabel}</p><p className="text-xs text-slate-400">{loanSummary.rateValue}</p></div>
-                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">1o vencimento</p><p className="text-sm font-bold text-slate-100">{loanSummary.firstDue !== "--/--/----" ? new Intl.DateTimeFormat("pt-BR").format(new Date(loanSummary.firstDue + "T12:00:00")) : "--/--/----"}</p></div>
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">1o vencimento</p><p className="text-sm font-bold text-slate-100">{(loanSummary.dueDates[0] || loanSummary.firstDue) !== "--/--/----" ? new Intl.DateTimeFormat("pt-BR").format(new Date((loanSummary.dueDates[0] || loanSummary.firstDue) + "T12:00:00")) : "--/--/----"}</p></div>
                   <hr className="border-slate-800" />
                   <p className="text-xs text-slate-500">{loanSummary.modeLabel}</p>
                 </div>

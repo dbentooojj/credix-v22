@@ -13,6 +13,7 @@ import {
   ModalField,
   modalInputClass,
 } from "./ModalBase";
+import { formatCurrencyInput, parseCurrencyInput } from "../../utils/currencyInput";
 
 const cashAdjustmentInputClass = `${modalInputClass} min-h-[40px] py-2`;
 
@@ -31,17 +32,6 @@ function toDateInputValue(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function parseCurrencyInput(value: string): number {
-  const trimmed = value.trim();
-  if (!trimmed) return Number.NaN;
-  const cleaned = trimmed.replace(/[^\d,.-]/g, "");
-  if (!cleaned) return Number.NaN;
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned;
-  return Number(normalized);
 }
 
 export function CashAdjustmentModalProvider({ children }: { children: ReactNode }) {
@@ -174,7 +164,7 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
               disabled={cashSaving}
               inputMode="decimal"
               maxLength={24}
-              onChange={(event) => setCashAmount(event.target.value)}
+              onChange={(event) => setCashAmount(formatCurrencyInput(event.target.value))}
               placeholder="0,00"
               type="text"
               value={cashAmount}

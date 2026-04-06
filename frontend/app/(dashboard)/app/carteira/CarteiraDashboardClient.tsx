@@ -136,6 +136,7 @@ type HealthMetrics = {
   avgTicket: number;
   avgInstallment: number;
   totalOverdue: number;
+  hasPortfolioBase: boolean;
 };
 
 const QUEUE_PAGE_SIZE = 4;
@@ -270,6 +271,16 @@ function getHealthDescriptor(score: number) {
     chip: 'border-rose-200 bg-rose-50 text-rose-600',
     bar: 'bg-rose-500',
     value: 'text-rose-600',
+  };
+}
+
+function getHealthEmptyDescriptor() {
+  return {
+    label: 'Sem base',
+    note: 'Ainda nao ha dados suficientes para avaliar a saude da carteira.',
+    chip: 'border-slate-200 bg-slate-100 text-slate-500',
+    bar: 'bg-slate-300',
+    value: 'text-slate-500',
   };
 }
 
@@ -471,8 +482,6 @@ export default function CarteiraDashboardClient() {
   const receivableBase = (kpis.receivedThisMonth || 0) + (kpis.totalOpenReceivable || 0);
   const recoveryRate = receivableBase > 0 ? ((kpis.receivedThisMonth || 0) / receivableBase) * 100 : 0;
   const normalizedDelinquency = Math.max(0, Math.min(100, kpis.delinquencyRate || 0));
-  const healthScore = Math.round((Math.max(0, Math.min(recoveryRate, 100)) * 0.62) + ((100 - normalizedDelinquency) * 0.38));
-  const healthDescriptor = getHealthDescriptor(healthScore);
 
   const receivedKpi = kpiCards.receivedThisMonth;
   const profitKpi = kpiCards.profitThisMonth;
@@ -492,6 +501,7 @@ export default function CarteiraDashboardClient() {
     const totalOverdue = kpis.openReceivableOverdue ?? kpis.totalOverdue ?? 0;
     const receivablePool = receivedThisMonth + totalOpenReceivable;
     const recovery = receivablePool > 0 ? (receivedThisMonth / receivablePool) * 100 : 0;
+    const hasPortfolioBase = totalLoaned > 0 || totalOpenReceivable > 0 || receivedThisMonth > 0;
     const loanIds = new Set([...upcoming, ...overdue].map((item) => Number(item.loanId || 0)).filter((id) => id > 0));
     const installmentCount = upcoming.length + overdue.length;
 
@@ -502,8 +512,16 @@ export default function CarteiraDashboardClient() {
       avgTicket: loanIds.size > 0 ? totalLoaned / loanIds.size : 0,
       avgInstallment: installmentCount > 0 ? totalOpenReceivable / installmentCount : 0,
       totalOverdue,
+      hasPortfolioBase,
     };
   }, [data, kpis]);
+
+  const healthScore = health?.hasPortfolioBase
+    ? Math.round((Math.max(0, Math.min(recoveryRate, 100)) * 0.62) + ((100 - normalizedDelinquency) * 0.38))
+    : null;
+  const healthDescriptor = health?.hasPortfolioBase
+    ? getHealthDescriptor(healthScore ?? 0)
+    : getHealthEmptyDescriptor();
 
   const upcomingItems = data?.upcomingDue || [];
   const overdueItems = data?.overduePayments || [];
@@ -931,10 +949,16 @@ export default function CarteiraDashboardClient() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Indice de saude</p>
-                  <p className={cn('mt-3 text-[2.7rem] font-bold leading-none tracking-tight', healthDescriptor.value)}>
-                    {healthScore}
-                    <span className="ml-1 text-lg font-semibold text-slate-400">/100</span>
-                  </p>
+                  {healthScore !== null ? (
+                    <p className={cn('mt-3 text-[2.7rem] font-bold leading-none tracking-tight', healthDescriptor.value)}>
+                      {healthScore}
+                      <span className="ml-1 text-lg font-semibold text-slate-400">/100</span>
+                    </p>
+                  ) : (
+                    <p className={cn('mt-3 text-[1.9rem] font-bold leading-none tracking-tight', healthDescriptor.value)}>
+                      Sem base
+                    </p>
+                  )}
                   <p className="mt-3 text-sm text-slate-500">{healthDescriptor.note}</p>
                 </div>
                 <span className={cn('rounded-full border px-3 py-1.5 text-xs font-semibold', healthDescriptor.chip)}>
@@ -942,9 +966,11 @@ export default function CarteiraDashboardClient() {
                 </span>
               </div>
 
-              <div className="mt-5 h-2 rounded-full bg-slate-200">
-                <div className={cn('h-full rounded-full transition-all duration-500', healthDescriptor.bar)} style={{ width: `${Math.max(0, Math.min(healthScore, 100))}%` }} />
-              </div>
+              {healthScore !== null ? (
+                <div className="mt-5 h-2 rounded-full bg-slate-200">
+                  <div className={cn('h-full rounded-full transition-all duration-500', healthDescriptor.bar)} style={{ width: `${Math.max(0, Math.min(healthScore, 100))}%` }} />
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">

@@ -1,3 +1,5 @@
+import { parseCurrencyInput } from "./currencyInput";
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MAX_AUTO_INSTALLMENTS = 96;
 const MAX_INSTALLMENT_TOLERANCE = 1;
@@ -14,6 +16,7 @@ export type LoanCalculatorInput = {
   interestType: LoanInterestType;
   startDate: unknown;
   firstDueDate: unknown;
+  dueDates?: unknown[];
 };
 
 export type LoanInstallmentPlanRow = {
@@ -76,6 +79,11 @@ type LoanValuesResolution = {
 };
 
 function toNumber(value: unknown): number {
+  if (typeof value === "string") {
+    const parsedCurrency = parseCurrencyInput(value);
+    if (Number.isFinite(parsedCurrency)) return parsedCurrency;
+  }
+
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
@@ -184,8 +192,16 @@ function generateDueDates(firstDueDate: string, installments: number): string[] 
   return Array.from({ length: total }, (_item, index) => addMonthsIsoDate(safeFirstDueDate, index));
 }
 
-function resolveDueDates(firstDueDate: string, installments: number): string[] {
-  return generateDueDates(firstDueDate, installments);
+function resolveDueDates(firstDueDate: string, installments: number, customDueDates?: unknown[]): string[] {
+  const generatedDueDates = generateDueDates(firstDueDate, installments);
+  if (!Array.isArray(customDueDates) || customDueDates.length === 0) {
+    return generatedDueDates;
+  }
+
+  return generatedDueDates.map((generatedDate, index) => {
+    const customDate = normalizeIsoDateOnly(customDueDates[index]);
+    return customDate || generatedDate;
+  });
 }
 
 function effectiveFactor(days: unknown, dailyRate: unknown): number {
@@ -658,7 +674,7 @@ export function calculateLoanPreview(input: LoanCalculatorInput): LoanCalculator
 
   const resolution = resolveLoanValuesForCalculation(resolvedRawValues);
   const values = resolution.values;
-  const dueDates = resolveDueDates(values.firstDueDate, values.installments);
+  const dueDates = resolveDueDates(values.firstDueDate, values.installments, input.dueDates);
 
   const baseTotalAmount = values.principal;
   const baseInstallmentAmount = values.installments > 0 ? round2(baseTotalAmount / values.installments) : 0;
