@@ -52,6 +52,14 @@ enum FinanceTransactionStatus {
   PENDING
 }
 
+enum LoanSimulationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  EXPIRED
+  CANCELED
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   name         String
@@ -64,6 +72,7 @@ model User {
   loans        Loan[]
   installments Installment[]
   payments     Payment[]
+  loanSimulations    LoanSimulation[]
   financeCategories   FinanceCategory[]
   financeTransactions FinanceTransaction[]
 }
@@ -82,6 +91,7 @@ model Client {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   loans        Loan[]
+  loanSimulations LoanSimulation[]
   installments Installment[]
 
   @@index([ownerUserId])
@@ -105,6 +115,8 @@ model Loan {
   startDate         DateTime       @db.Date
   firstDueDate      DateTime       @db.Date
   dueDate           DateTime       @db.Date
+  simulationId      String?        @unique
+  simulation        LoanSimulation? @relation(fields: [simulationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   status            LoanStatus     @default(PENDENTE)
   observations      String?
   createdAt         DateTime       @default(now())
@@ -116,6 +128,36 @@ model Loan {
   @@index([clientId])
   @@index([status])
   @@index([dueDate])
+}
+
+model LoanSimulation {
+  id                String               @id @default(uuid())
+  ownerUserId       Int
+  ownerUser         User                 @relation(fields: [ownerUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  clientId          Int
+  client            Client               @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  clientName        String?
+  clientPhone       String?
+  principalAmount   Decimal              @db.Decimal(14, 2)
+  interestType      String
+  interestRate      Decimal              @db.Decimal(7, 4)
+  fixedFeeAmount    Decimal              @db.Decimal(14, 2)
+  installmentsCount Int
+  startDate         DateTime             @db.Date
+  firstDueDate      DateTime             @db.Date
+  dueDates          String[]
+  observations      String?
+  status            LoanSimulationStatus @default(DRAFT)
+  totalAmount       Decimal              @db.Decimal(14, 2)
+  installmentAmount Decimal              @db.Decimal(14, 2)
+  expiresAt         DateTime             @db.Date
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  loan              Loan?
+
+  @@index([ownerUserId])
+  @@index([clientId])
+  @@index([ownerUserId, status, expiresAt])
 }
 
 model Installment {

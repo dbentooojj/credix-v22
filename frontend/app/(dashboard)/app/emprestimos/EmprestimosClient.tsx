@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Edit2,
   Trash2,
   ArrowUpDown,
   Plus,
@@ -18,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
+import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { calculateLoanPreview } from "../../../../utils/loanCalculator";
 import { formatCurrencyInput, parseCurrencyInput } from "../../../../utils/currencyInput";
 
@@ -34,12 +36,63 @@ type Loan = {
   id: string | number;
   debtor_id: string | number;
   status?: string;
+  principal_amount?: number | string;
+  principalAmount?: number | string;
   borrowed_amount?: number | string;
+  borrowedAmount?: number | string;
   amount?: number | string;
   total_amount?: number | string;
+  totalAmount?: number | string;
+  installments_count?: number | string;
+  installmentsCount?: number | string;
+  interest_rate?: number | string;
+  interestRate?: number | string;
+  interest_type?: string;
+  interestType?: string;
+  installment_amount?: number | string | null;
+  installmentAmount?: number | string | null;
+  observations?: string | null;
+  start_date?: string;
+  first_due_date?: string;
+  due_date?: string;
   created_at?: string;
   date?: string; 
 };
+
+type Installment = {
+  id: string | number;
+  loan_id?: string | number;
+  loanId?: string | number;
+  installment_number?: number | string;
+  installmentNumber?: number | string;
+  due_date?: string;
+  dueDate?: string;
+  payment_date?: string | null;
+  paymentDate?: string | null;
+  amount?: number | string;
+  principal_amount?: number | string | null;
+  principalAmount?: number | string | null;
+  interest_amount?: number | string | null;
+  interestAmount?: number | string | null;
+  status?: string;
+};
+
+type LoanModalMode = "loan" | "simulation" | "edit" | "view";
+
+type EnrichedLoan = Loan & {
+  debtor?: Debtor;
+  principal: number;
+  total: number;
+  uiStatus: string;
+  createdAt: Date | null;
+  installments: Installment[];
+  hasPaidInstallments: boolean;
+  canEdit: boolean;
+  searchStr: string;
+};
+
+const LOAN_META_START = "[[LOAN_META]]";
+const LOAN_META_END = "[[/LOAN_META]]";
 
 // --- HELPERS ---
 function sameId(a: any, b: any) {
@@ -83,6 +136,11 @@ function formatDocument(value: any) {
   return value || "-";
 }
 
+function toFiniteNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function getStatusBadge(status: string) {
   const normalized = String(status || "").trim().toLowerCase();
   switch (normalized) {
@@ -112,9 +170,43 @@ function translateStatus(status: string) {
   return status || "Desconhecido";
 }
 
+function translateInstallmentStatus(status: string) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "pago" || normalized === "paid") return "Pago";
+  if (normalized === "atrasado" || normalized === "late" || normalized === "overdue") return "Atrasado";
+  return "Pendente";
+}
+
+function readLoanMeta(rawValue: any) {
+  const text = String(rawValue || "");
+  const start = text.indexOf(LOAN_META_START);
+  const end = text.indexOf(LOAN_META_END);
+  if (start === -1 || end === -1 || end <= start) {
+    return {
+      text: text.trim(),
+      meta: {} as Record<string, any>,
+    };
+  }
+
+  const plainText = `${text.slice(0, start)}${text.slice(end + LOAN_META_END.length)}`.trim();
+  try {
+    const meta = JSON.parse(text.slice(start + LOAN_META_START.length, end));
+    return {
+      text: plainText,
+      meta: meta && typeof meta === "object" ? meta : {},
+    };
+  } catch {
+    return {
+      text: plainText,
+      meta: {} as Record<string, any>,
+    };
+  }
+}
+
 export function EmprestimosClient() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [installments, setInstallments] = useState<Installment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -128,7 +220,8 @@ export function EmprestimosClient() {
 
   // Modal state
   const [showLoanModal, setShowLoanModal] = useState(false);
-  const [loanModalMode, setLoanModalMode] = useState<"loan" | "simulation">("loan");
+  const [loanModalMode, setLoanModalMode] = useState<LoanModalMode>("loan");
+  const [selectedLoanId, setSelectedLoanId] = useState<string | number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingLoan, setDeletingLoan] = useState<Loan | null>(null);
   const [saving, setSaving] = useState(false);
@@ -146,6 +239,18 @@ export function EmprestimosClient() {
   const [formFirstDue, setFormFirstDue] = useState("");
   const [formObservations, setFormObservations] = useState("");
   const [formCustomDueDates, setFormCustomDueDates] = useState<string[]>([]);
+
+  async function readApiMessage(response: Response, fallback: string) {
+    try {
+      const body = await response.json();
+      if (typeof body?.message === "string" && body.message.trim()) {
+        return body.message;
+      }
+    } catch {
+      // ignore body parsing failures
+    }
+    return fallback;
+  }
 
   function toDateInput(d: Date) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -198,12 +303,14 @@ export function EmprestimosClient() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [resLoans, resDebtors] = await Promise.all([
+      const [resLoans, resDebtors, resInstallments] = await Promise.all([
         fetch("/api/tables/loans").then((r) => r.json()),
         fetch("/api/tables/debtors").then((r) => r.json()),
+        fetch("/api/tables/installments").then((r) => r.json()),
       ]);
       if (resLoans.data) setLoans(resLoans.data);
       if (resDebtors.data) setDebtors(resDebtors.data);
+      if (resInstallments.data) setInstallments(resInstallments.data);
     } catch (err) {
       setError("Erro ao carregar dados. Verifique a conexão.");
     } finally {
@@ -322,6 +429,23 @@ export function EmprestimosClient() {
     };
   }
 
+  function buildLoanUpdatePayload() {
+    const basePayload = buildLoanSimulationPayload();
+    return {
+      ...basePayload,
+      installmentAmount: loanSummary.installmentAmount,
+      totalAmount: loanSummary.totalAmount,
+      maxInstallment: parseCurrencyInput(formMaxInstallment),
+      plan: loanSummary.plan.map((item) => ({
+        installmentNumber: item.installmentNumber,
+        dueDate: item.dueDate,
+        amount: item.amount,
+        principalAmount: item.principalAmount,
+        interestAmount: item.interestAmount,
+      })),
+    };
+  }
+
   const canSubmitLoan = useMemo(() => {
     const principal = parseCurrencyInput(formPrincipal);
     const rate = Number(formRate) || 0;
@@ -363,6 +487,44 @@ export function EmprestimosClient() {
     setFormCustomDueDates([]);
   }
 
+  function populateFormFromLoan(loan: EnrichedLoan) {
+    const loanMeta = readLoanMeta(loan.observations);
+    const interestMode = (() => {
+      const mode = String(loanMeta.meta.interestMode || "").trim().toLowerCase();
+      if (mode === "simples" || mode === "composto" || mode === "fixo") return mode as "simples" | "composto" | "fixo";
+      const loanInterestType = String(loan.interest_type || "").trim().toLowerCase();
+      return loanInterestType === "simples" ? "simples" : "composto";
+    })();
+
+    const dueDates = [...loan.installments]
+      .sort((left, right) => {
+        const leftNumber = Number(left.installment_number ?? left.installmentNumber ?? 0);
+        const rightNumber = Number(right.installment_number ?? right.installmentNumber ?? 0);
+        return leftNumber - rightNumber;
+      })
+      .map((item) => String(item.due_date ?? item.dueDate ?? "").slice(0, 10))
+      .filter(Boolean);
+
+    const fixedAddition = Number(loanMeta.meta.fixedAddition ?? 0);
+    const maxInstallment = Number(loanMeta.meta.maxInstallment ?? 0);
+    const startDate = String(loan.start_date || "").slice(0, 10) || toDateInput(new Date());
+    const firstDueDate = dueDates[0] || String(loan.first_due_date || "").slice(0, 10) || addMonths(startDate, 1);
+
+    setSelectedLoanId(loan.id);
+    setFormClientId(String(loan.debtor_id));
+    setFormPrincipal(formatCurrencyInput(String(loan.principal || 0)));
+    setFormInterestType(interestMode);
+    setFormRate(interestMode === "fixo" ? "" : String(Number(loan.interest_rate ?? 0) || ""));
+    setFormFixedAddition(interestMode === "fixo" ? formatCurrencyInput(String(fixedAddition || 0)) : "");
+    setFormInstallments(String(loan.installments_count || dueDates.length || ""));
+    setFormMaxInstallment(maxInstallment > 0 ? formatCurrencyInput(String(maxInstallment)) : "");
+    setFormCalcByInstallment(maxInstallment > 0);
+    setFormStartDate(startDate);
+    setFormFirstDue(firstDueDate);
+    setFormObservations(loanMeta.text);
+    setFormCustomDueDates(dueDates);
+  }
+
   function clearCustomDueDates() {
     setFormCustomDueDates([]);
   }
@@ -383,19 +545,38 @@ export function EmprestimosClient() {
 
   function openLoanModal() {
     resetForm();
+    setSelectedLoanId(null);
     setLoanModalMode("loan");
     setShowLoanModal(true);
   }
 
   function openSimulationModal() {
     resetForm();
+    setSelectedLoanId(null);
     setLoanModalMode("simulation");
+    setShowLoanModal(true);
+  }
+
+  function openViewModal(loan: EnrichedLoan) {
+    populateFormFromLoan(loan);
+    setLoanModalMode("view");
+    setShowLoanModal(true);
+  }
+
+  function openEditModal(loan: EnrichedLoan) {
+    populateFormFromLoan(loan);
+    setLoanModalMode("edit");
     setShowLoanModal(true);
   }
 
   function openDeleteModal(loan: Loan) {
     setDeletingLoan(loan);
     setShowDeleteModal(true);
+  }
+
+  function closeLoanModal() {
+    setShowLoanModal(false);
+    setSelectedLoanId(null);
   }
 
   async function handleSaveLoan() {
@@ -413,9 +594,34 @@ export function EmprestimosClient() {
         // 2. Aprovar automaticamente (cria o empréstimo real)
         await fetch(`/api/loan-simulations/${simRes.data.id}/approve`, { method: "POST" });
       }
-      setShowLoanModal(false);
+      closeLoanModal();
       await fetchData();
     } catch { /* silent */ } finally { setSaving(false); }
+  }
+
+  async function handleUpdateLoan() {
+    if (!canSubmitLoan || !selectedLoanId) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/loans/${selectedLoanId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildLoanUpdatePayload()),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readApiMessage(response, "Nao foi possivel atualizar o emprestimo."));
+      }
+
+      closeLoanModal();
+      await fetchData();
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel atualizar o emprestimo.";
+      setError(message);
+      window.alert(message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleSaveSimulation() {
@@ -428,7 +634,7 @@ export function EmprestimosClient() {
         body: JSON.stringify(buildLoanSimulationPayload()),
       }).then(r => r.json());
 
-      setShowLoanModal(false);
+      closeLoanModal();
       return simRes.data;
     } catch { /* silent */ } finally { setSaving(false); }
     return null;
@@ -452,10 +658,17 @@ export function EmprestimosClient() {
     try {
       const res = await fetch("/api/tables/loans").then((r) => r.json());
       const rows = (res.data || []).filter((r: any) => String(r.id) !== String(deletingLoan.id));
-      await fetch("/api/tables/loans", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
+      const putResponse = await fetch("/api/tables/loans", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
+      if (!putResponse.ok) {
+        throw new Error(await readApiMessage(putResponse, "Nao foi possivel excluir o emprestimo."));
+      }
       setShowDeleteModal(false); setDeletingLoan(null);
       await fetchData();
-    } catch { /* silent */ } finally { setSaving(false); }
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel excluir o emprestimo.";
+      setError(message);
+      window.alert(message);
+    } finally { setSaving(false); }
   }
 
   // Dropdown de clientes para o form
@@ -463,13 +676,41 @@ export function EmprestimosClient() {
     return debtors.map(d => ({ id: String(d.id), name: d.name || `Cliente #${d.id}` })).sort((a, b) => a.name.localeCompare(b.name));
   }, [debtors]);
 
-  const enrichedLoans = useMemo(() => {
-    return loans.map(loan => {
-      const debtor = debtors.find(d => sameId(d.id, loan.debtor_id));
-      const principal = Number(loan.borrowed_amount ?? loan.amount ?? 0);
-      const total = Number(loan.total_amount ?? 0);
+  const enrichedLoans = useMemo<EnrichedLoan[]>(() => {
+    return loans.map((loan) => {
+      const debtor = debtors.find((d) => sameId(d.id, loan.debtor_id));
+      const loanInstallments = installments
+        .filter((item) => sameId(item.loan_id ?? item.loanId, loan.id))
+        .sort((left, right) => {
+          const leftNumber = Number(left.installment_number ?? left.installmentNumber ?? 0);
+          const rightNumber = Number(right.installment_number ?? right.installmentNumber ?? 0);
+          return leftNumber - rightNumber;
+        });
+      const hasPaidInstallments = loanInstallments.some((item) => translateInstallmentStatus(String(item.status || "")) === "Pago");
+      const principalFromLoan =
+        [
+          loan.principal_amount,
+          loan.principalAmount,
+          loan.borrowed_amount,
+          loan.borrowedAmount,
+          loan.amount,
+        ]
+          .map(toFiniteNumber)
+          .find((value) => value > 0) ?? 0;
+      const principalFromInstallments = loanInstallments.reduce(
+        (sum, item) => sum + toFiniteNumber(item.principal_amount ?? item.principalAmount),
+        0,
+      );
+      const principal = principalFromLoan > 0 ? principalFromLoan : principalFromInstallments;
+      const total =
+        [
+          loan.total_amount,
+          loan.totalAmount,
+        ]
+          .map(toFiniteNumber)
+          .find((value) => value > 0) ?? 0;
       const uiStatus = translateStatus(loan.status || "");
-      const createdAt = parseDateValue(loan.created_at || loan.date);
+      const createdAt = parseDateValue(loan.created_at || loan.start_date || loan.date);
 
       return {
         ...loan,
@@ -478,10 +719,18 @@ export function EmprestimosClient() {
         total,
         uiStatus,
         createdAt,
-        searchStr: `${loan.id} ${debtor?.name || ""} ${debtor?.document || debtor?.cpf || ""}`.toLowerCase()
+        installments: loanInstallments,
+        hasPaidInstallments,
+        canEdit: !hasPaidInstallments,
+        searchStr: `${loan.id} ${debtor?.name || ""} ${debtor?.document || debtor?.cpf || ""}`.toLowerCase(),
       };
     });
-  }, [loans, debtors]);
+  }, [loans, debtors, installments]);
+
+  const selectedLoan = useMemo(
+    () => enrichedLoans.find((loan) => sameId(loan.id, selectedLoanId)) ?? null,
+    [enrichedLoans, selectedLoanId],
+  );
 
   const filteredAndSortedLoans = useMemo(() => {
     let result = [...enrichedLoans];
@@ -551,6 +800,10 @@ export function EmprestimosClient() {
     if (sortBy !== field) return <ArrowUpDown className="h-3 w-3 opacity-40 ml-1 inline text-slate-500" />;
     return <ArrowUpDown className="h-3 w-3 opacity-100 ml-1 inline text-blue-500" />;
   }
+
+  const isReadOnlyLoanModal = loanModalMode === "view";
+  const isEditingLoanModal = loanModalMode === "edit";
+  const isSimulationLoanModal = loanModalMode === "simulation";
 
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
@@ -631,7 +884,7 @@ export function EmprestimosClient() {
           <div className="md:col-span-4"></div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <div className="hidden overflow-x-auto rounded-xl border border-slate-800 md:block">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-900/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
               <tr>
@@ -689,10 +942,28 @@ export function EmprestimosClient() {
                         {loan.uiStatus}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right">
-                      <button onClick={() => openDeleteModal(loan)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20" title="Excluir">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openViewModal(loan)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-blue-500 hover:text-blue-300"
+                          title="Visualizar"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        {loan.canEdit ? (
+                          <button
+                            onClick={() => openEditModal(loan)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 transition-colors hover:bg-amber-500/20"
+                            title="Editar"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        <button onClick={() => openDeleteModal(loan)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20" title="Excluir">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -702,14 +973,76 @@ export function EmprestimosClient() {
         </div>
 
         {/* Rodapé Tabela (Paginação) */}
+        <div className="grid gap-3 md:hidden">
+          {loading ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
+              Carregando emprestimos...
+            </div>
+          ) : pageRows.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
+              Nenhum emprestimo encontrado.
+            </div>
+          ) : (
+            pageRows.map((loan) => (
+              <MobileDataCard
+                key={loan.id}
+                title={loan.debtor?.name || "Cliente excluido"}
+                subtitle={formatDocument(loan.debtor?.document || loan.debtor?.cpf) || "Sem documento"}
+                badge={(
+                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(loan.uiStatus)}`}>
+                    {loan.uiStatus}
+                  </span>
+                )}
+                actions={(
+                  <MobileDataCardActions
+                    primary={(
+                      <button
+                        onClick={() => openViewModal(loan)}
+                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#3b6ef0]"
+                      >
+                        <Eye className="h-4 w-4" />
+                        Visualizar
+                      </button>
+                    )}
+                  >
+                    {loan.canEdit ? (
+                      <button
+                        onClick={() => openEditModal(loan)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 transition-colors hover:bg-amber-500/20"
+                        title="Editar"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={() => openDeleteModal(loan)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
+                      title="Excluir"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </MobileDataCardActions>
+                )}
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <MobileDataCardRow label="ID" value={`#${loan.id}`} />
+                  <MobileDataCardRow label="Data" value={loan.createdAt ? new Intl.DateTimeFormat("pt-BR").format(loan.createdAt) : "-"} />
+                  <MobileDataCardRow label="Principal" value={formatCurrency(loan.principal)} />
+                  <MobileDataCardRow label="Total" value={formatCurrency(loan.total)} />
+                </div>
+              </MobileDataCard>
+            ))
+          )}
+        </div>
+
         {!loading && (
-          <div className="mt-4 flex items-center justify-between border-t border-slate-800/60 pt-4">
+          <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
               Mostrando <span className="text-slate-200">{filteredAndSortedLoans.length > 0 ? startIdx + 1 : 0}</span> até{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filteredAndSortedLoans.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filteredAndSortedLoans.length}</span> resultados
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-2">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(p => p - 1)}
@@ -734,22 +1067,30 @@ export function EmprestimosClient() {
 
       {/* ===== MODAL: NOVO EMPRÉSTIMO / NOVA SIMULAÇÃO ===== */}
       {showLoanModal && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-hidden bg-black/60 px-4 pb-4 pt-14 backdrop-blur-sm sm:pt-16" onClick={() => setShowLoanModal(false)}>
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-hidden bg-black/60 px-4 pb-4 pt-14 backdrop-blur-sm sm:pt-16" onClick={closeLoanModal}>
           <div className="flex max-h-[calc(100vh-4.5rem)] w-full max-w-[840px] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl sm:max-h-[calc(100vh-5rem)]" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="shrink-0 flex items-start justify-between border-b border-slate-800 px-5 py-4">
               <div>
-                <h2 className="text-xl font-bold text-slate-100">{loanModalMode === "loan" ? "Novo emprestimo" : "Nova simulacao"}</h2>
+                <h2 className="text-xl font-bold text-slate-100">
+                  {loanModalMode === "loan"
+                    ? "Novo emprestimo"
+                    : loanModalMode === "simulation"
+                      ? "Nova simulacao"
+                      : loanModalMode === "edit"
+                        ? `Editar emprestimo #${selectedLoan?.id ?? ""}`
+                        : `Visualizar emprestimo #${selectedLoan?.id ?? ""}`}
+                </h2>
                 <p className="mt-1 text-sm text-slate-400">{loanModalMode === "loan" ? "Defina as informações, condições e agenda do contrato." : "Monte a proposta, envie no WhatsApp e aprove para criar o emprestimo real."}</p>
               </div>
-              <button onClick={() => setShowLoanModal(false)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"><X className="h-5 w-5" /></button>
+              <button onClick={closeLoanModal} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"><X className="h-5 w-5" /></button>
             </div>
 
             {/* Body: 2 columns */}
             <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col xl:flex-row">
               {/* Left: Form */}
-              <div className="flex-1 space-y-4 px-5 py-4">
+              <fieldset disabled={isReadOnlyLoanModal} className="m-0 min-w-0 border-0 p-0 flex-1 space-y-4 px-5 py-4">
                 {/* Informações Básicas */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Informacoes basicas</h3>
@@ -864,7 +1205,7 @@ export function EmprestimosClient() {
                 <div>
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Previa das parcelas</h3>
-                    {formCustomDueDates.some((date) => isIsoDateString(date)) ? (
+                    {!isReadOnlyLoanModal && formCustomDueDates.some((date) => isIsoDateString(date)) ? (
                       <button
                         className="text-[11px] font-semibold text-blue-400 transition-colors hover:text-blue-300"
                         onClick={clearCustomDueDates}
@@ -912,7 +1253,7 @@ export function EmprestimosClient() {
                     <p className="mt-2 text-xs text-slate-500">Voce pode ajustar o vencimento de cada parcela diretamente na previa.</p>
                   )}
                 </div>
-              </div>
+              </fieldset>
 
               {/* Right: Resumo */}
               <div className="w-full border-t border-slate-800 px-5 py-4 xl:w-[248px] xl:border-l xl:border-t-0">
@@ -933,9 +1274,17 @@ export function EmprestimosClient() {
 
             {/* Footer */}
             <div className="shrink-0 flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-3.5">
-              {loanModalMode === "loan" ? (
+              {isReadOnlyLoanModal ? (
+                <button onClick={closeLoanModal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-6 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700">
+                  Fechar
+                </button>
+              ) : loanModalMode === "loan" ? (
                 <button onClick={handleSaveLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
                   {saving ? "Salvando..." : "Salvar empréstimo"}
+                </button>
+              ) : isEditingLoanModal ? (
+                <button onClick={handleUpdateLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
+                  {saving ? "Salvando..." : "Salvar alteracoes"}
                 </button>
               ) : (
                 <>

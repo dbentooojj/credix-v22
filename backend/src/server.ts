@@ -11,6 +11,7 @@ import { optionalAuth } from "./middleware/auth";
 import { authRoutes } from "./routes/auth.routes";
 import { dashboardRoutes } from "./routes/dashboard.routes";
 import { financeRoutes } from "./routes/finance.routes";
+import { loansRoutes } from "./routes/loans.routes";
 import { loanSimulationsRoutes } from "./routes/loan-simulations.routes";
 import { notificationsRoutes } from "./routes/notifications.routes";
 import { paymentsRoutes } from "./routes/payments.routes";
@@ -38,6 +39,7 @@ app.get("/health", (_req, res) => {
 app.use(authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/finance", financeRoutes);
+app.use("/api/loans", loansRoutes);
 app.use("/api/loan-simulations", loanSimulationsRoutes);
 app.use("/api/tables", tablesRoutes);
 app.use("/api/payments", paymentsRoutes);

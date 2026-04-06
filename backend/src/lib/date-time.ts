@@ -1,4 +1,4 @@
-const DEFAULT_TIME_ZONE = "America/Sao_Paulo";
+export const DEFAULT_TIME_ZONE = "America/Sao_Paulo";
 
 export function normalizeTimeZone(rawTimeZone?: string, fallback = DEFAULT_TIME_ZONE): string {
   const value = rawTimeZone?.trim();
@@ -14,6 +14,23 @@ export function normalizeTimeZone(rawTimeZone?: string, fallback = DEFAULT_TIME_
 
 export function dateToIso(value: Date): string {
   return value.toISOString().slice(0, 10);
+}
+
+export function dateLikeToIso(value: Date | string): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      return trimmed;
+    }
+
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return dateToIso(parsed);
+    }
+  }
+
+  return dateToIso(value instanceof Date ? value : new Date(value));
 }
 
 export function dateToMonthKey(value: Date): string {
@@ -39,6 +56,23 @@ export function getIsoTodayInTimeZone(timeZone: string): string {
   const month = parts.find((item) => item.type === "month")?.value ?? "01";
   const day = parts.find((item) => item.type === "day")?.value ?? "01";
   return `${year}-${month}-${day}`;
+}
+
+export function compareIsoDateOnly(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
+export function isDateBeforeTodayInTimeZone(value: Date | string, timeZone = DEFAULT_TIME_ZONE): boolean {
+  const dateIso = dateLikeToIso(value);
+  const todayIso = getIsoTodayInTimeZone(normalizeTimeZone(timeZone, DEFAULT_TIME_ZONE));
+  return compareIsoDateOnly(dateIso, todayIso) < 0;
+}
+
+export function isDateTodayInTimeZone(value: Date | string, timeZone = DEFAULT_TIME_ZONE): boolean {
+  const dateIso = dateLikeToIso(value);
+  const todayIso = getIsoTodayInTimeZone(normalizeTimeZone(timeZone, DEFAULT_TIME_ZONE));
+  return compareIsoDateOnly(dateIso, todayIso) === 0;
 }
 
 export function getHourMinuteInTimeZone(timeZone: string): string {

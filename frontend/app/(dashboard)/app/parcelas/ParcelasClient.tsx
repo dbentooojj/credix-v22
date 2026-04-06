@@ -15,7 +15,9 @@ import {
   DollarSign,
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
+import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
+import { getDateOnlyRelationToToday } from "../../../../utils/dateOnlyStatus";
 
 // --- TYPES ---
 type Debtor = {
@@ -91,13 +93,10 @@ function translateStatus(status: string) {
   return status || "Desconhecido";
 }
 
-function isOverdue(dueDate: Date | null, status: string) {
-  if (!dueDate) return false;
+function isOverdue(dueDate: unknown, status: string) {
   const s = translateStatus(status);
   if (s === "Pago") return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return dueDate < today;
+  return getDateOnlyRelationToToday(dueDate) === "past";
 }
 
 function isCurrentMonth(date: Date | null) {
@@ -228,7 +227,7 @@ export function ParcelasClient() {
       const dueDate = parseDateValue(inst.due_date);
       const amount = Number(inst.amount || 0);
       const rawStatus = inst.status || "";
-      const uiStatus = isOverdue(dueDate, rawStatus) ? "Atrasado" : translateStatus(rawStatus);
+      const uiStatus = isOverdue(inst.due_date, rawStatus) ? "Atrasado" : translateStatus(rawStatus);
       const installmentNumber = inst.number ?? inst.installment_number ?? 0;
 
       return {
@@ -510,7 +509,7 @@ export function ParcelasClient() {
           </span>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <div className="hidden overflow-x-auto rounded-xl border border-slate-800 md:block">
           <table className="w-full text-left text-sm text-slate-300" style={{ minWidth: 1020 }}>
             <thead className="bg-slate-900/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
               <tr>
@@ -580,14 +579,78 @@ export function ParcelasClient() {
         </div>
 
         {/* Paginação */}
+        <div className="grid gap-3 md:hidden">
+          {loading ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
+              Carregando parcelas...
+            </div>
+          ) : pageRows.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
+              Nenhuma parcela encontrada.
+            </div>
+          ) : (
+            pageRows.map((inst) => {
+              const totalLoanInstallments = enriched.filter((item) => sameId(item.loan_id, inst.loan_id)).length;
+              const isPaid = inst.uiStatus === "Pago";
+
+              return (
+                <MobileDataCard
+                  key={inst.id}
+                  title={inst.debtor?.name || "Cliente"}
+                  subtitle={`Emprestimo #${inst.loan_id} • Parcela ${inst.installmentNumber}/${totalLoanInstallments}`}
+                  badge={(
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(inst.uiStatus)}`}>
+                      {inst.uiStatus}
+                    </span>
+                  )}
+                  actions={(
+                    <MobileDataCardActions
+                      primary={isPaid ? (
+                        <button
+                          onClick={() => openRevertModal(inst)}
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-amber-500/90 px-4 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          Estornar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openPayModal(inst)}
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                        >
+                          <DollarSign className="h-4 w-4" />
+                          Pagar
+                        </button>
+                      )}
+                    >
+                      <button
+                        onClick={() => openDeleteModal(inst)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
+                        title="Excluir parcela"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </MobileDataCardActions>
+                  )}
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <MobileDataCardRow label="Vencimento" value={formatDate(inst.dueDate)} />
+                    <MobileDataCardRow label="Valor" value={formatCurrency(inst.amount)} />
+                  </div>
+                </MobileDataCard>
+              );
+            })
+          )}
+        </div>
+
         {!loading && (
-          <div className="mt-4 flex items-center justify-between border-t border-slate-800/60 pt-4">
+          <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
               Mostrando <span className="text-slate-200">{filtered.length > 0 ? startIdx + 1 : 0}</span> até{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filtered.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filtered.length}</span> resultados
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-2">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
+import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
 
 import {
   UsersIcon,
@@ -175,6 +176,18 @@ export function ClientesClient() {
   const [formEmail, setFormEmail] = useState("");
   const [formStatus, setFormStatus] = useState("ativo");
 
+  async function readApiMessage(response: Response, fallback: string) {
+    try {
+      const body = await response.json();
+      if (typeof body?.message === "string" && body.message.trim()) {
+        return body.message;
+      }
+    } catch {
+      // ignore body parsing failures
+    }
+    return fallback;
+  }
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -231,10 +244,17 @@ export function ClientesClient() {
         const maxId = rows.reduce((m: number, r: any) => Math.max(m, Number(r.id) || 0), 0);
         rows.push({ id: maxId + 1, name: formName.trim(), document: formDocument.trim(), cpf: formDocument.trim(), phone: formPhone.trim(), email: formEmail.trim(), status: formStatus, created_at: new Date().toISOString() });
       }
-      await fetch("/api/tables/debtors", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
+      const putResponse = await fetch("/api/tables/debtors", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
+      if (!putResponse.ok) {
+        throw new Error(await readApiMessage(putResponse, "Nao foi possivel salvar o cliente."));
+      }
       setShowFormModal(false);
       await fetchData();
-    } catch { /* silent */ } finally { setSaving(false); }
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel salvar o cliente.";
+      setError(message);
+      window.alert(message);
+    } finally { setSaving(false); }
   }
 
   async function handleDeleteClient() {
@@ -243,10 +263,17 @@ export function ClientesClient() {
     try {
       const res = await fetch("/api/tables/debtors").then((r) => r.json());
       const rows = (res.data || []).filter((r: any) => String(r.id) !== String(deletingDebtor.id));
-      await fetch("/api/tables/debtors", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
+      const putResponse = await fetch("/api/tables/debtors", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
+      if (!putResponse.ok) {
+        throw new Error(await readApiMessage(putResponse, "Nao foi possivel excluir o cliente."));
+      }
       setShowDeleteModal(false); setDeletingDebtor(null);
       await fetchData();
-    } catch { /* silent */ } finally { setSaving(false); }
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel excluir o cliente.";
+      setError(message);
+      window.alert(message);
+    } finally { setSaving(false); }
   }
 
   // --- ENGINE DE PROCESSAMENTO (Réplica exata do backend/ejs) ---
@@ -589,7 +616,7 @@ export function ClientesClient() {
         </div>
 
         {/* Tabela */}
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <div className="hidden overflow-x-auto rounded-xl border border-slate-800 md:block">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-900/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
               <tr>
@@ -720,14 +747,99 @@ export function ClientesClient() {
         </div>
 
         {/* Rodapé Tabela (Paginação) */}
+        <div className="grid gap-3 md:hidden">
+          {loading ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
+              Carregando clientes...
+            </div>
+          ) : pageRows.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
+              Nenhum cliente encontrado
+            </div>
+          ) : (
+            pageRows.map((debtor) => {
+              const scoreInfo = getScoreIndicator(debtor.score);
+              const situation = debtor.overdueCount > 0
+                ? `${debtor.overdueCount} boleto(s) pendente(s)`
+                : debtor.openTotal > 0
+                  ? "Em dia"
+                  : "-";
+
+              return (
+                <MobileDataCard
+                  key={debtor.id}
+                  title={debtor.name || "-"}
+                  subtitle={`${formatDocument(debtor.document || debtor.cpf) || "Sem doc."} • ${formatPhone(debtor.phone) || "Sem cel."}`}
+                  badge={(
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(debtor.uiStatus)}`}>
+                      {debtor.uiStatus}
+                    </span>
+                  )}
+                  actions={(
+                    <MobileDataCardActions
+                      primary={(
+                        <button
+                          onClick={() => openEditModal(debtor)}
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                        >
+                          <Edit2Icon className="h-4 w-4" />
+                          Editar
+                        </button>
+                      )}
+                    >
+                      <button
+                        onClick={() => openDeleteModal(debtor)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
+                        title="Excluir"
+                      >
+                        <Trash2Icon className="h-4 w-4" />
+                      </button>
+                    </MobileDataCardActions>
+                  )}
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <MobileDataCardRow
+                      label="Situacao"
+                      value={(
+                        <div>
+                          <div className={debtor.overdueCount > 0 ? "text-red-400" : debtor.openTotal > 0 ? "text-emerald-400" : "text-slate-400"}>
+                            {situation}
+                          </div>
+                          {debtor.maxOverdueDays > 0 ? (
+                            <div className="mt-1 text-xs text-red-400/80">{debtor.maxOverdueDays} dias atrasado</div>
+                          ) : null}
+                        </div>
+                      )}
+                    />
+                    <MobileDataCardRow
+                      label="Indice Credix"
+                      value={debtor.totalDueCount > 0 ? debtor.score : "Sem historico"}
+                      valueClassName={debtor.totalDueCount > 0 ? scoreInfo.textClass : "text-slate-400"}
+                    />
+                    <MobileDataCardRow
+                      label="Atrasos"
+                      value={debtor.overdueCount > 0 ? debtor.overdueCount : "0"}
+                      valueClassName={debtor.overdueCount > 0 ? "text-red-400" : "text-slate-300"}
+                    />
+                    <MobileDataCardRow
+                      label="Total em aberto"
+                      value={debtor.openTotal > 0 ? formatCurrency(debtor.openTotal) : "R$ 0,00"}
+                    />
+                  </div>
+                </MobileDataCard>
+              );
+            })
+          )}
+        </div>
+
         {!loading && (
-          <div className="mt-4 flex items-center justify-between border-t border-slate-800/60 pt-4">
+          <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
               Mostrando <span className="text-slate-200">{filteredAndSorted.length > 0 ? startIdx + 1 : 0}</span> até{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filteredAndSorted.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filteredAndSorted.length}</span> resultados
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-2">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(p => p - 1)}

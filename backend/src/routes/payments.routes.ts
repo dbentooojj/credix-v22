@@ -9,6 +9,7 @@ import {
   deleteInstallmentIncomeTransaction,
   upsertInstallmentIncomeTransaction,
 } from "../lib/installment-income-transaction";
+import { isDateBeforeTodayInTimeZone } from "../lib/date-time";
 import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
@@ -65,8 +66,10 @@ async function refreshLoanStatus(loanId: number, ownerUserId: number) {
     return;
   }
 
-  const today = new Date();
-  const hasOverdue = installments.some((i) => i.status === InstallmentStatus.ATRASADO || (i.status !== InstallmentStatus.PAGO && i.dueDate < today));
+  const hasOverdue = installments.some((i) => (
+    i.status === InstallmentStatus.ATRASADO
+    || (i.status !== InstallmentStatus.PAGO && isDateBeforeTodayInTimeZone(i.dueDate))
+  ));
 
   await prisma.loan.updateMany({
     where: { id: loanId, ownerUserId },
@@ -281,8 +284,7 @@ router.post("/installments/:installmentId/revert", async (req, res) => {
       },
     });
 
-    const today = new Date();
-    const revertedStatus = installment.dueDate < today
+    const revertedStatus = isDateBeforeTodayInTimeZone(installment.dueDate)
       ? InstallmentStatus.ATRASADO
       : InstallmentStatus.PENDENTE;
 

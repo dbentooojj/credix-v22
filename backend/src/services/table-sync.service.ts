@@ -4,7 +4,7 @@
   InterestType,
   LoanStatus,
   PaymentMethod,
-  type Prisma,
+  Prisma,
 } from "@prisma/client";
 import {
   deleteLoanDisbursementTransaction,
@@ -13,6 +13,7 @@ import {
   upsertLoanDisbursementTransaction,
   upsertInstallmentIncomeTransaction,
 } from "../lib/installment-income-transaction";
+import { isDateBeforeTodayInTimeZone } from "../lib/date-time";
 import { toSafeInteger, toSafeNumber } from "../lib/numbers";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error-handler";
@@ -95,6 +96,13 @@ function sameNullableMoney(left: unknown, right: unknown): boolean {
   return sameMoney(left, right);
 }
 
+function isUniqueConstraintError(error: unknown, fields: string[]): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2002") return false;
+  const target = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];
+  return fields.every((field) => target.includes(field));
+}
+
 function asRows(rows: unknown[]): RawRow[] {
   return rows.filter((row): row is RawRow => Boolean(row && typeof row === "object"));
 }
@@ -170,14 +178,13 @@ function computeLoanStatusFromInstallments(
 ): LoanStatus {
   if (installments.length === 0) return LoanStatus.PENDENTE;
 
-  const now = new Date();
   const allPaid = installments.every((item) => item.status === InstallmentStatus.PAGO);
   if (allPaid) return LoanStatus.QUITADO;
 
   const hasOverdue = installments.some((item) => {
     if (item.status === InstallmentStatus.ATRASADO) return true;
     if (item.status === InstallmentStatus.PAGO) return false;
-    return item.dueDate < now;
+    return isDateBeforeTodayInTimeZone(item.dueDate);
   });
 
   if (hasOverdue) return LoanStatus.ATRASADO;
@@ -310,17 +317,18 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
   if (tableName === "debtors") {
     const rows = asRows(rawRows);
 
-    await prisma.$transaction(async (tx) => {
-      const maxId = (await tx.client.aggregate({ _max: { id: true } }))._max.id ?? 0;
-      let nextId = maxId + 1;
+    try {
+      await prisma.$transaction(async (tx) => {
+        const maxId = (await tx.client.aggregate({ _max: { id: true } }))._max.id ?? 0;
+        let nextId = maxId + 1;
 
-      const drafted = rows.map((row) => {
-        const id = toSafeInteger(row.id) ?? nextId++;
-        return { id, row };
-      });
+        const drafted = rows.map((row) => {
+          const id = toSafeInteger(row.id) ?? nextId++;
+          return { id, row };
+        });
 
-      const ids = drafted.map((item) => item.id);
-      await ensureRowsOwnedByUser(tx, "debtors", ids, ownerUserId);
+        const ids = drafted.map((item) => item.id);
+        await ensureRowsOwnedByUser(tx, "debtors", ids, ownerUserId);
 
       const existing = await tx.client.findMany({
         where: {
@@ -407,46 +415,86 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
         };
       });
 
-      if (ids.length > 0) {
-        await tx.client.deleteMany({
+      const existingClientIds = await tx.client.findMany({
+        where: { ownerUserId },
+        select: { id: true },
+      });
+      const existingClientIdSet = new Set(existingClientIds.map((item) => item.id));
+      const normalizedClientIdSet = new Set(ids);
+      const removedClientIds = [...existingClientIdSet].filter((clientId) => !normalizedClientIdSet.has(clientId));
+
+      if (removedClientIds.length > 0) {
+        const linkedLoan = await tx.loan.findFirst({
           where: {
             ownerUserId,
-            id: { notIn: ids },
+            clientId: { in: removedClientIds },
           },
+          select: { id: true },
         });
-      } else {
-        await tx.client.deleteMany({ where: { ownerUserId } });
+
+        if (linkedLoan) {
+          throw new AppError("Nao e permitido excluir cliente com historico de emprestimos. Marque-o como Inativo.", 400);
+        }
+
+        const linkedInstallment = await tx.installment.findFirst({
+          where: {
+            ownerUserId,
+            clientId: { in: removedClientIds },
+          },
+          select: { id: true },
+        });
+
+        if (linkedInstallment) {
+          throw new AppError("Nao e permitido excluir cliente com historico de parcelas. Marque-o como Inativo.", 400);
+        }
       }
 
-      for (const row of normalized) {
-        await tx.client.upsert({
-          where: { id: row.id },
-          create: {
-            id: row.id,
-            ownerUserId,
-            name: row.name,
-            cpf: row.cpf ?? undefined,
-            phone: row.phone,
-            email: row.email,
-            status: row.status,
-            address: row.address,
-            notes: row.notes,
-            // Backend-controlled "date only" createdAt (not editable by the UI).
-            createdAt: toDateOnly(new Date().toISOString().slice(0, 10)),
-          },
-          update: {
-            ownerUserId,
-            name: row.name,
-            cpf: row.cpf ?? undefined,
-            phone: row.phone,
-            email: row.email,
-            status: row.status,
-            address: row.address,
-            notes: row.notes,
-          },
-        });
+        if (ids.length > 0) {
+          await tx.client.deleteMany({
+            where: {
+              ownerUserId,
+              id: { notIn: ids },
+            },
+          });
+        } else {
+          await tx.client.deleteMany({ where: { ownerUserId } });
+        }
+
+        for (const row of normalized) {
+          await tx.client.upsert({
+            where: { id: row.id },
+            create: {
+              id: row.id,
+              ownerUserId,
+              name: row.name,
+              cpf: row.cpf ?? undefined,
+              phone: row.phone,
+              email: row.email,
+              status: row.status,
+              address: row.address,
+              notes: row.notes,
+              // Backend-controlled "date only" createdAt (not editable by the UI).
+              createdAt: toDateOnly(new Date().toISOString().slice(0, 10)),
+            },
+            update: {
+              ownerUserId,
+              name: row.name,
+              cpf: row.cpf ?? undefined,
+              phone: row.phone,
+              email: row.email,
+              status: row.status,
+              address: row.address,
+              notes: row.notes,
+            },
+          });
+        }
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error, ["ownerUserId", "cpf"]) || isUniqueConstraintError(error, ["cpf"])) {
+        throw new AppError("Ja existe outro cliente com este CPF cadastrado.", 400);
       }
-    });
+      throw error;
+    }
 
     return getTableData("debtors", ownerUserId);
   }
@@ -696,10 +744,9 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
     const ids = normalized.map((row) => row.id);
     await ensureRowsOwnedByUser(tx, "installments", ids, ownerUserId);
 
-    const persistedPaidInstallments = await tx.installment.findMany({
+    const persistedInstallments = await tx.installment.findMany({
       where: {
         ownerUserId,
-        status: InstallmentStatus.PAGO,
       },
       select: {
         id: true,
@@ -716,32 +763,54 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
         notes: true,
       },
     });
+    const normalizedIds = new Set(ids);
+    const removedInstallments = persistedInstallments.filter((item) => !normalizedIds.has(item.id));
+    const normalizedById = new Map(normalized.map((row) => [row.id, row]));
 
-    if (persistedPaidInstallments.length > 0) {
-      const normalizedById = new Map(normalized.map((row) => [row.id, row]));
+    const persistedPaidInstallments = persistedInstallments.filter((item) => item.status === InstallmentStatus.PAGO);
 
-      for (const persistedInstallment of persistedPaidInstallments) {
-        const nextInstallment = normalizedById.get(persistedInstallment.id);
-        if (!nextInstallment) {
-          throw new AppError("Nao e permitido excluir parcela paga. Estorne o pagamento antes de editar ou excluir.", 400);
+    const loansWithPaidHistory = [...new Set(persistedPaidInstallments.map((item) => item.loanId))];
+    if (loansWithPaidHistory.length > 0) {
+      for (const loanId of loansWithPaidHistory) {
+        const persistedLoanInstallments = persistedInstallments.filter((item) => item.loanId === loanId);
+        const nextLoanInstallments = normalized.filter((item) => item.loanId === loanId);
+
+        if (persistedLoanInstallments.length !== nextLoanInstallments.length) {
+          throw new AppError("Nao e permitido alterar a agenda de parcelas de emprestimo com pagamento registrado. Estorne os pagamentos antes de editar.", 400);
         }
 
-        const unchanged = nextInstallment.loanId === persistedInstallment.loanId
-          && nextInstallment.clientId === persistedInstallment.clientId
-          && nextInstallment.installmentNumber === persistedInstallment.installmentNumber
-          && sameDateOnly(nextInstallment.dueDate, persistedInstallment.dueDate)
-          && sameDateOnly(nextInstallment.paymentDate, persistedInstallment.paymentDate)
-          && sameMoney(nextInstallment.amount, persistedInstallment.amount)
-          && sameNullableMoney(nextInstallment.principalAmount, persistedInstallment.principalAmount)
-          && sameNullableMoney(nextInstallment.interestAmount, persistedInstallment.interestAmount)
-          && nextInstallment.status === persistedInstallment.status
-          && (nextInstallment.paymentMethod ?? null) === (persistedInstallment.paymentMethod ?? null)
-          && normalizeText(nextInstallment.notes) === normalizeText(persistedInstallment.notes);
+        for (const persistedInstallment of persistedLoanInstallments) {
+          const nextInstallment = normalizedById.get(persistedInstallment.id);
+          if (!nextInstallment) {
+            throw new AppError("Nao e permitido alterar a agenda de parcelas de emprestimo com pagamento registrado. Estorne os pagamentos antes de editar.", 400);
+          }
 
-        if (!unchanged) {
-          throw new AppError("Nao e permitido editar parcela paga. Estorne o pagamento antes de alterar o emprestimo.", 400);
+          const unchanged = nextInstallment.loanId === persistedInstallment.loanId
+            && nextInstallment.clientId === persistedInstallment.clientId
+            && nextInstallment.installmentNumber === persistedInstallment.installmentNumber
+            && sameDateOnly(nextInstallment.dueDate, persistedInstallment.dueDate)
+            && sameDateOnly(nextInstallment.paymentDate, persistedInstallment.paymentDate)
+            && sameMoney(nextInstallment.amount, persistedInstallment.amount)
+            && sameNullableMoney(nextInstallment.principalAmount, persistedInstallment.principalAmount)
+            && sameNullableMoney(nextInstallment.interestAmount, persistedInstallment.interestAmount)
+            && nextInstallment.status === persistedInstallment.status
+            && (nextInstallment.paymentMethod ?? null) === (persistedInstallment.paymentMethod ?? null)
+            && normalizeText(nextInstallment.notes) === normalizeText(persistedInstallment.notes);
+
+          if (!unchanged) {
+            throw new AppError("Nao e permitido alterar a agenda de parcelas de emprestimo com pagamento registrado. Estorne os pagamentos antes de editar.", 400);
+          }
         }
       }
+    }
+
+    const loansWithoutInstallments = loans.filter((loan) => {
+      if (!persistedInstallments.some((item) => item.loanId === loan.id)) return false;
+      return !normalized.some((item) => item.loanId === loan.id);
+    });
+
+    if (loansWithoutInstallments.length > 0) {
+      throw new AppError("Nao e permitido remover todas as parcelas de um emprestimo pela sincronizacao. Exclua o emprestimo inteiro na tela de emprestimos.", 400);
     }
 
     if (ids.length > 0) {
@@ -846,9 +915,14 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
       }
     }
 
+    const affectedLoanIds = [...new Set([
+      ...normalized.map((row) => row.loanId),
+      ...removedInstallments.map((row) => row.loanId),
+    ])];
+
     await refreshLoanStatuses(
       tx,
-      normalized.map((row) => row.loanId),
+      affectedLoanIds,
     );
   });
 

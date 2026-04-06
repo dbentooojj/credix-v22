@@ -1,44 +1,47 @@
 import { randomUUID } from "node:crypto";
-import { InstallmentStatus, InterestType, LoanStatus, PaymentMethod, Prisma } from "@prisma/client";
+import {
+  InstallmentStatus,
+  InterestType,
+  LoanSimulationStatus,
+  LoanStatus,
+  PaymentMethod,
+  Prisma,
+} from "@prisma/client";
 import { Router } from "express";
+import { addDays, DEFAULT_TIME_ZONE, getIsoTodayInTimeZone } from "../lib/date-time";
 import { upsertLoanDisbursementTransaction } from "../lib/installment-income-transaction";
+import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 
 type SimulationStatus = "DRAFT" | "SENT" | "ACCEPTED" | "EXPIRED" | "CANCELED";
 
-type LoanSimulationRow = {
-  id: string;
-  ownerUserId: number;
-  clientId: number;
-  clientName: string | null;
-  clientPhone: string | null;
-  principalAmount: number;
-  interestType: string;
-  interestRate: number;
-  fixedFeeAmount: number;
-  installmentsCount: number;
-  startDate: string;
-  firstDueDate: string;
-  dueDates: string[];
-  observations: string;
-  status: SimulationStatus;
-  loanId: number | null;
-  createdAt: string;
-  updatedAt: string;
-  expiresAt: string;
-  totals: {
-    totalAmount: number;
-    installmentAmount: number;
-  };
-  schedule: Array<{ dueDate: string }>;
+type ClientLite = {
+  id: number;
+  name: string;
+  phone: string;
 };
+
+type LoanSimulationWithRefs = Prisma.LoanSimulationGetPayload<{
+  include: {
+    client: {
+      select: {
+        id: true;
+        name: true;
+        phone: true;
+      };
+    };
+    loan: {
+      select: {
+        id: true;
+      };
+    };
+  };
+}>;
 
 const router = Router();
 router.use(requireAuthApi);
 
-const simulationStore = new Map<number, Map<string, LoanSimulationRow>>();
-const simulationApprovalLocks = new Set<string>();
 const LOAN_META_START = "[[LOAN_META]]";
 const LOAN_META_END = "[[/LOAN_META]]";
 
@@ -64,13 +67,6 @@ function toIsoDateOnly(input: unknown, fallback = new Date()): string {
   if (Number.isNaN(parsed.getTime())) {
     return fallback.toISOString().slice(0, 10);
   }
-  return parsed.toISOString().slice(0, 10);
-}
-
-function addDaysIsoDate(baseIsoDate: string, days: number): string {
-  const parsed = new Date(`${baseIsoDate}T00:00:00.000Z`);
-  if (Number.isNaN(parsed.getTime())) return baseIsoDate;
-  parsed.setUTCDate(parsed.getUTCDate() + days);
   return parsed.toISOString().slice(0, 10);
 }
 
@@ -118,7 +114,7 @@ function resolveInterestTypeForLoan(value: unknown): InterestType {
 
 function resolveLoanStatusFromDueDates(dueDates: string[]): LoanStatus {
   if (dueDates.length === 0) return LoanStatus.PENDENTE;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
   if (dueDates.some((dueDate) => dueDate < todayIso)) {
     return LoanStatus.ATRASADO;
   }
@@ -140,19 +136,15 @@ function encodeLoanObservations(userText: unknown, meta: Record<string, unknown>
   return `${cleanText}\n${encodedMeta}`;
 }
 
-function resolveSimulationDueDates(row: LoanSimulationRow): string[] {
-  const count = Math.max(1, Math.trunc(toNumber(row.installmentsCount)));
-  const explicitDueDates = (row.schedule.length > 0
-    ? row.schedule.map((item) => item.dueDate)
-    : row.dueDates
-  )
+function resolveSimulationDueDates(firstDueDate: string, dueDates: string[], count: number): string[] {
+  const safeCount = Math.max(1, Math.trunc(toNumber(count)));
+  const explicitDueDates = dueDates
     .map((dueDate) => toIsoDateOnly(dueDate, new Date()))
     .filter(Boolean);
 
-  const firstDueDate = toIsoDateOnly(row.firstDueDate || explicitDueDates[0], new Date());
-
-  return Array.from({ length: count }, (_item, index) => {
-    return explicitDueDates[index] || addMonthsIsoDate(firstDueDate, index);
+  const normalizedFirstDueDate = toIsoDateOnly(firstDueDate || explicitDueDates[0], new Date());
+  return Array.from({ length: safeCount }, (_item, index) => {
+    return explicitDueDates[index] || addMonthsIsoDate(normalizedFirstDueDate, index);
   });
 }
 
@@ -163,17 +155,11 @@ function isIdUniqueViolation(error: unknown): boolean {
   return target.includes("id");
 }
 
-async function findLoanBySimulationMarker(ownerUserId: number, simulationId: string): Promise<number | null> {
-  const marker = `"simulationId":"${simulationId}"`;
-  const loan = await prisma.loan.findFirst({
-    where: {
-      ownerUserId,
-      observations: { contains: marker },
-    },
-    select: { id: true },
-  });
-
-  return loan?.id ?? null;
+function isSimulationLinkUniqueViolation(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2002") return false;
+  const target = Array.isArray(error.meta?.target) ? error.meta.target : [];
+  return target.includes("simulationId");
 }
 
 function formatCurrencyBRL(value: unknown): string {
@@ -222,12 +208,6 @@ function toWhatsAppPhone(value: unknown): string | null {
   return `55${digits}`;
 }
 
-type ClientLite = {
-  id: number;
-  name: string;
-  phone: string;
-};
-
 async function findClient(ownerUserId: number, clientId: number): Promise<ClientLite | null> {
   return prisma.client.findFirst({
     where: {
@@ -240,33 +220,6 @@ async function findClient(ownerUserId: number, clientId: number): Promise<Client
       phone: true,
     },
   });
-}
-
-async function buildClientLookup(ownerUserId: number, rows: LoanSimulationRow[]): Promise<Map<number, ClientLite>> {
-  const clientIds = [...new Set(rows.map((row) => row.clientId).filter((id) => Number.isFinite(id) && id > 0))];
-  if (clientIds.length === 0) return new Map();
-
-  const clients = await prisma.client.findMany({
-    where: {
-      ownerUserId,
-      id: { in: clientIds },
-    },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-    },
-  });
-
-  return new Map(clients.map((client) => [client.id, client]));
-}
-
-function getUserStore(ownerUserId: number): Map<string, LoanSimulationRow> {
-  const existing = simulationStore.get(ownerUserId);
-  if (existing) return existing;
-  const created = new Map<string, LoanSimulationRow>();
-  simulationStore.set(ownerUserId, created);
-  return created;
 }
 
 function parseStatusFilter(rawStatus: unknown): Set<SimulationStatus> | null {
@@ -332,28 +285,83 @@ function computeTotalsFromPayload(payload: Record<string, unknown>) {
   };
 }
 
-function mapRowForResponse(row: LoanSimulationRow, client?: ClientLite | null) {
-  const nowIso = new Date().toISOString().slice(0, 10);
-  const effectiveStatus: SimulationStatus = (
-    (row.status === "DRAFT" || row.status === "SENT")
-    && row.expiresAt < nowIso
-  )
-    ? "EXPIRED"
-    : row.status;
+function resolveEffectiveSimulationStatus(row: {
+  status: LoanSimulationStatus;
+  expiresAt: Date;
+}): SimulationStatus {
+  const nowIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
+  const expiresAtIso = row.expiresAt.toISOString().slice(0, 10);
+  if ((row.status === LoanSimulationStatus.DRAFT || row.status === LoanSimulationStatus.SENT) && expiresAtIso < nowIso) {
+    return "EXPIRED";
+  }
+  return row.status;
+}
 
-  const clientName = client?.name ?? row.clientName ?? `Cliente #${row.clientId}`;
-  const clientPhone = client?.phone ?? row.clientPhone ?? null;
+function mapRowForResponse(row: LoanSimulationWithRefs) {
+  const dueDates = resolveSimulationDueDates(
+    row.firstDueDate.toISOString().slice(0, 10),
+    row.dueDates,
+    row.installmentsCount,
+  );
+  const effectiveStatus = resolveEffectiveSimulationStatus(row);
+  const clientName = row.client?.name ?? row.clientName ?? `Cliente #${row.clientId}`;
+  const clientPhone = row.client?.phone ?? row.clientPhone ?? null;
 
   return {
-    ...row,
+    id: row.id,
+    ownerUserId: row.ownerUserId,
+    clientId: row.clientId,
+    clientName,
+    clientPhone,
+    principalAmount: Number(row.principalAmount),
+    interestType: row.interestType,
+    interestRate: Number(row.interestRate),
+    fixedFeeAmount: Number(row.fixedFeeAmount),
+    installmentsCount: row.installmentsCount,
+    startDate: row.startDate.toISOString().slice(0, 10),
+    firstDueDate: row.firstDueDate.toISOString().slice(0, 10),
+    dueDates,
+    observations: row.observations ?? "",
+    status: effectiveStatus,
+    loanId: row.loan?.id ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString().slice(0, 10),
+    totals: {
+      totalAmount: Number(row.totalAmount),
+      installmentAmount: Number(row.installmentAmount),
+    },
+    schedule: dueDates.map((dueDate) => ({ dueDate })),
     client: {
       id: row.clientId,
       name: clientName,
       phone: clientPhone,
     },
-    status: effectiveStatus,
     statusLabel: getSimulationStatusLabel(effectiveStatus),
   };
+}
+
+async function readSimulation(ownerUserId: number, simulationId: string) {
+  return prisma.loanSimulation.findFirst({
+    where: {
+      id: simulationId,
+      ownerUserId,
+    },
+    include: {
+      client: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
+      loan: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
 }
 
 router.get("/", async (req, res) => {
@@ -361,14 +369,35 @@ router.get("/", async (req, res) => {
   if (!Number.isFinite(ownerUserId)) return res.status(401).json({ message: "Nao autenticado" });
 
   const statusFilter = parseStatusFilter(req.query.status);
-  const rawRows = [...getUserStore(ownerUserId).values()];
-  const clientById = await buildClientLookup(ownerUserId, rawRows);
-  const rows = rawRows
-    .map((row) => mapRowForResponse(row, clientById.get(row.clientId) ?? null))
-    .filter((item) => (statusFilter ? statusFilter.has(item.status) : true))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const rows = await prisma.loanSimulation.findMany({
+    where: {
+      ownerUserId,
+    },
+    include: {
+      client: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
+      loan: {
+        select: {
+          id: true,
+        },
+      },
+    },
+    orderBy: [
+      { createdAt: "desc" },
+      { id: "desc" },
+    ],
+  });
 
-  return res.json({ data: rows });
+  const mapped = rows
+    .map((row) => mapRowForResponse(row))
+    .filter((row) => (statusFilter ? statusFilter.has(row.status) : true));
+
+  return res.json({ data: mapped });
 });
 
 router.post("/", async (req, res) => {
@@ -376,14 +405,15 @@ router.post("/", async (req, res) => {
   if (!Number.isFinite(ownerUserId)) return res.status(401).json({ message: "Nao autenticado" });
 
   const payload = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const id = String(payload.id ?? "").trim() || randomUUID();
+  const simulationId = String(payload.id ?? "").trim() || randomUUID();
   const now = new Date();
-  const nowIso = now.toISOString();
   const startDate = toIsoDateOnly(payload.startDate, now);
   const firstDueDate = toIsoDateOnly(payload.firstDueDate ?? payload.startDate, now);
-  const dueDates = Array.isArray(payload.dueDates)
-    ? payload.dueDates.map((item) => toIsoDateOnly(item, now))
-    : [firstDueDate];
+  const dueDates = resolveSimulationDueDates(
+    firstDueDate,
+    Array.isArray(payload.dueDates) ? payload.dueDates.map((item) => toIsoDateOnly(item, now)) : [firstDueDate],
+    Math.max(1, Math.trunc(toNumber(payload.installmentsCount))),
+  );
   const totals = computeTotalsFromPayload(payload);
   const clientId = Math.max(1, Math.trunc(toNumber(payload.clientId)));
   const client = await findClient(ownerUserId, clientId);
@@ -391,35 +421,44 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ message: "Cliente invalido para simulacao." });
   }
 
-  const row: LoanSimulationRow = {
-    id,
-    ownerUserId,
-    clientId,
-    clientName: client.name,
-    clientPhone: client.phone,
-    principalAmount: round2(payload.principalAmount),
-    interestType: String(payload.interestType ?? "composto").toLowerCase(),
-    interestRate: totals.interestRate,
-    fixedFeeAmount: totals.fixedFeeAmount,
-    installmentsCount: Math.max(1, Math.trunc(toNumber(payload.installmentsCount))),
-    startDate,
-    firstDueDate,
-    dueDates,
-    observations: String(payload.observations ?? ""),
-    status: "DRAFT",
-    loanId: null,
-    createdAt: nowIso,
-    updatedAt: nowIso,
-    expiresAt: addDaysIsoDate(nowIso.slice(0, 10), 7),
-    totals: {
+  const created = await prisma.loanSimulation.create({
+    data: {
+      id: simulationId,
+      ownerUserId,
+      clientId,
+      clientName: client.name,
+      clientPhone: client.phone,
+      principalAmount: round2(payload.principalAmount),
+      interestType: String(payload.interestType ?? "composto").toLowerCase(),
+      interestRate: totals.interestRate,
+      fixedFeeAmount: totals.fixedFeeAmount,
+      installmentsCount: Math.max(1, Math.trunc(toNumber(payload.installmentsCount))),
+      startDate: toDateOnlyUtc(startDate),
+      firstDueDate: toDateOnlyUtc(firstDueDate),
+      dueDates,
+      observations: String(payload.observations ?? "").trim() || null,
+      status: LoanSimulationStatus.DRAFT,
       totalAmount: totals.totalAmount,
       installmentAmount: totals.installmentAmount,
+      expiresAt: toDateOnlyUtc(addDays(getIsoTodayInTimeZone(DEFAULT_TIME_ZONE), 7)),
     },
-    schedule: dueDates.map((dueDate) => ({ dueDate })),
-  };
+    include: {
+      client: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
+      loan: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
 
-  getUserStore(ownerUserId).set(id, row);
-  return res.status(201).json({ data: mapRowForResponse(row, client) });
+  return res.status(201).json({ data: mapRowForResponse(created) });
 });
 
 router.post("/:id/send", async (req, res) => {
@@ -427,18 +466,22 @@ router.post("/:id/send", async (req, res) => {
   if (!Number.isFinite(ownerUserId)) return res.status(401).json({ message: "Nao autenticado" });
 
   const id = String(req.params.id ?? "").trim();
-  const row = getUserStore(ownerUserId).get(id);
+  const row = await readSimulation(ownerUserId, id);
   if (!row) return res.status(404).json({ message: "Simulacao nao encontrada" });
 
-  row.status = "SENT";
-  row.updatedAt = new Date().toISOString();
-  const client = await findClient(ownerUserId, row.clientId);
-  const clientPhone = client?.phone ?? row.clientPhone ?? null;
+  await prisma.loanSimulation.update({
+    where: { id: row.id },
+    data: {
+      status: LoanSimulationStatus.SENT,
+    },
+  });
+
+  const updatedRow = await readSimulation(ownerUserId, id);
+  if (!updatedRow) return res.status(404).json({ message: "Simulacao nao encontrada" });
+
+  const clientPhone = updatedRow.client?.phone ?? updatedRow.clientPhone ?? null;
   const waPhone = toWhatsAppPhone(clientPhone);
-  const paymentDatesSource = row.schedule.length > 0
-    ? row.schedule.map((item) => item.dueDate)
-    : row.dueDates;
-  const paymentDatesList = paymentDatesSource
+  const paymentDatesList = updatedRow.dueDates
     .map((date) => formatDateDayMonthShort(date))
     .filter((date) => date !== "-");
   const paymentDatesBlock = paymentDatesList.length > 0
@@ -446,8 +489,8 @@ router.post("/:id/send", async (req, res) => {
     : "- -";
 
   const whatsappMessage = [
-    `*Valor total:* ${formatCurrencyBRL(row.totals.totalAmount)}`,
-    `*Valor da parcela:* ${formatCurrencyBRL(row.totals.installmentAmount)}`,
+    `*Valor total:* ${formatCurrencyBRL(updatedRow.totalAmount)}`,
+    `*Valor da parcela:* ${formatCurrencyBRL(updatedRow.installmentAmount)}`,
     "",
     "*Datas de pagamento:*",
     paymentDatesBlock,
@@ -456,7 +499,7 @@ router.post("/:id/send", async (req, res) => {
     ? `https://wa.me/${waPhone}?text=${encodeURIComponent(whatsappMessage)}`
     : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
 
-  return res.json({ data: { ...mapRowForResponse(row, client), whatsappMessage, whatsappUrl } });
+  return res.json({ data: { ...mapRowForResponse(updatedRow), whatsappMessage, whatsappUrl } });
 });
 
 router.post("/:id/approve", async (req, res) => {
@@ -464,152 +507,195 @@ router.post("/:id/approve", async (req, res) => {
   if (!Number.isFinite(ownerUserId)) return res.status(401).json({ message: "Nao autenticado" });
 
   const id = String(req.params.id ?? "").trim();
-  const row = getUserStore(ownerUserId).get(id);
-  if (!row) return res.status(404).json({ message: "Simulacao nao encontrada" });
-  const approvalLockKey = `${ownerUserId}:${id}`;
-  if (simulationApprovalLocks.has(approvalLockKey)) {
-    return res.status(409).json({ message: "Aprovacao em andamento. Aguarde alguns segundos." });
+  const existingSimulation = await readSimulation(ownerUserId, id);
+  if (!existingSimulation) return res.status(404).json({ message: "Simulacao nao encontrada" });
+
+  if (existingSimulation.loan?.id) {
+    await prisma.loanSimulation.update({
+      where: { id: existingSimulation.id },
+      data: { status: LoanSimulationStatus.ACCEPTED },
+    });
+
+    const alreadyAccepted = await readSimulation(ownerUserId, id);
+    if (!alreadyAccepted) return res.status(404).json({ message: "Simulacao nao encontrada" });
+    return res.json({ data: mapRowForResponse(alreadyAccepted) });
   }
 
-  simulationApprovalLocks.add(approvalLockKey);
+  const client = await findClient(ownerUserId, existingSimulation.clientId);
+  if (!client) {
+    return res.status(400).json({ message: "Cliente invalido para aprovar simulacao." });
+  }
 
-  try {
-    const client = await findClient(ownerUserId, row.clientId);
-    if (!client) {
-      return res.status(400).json({ message: "Cliente invalido para aprovar simulacao." });
-    }
+  let createdLoanId: number | null = null;
 
-    if (row.loanId && Number.isFinite(row.loanId)) {
-      const existingLoan = await prisma.loan.findFirst({
-        where: { id: row.loanId, ownerUserId },
-        select: { id: true },
-      });
-
-      if (existingLoan) {
-        row.status = "ACCEPTED";
-        row.updatedAt = new Date().toISOString();
-        return res.json({ data: { ...mapRowForResponse(row, client), loanId: existingLoan.id } });
-      }
-
-      row.loanId = null;
-    }
-
-    const linkedLoanId = await findLoanBySimulationMarker(ownerUserId, row.id);
-    if (linkedLoanId) {
-      row.status = "ACCEPTED";
-      row.loanId = linkedLoanId;
-      row.updatedAt = new Date().toISOString();
-      return res.json({ data: { ...mapRowForResponse(row, client), loanId: linkedLoanId } });
-    }
-
-    const dueDates = resolveSimulationDueDates(row);
-    const installmentsCount = Math.max(1, Math.trunc(toNumber(row.installmentsCount)));
-    const principalAmount = round2(row.principalAmount);
-    const totalAmount = round2(row.totals.totalAmount);
-    const installmentAmount = round2(row.totals.installmentAmount);
-    const interestAmountTotal = Math.max(round2(totalAmount - principalAmount), 0);
-    const normalizedInterestType = String(row.interestType || "composto").trim().toLowerCase();
-    const fixedAddition = round2(normalizedInterestType === "fixo" ? (row.fixedFeeAmount || row.interestRate) : 0);
-    const loanInterestRate = round2(normalizedInterestType === "fixo" ? 0 : row.interestRate);
-    const interestType = resolveInterestTypeForLoan(normalizedInterestType);
-    const loanStatus = resolveLoanStatusFromDueDates(dueDates);
-
-    const loanMeta = {
-      interestMode: normalizedInterestType === "simples" ? "simples" : (normalizedInterestType === "fixo" ? "fixo" : "composto"),
-      fixedAddition,
-      maxInstallment: 0,
-      simulationId: row.id,
-    };
-
-    const observations = encodeLoanObservations(row.observations, loanMeta);
-    const installmentValues = splitAmount(totalAmount, installmentsCount);
-    const principalValues = splitAmount(principalAmount, installmentsCount);
-    const interestValues = splitAmount(interestAmountTotal, installmentsCount);
-    const todayIso = new Date().toISOString().slice(0, 10);
-
-    let createdLoan: { id: number } | null = null;
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        createdLoan = await prisma.$transaction(async (tx) => {
-          const [loanMax, installmentMax] = await Promise.all([
-            tx.loan.aggregate({ _max: { id: true } }),
-            tx.installment.aggregate({ _max: { id: true } }),
-          ]);
-
-          const nextLoanId = (loanMax._max.id ?? 0) + 1;
-          const nextInstallmentId = (installmentMax._max.id ?? 0) + 1;
-
-          const loan = await tx.loan.create({
-            data: {
-              id: nextLoanId,
-              ownerUserId,
-              clientId: row.clientId,
-              principalAmount,
-              interestRate: loanInterestRate,
-              interestType,
-              installmentsCount,
-              installmentAmount,
-              totalAmount,
-              paymentMethod: PaymentMethod.PIX,
-              startDate: toDateOnlyUtc(row.startDate),
-              firstDueDate: toDateOnlyUtc(dueDates[0] || row.firstDueDate || row.startDate),
-              dueDate: toDateOnlyUtc(dueDates[dueDates.length - 1] || dueDates[0] || row.firstDueDate || row.startDate),
-              status: loanStatus,
-              observations,
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      createdLoanId = await prisma.$transaction(async (tx) => {
+        const lockedSimulation = await tx.loanSimulation.findFirst({
+          where: {
+            id,
+            ownerUserId,
+          },
+          include: {
+            loan: {
+              select: {
+                id: true,
+              },
             },
-            select: { id: true },
-          });
-
-          await tx.installment.createMany({
-            data: dueDates.map((dueDate, index) => ({
-              id: nextInstallmentId + index,
-              ownerUserId,
-              loanId: loan.id,
-              clientId: row.clientId,
-              installmentNumber: index + 1,
-              dueDate: toDateOnlyUtc(dueDate),
-              paymentDate: null,
-              amount: installmentValues[index] ?? installmentAmount,
-              principalAmount: principalValues[index] ?? null,
-              interestAmount: interestValues[index] ?? null,
-              status: dueDate < todayIso ? InstallmentStatus.ATRASADO : InstallmentStatus.PENDENTE,
-              paymentMethod: null,
-              notes: null,
-            })),
-          });
-
-          if (loanStatus !== LoanStatus.PENDENTE) {
-            await upsertLoanDisbursementTransaction(tx, {
-              ownerUserId,
-              loanId: loan.id,
-              amount: principalAmount,
-              date: toDateOnlyUtc(row.startDate),
-            });
-          }
-
-          return loan;
+          },
         });
-        break;
-      } catch (error) {
-        if (isIdUniqueViolation(error) && attempt < 2) {
-          continue;
+
+        if (!lockedSimulation) {
+          throw new AppError("Simulacao nao encontrada", 404);
         }
-        throw error;
+
+        if (lockedSimulation.loan?.id) {
+          await tx.loanSimulation.update({
+            where: { id: lockedSimulation.id },
+            data: { status: LoanSimulationStatus.ACCEPTED },
+          });
+          return lockedSimulation.loan.id;
+        }
+
+        const dueDates = resolveSimulationDueDates(
+          lockedSimulation.firstDueDate.toISOString().slice(0, 10),
+          lockedSimulation.dueDates,
+          lockedSimulation.installmentsCount,
+        );
+        const installmentsCount = Math.max(1, Math.trunc(toNumber(lockedSimulation.installmentsCount)));
+        const principalAmount = round2(lockedSimulation.principalAmount);
+        const totalAmount = round2(lockedSimulation.totalAmount);
+        const installmentAmount = round2(lockedSimulation.installmentAmount);
+        const interestAmountTotal = Math.max(round2(totalAmount - principalAmount), 0);
+        const normalizedInterestType = String(lockedSimulation.interestType || "composto").trim().toLowerCase();
+        const fixedAddition = round2(normalizedInterestType === "fixo" ? (lockedSimulation.fixedFeeAmount || lockedSimulation.interestRate) : 0);
+        const loanInterestRate = round2(normalizedInterestType === "fixo" ? 0 : lockedSimulation.interestRate);
+        const interestType = resolveInterestTypeForLoan(normalizedInterestType);
+        const loanStatus = resolveLoanStatusFromDueDates(dueDates);
+
+        const loanMeta = {
+          interestMode: normalizedInterestType === "simples" ? "simples" : (normalizedInterestType === "fixo" ? "fixo" : "composto"),
+          fixedAddition,
+          maxInstallment: 0,
+          simulationId: lockedSimulation.id,
+        };
+
+        const observations = encodeLoanObservations(lockedSimulation.observations, loanMeta);
+        const installmentValues = splitAmount(totalAmount, installmentsCount);
+        const principalValues = splitAmount(principalAmount, installmentsCount);
+        const interestValues = splitAmount(interestAmountTotal, installmentsCount);
+        const todayIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
+
+        const [loanMax, installmentMax] = await Promise.all([
+          tx.loan.aggregate({ _max: { id: true } }),
+          tx.installment.aggregate({ _max: { id: true } }),
+        ]);
+
+        const nextLoanId = (loanMax._max.id ?? 0) + 1;
+        const nextInstallmentId = (installmentMax._max.id ?? 0) + 1;
+
+        const loan = await tx.loan.create({
+          data: {
+            id: nextLoanId,
+            ownerUserId,
+            clientId: lockedSimulation.clientId,
+            principalAmount,
+            interestRate: loanInterestRate,
+            interestType,
+            installmentsCount,
+            installmentAmount,
+            totalAmount,
+            paymentMethod: PaymentMethod.PIX,
+            startDate: lockedSimulation.startDate,
+            firstDueDate: toDateOnlyUtc(dueDates[0] || lockedSimulation.firstDueDate.toISOString().slice(0, 10)),
+            dueDate: toDateOnlyUtc(dueDates[dueDates.length - 1] || dueDates[0] || lockedSimulation.firstDueDate.toISOString().slice(0, 10)),
+            simulationId: lockedSimulation.id,
+            status: loanStatus,
+            observations,
+          },
+          select: { id: true },
+        });
+
+        await tx.installment.createMany({
+          data: dueDates.map((dueDate, index) => ({
+            id: nextInstallmentId + index,
+            ownerUserId,
+            loanId: loan.id,
+            clientId: lockedSimulation.clientId,
+            installmentNumber: index + 1,
+            dueDate: toDateOnlyUtc(dueDate),
+            paymentDate: null,
+            amount: installmentValues[index] ?? installmentAmount,
+            principalAmount: principalValues[index] ?? null,
+            interestAmount: interestValues[index] ?? null,
+            status: dueDate < todayIso ? InstallmentStatus.ATRASADO : InstallmentStatus.PENDENTE,
+            paymentMethod: null,
+            notes: null,
+          })),
+        });
+
+        if (loanStatus !== LoanStatus.PENDENTE) {
+          await upsertLoanDisbursementTransaction(tx, {
+            ownerUserId,
+            loanId: loan.id,
+            amount: principalAmount,
+            date: lockedSimulation.startDate,
+          });
+        }
+
+        await tx.loanSimulation.update({
+          where: { id: lockedSimulation.id },
+          data: {
+            status: LoanSimulationStatus.ACCEPTED,
+            clientName: client.name,
+            clientPhone: client.phone,
+          },
+        });
+
+        return loan.id;
+      });
+      break;
+    } catch (error) {
+      if (isSimulationLinkUniqueViolation(error)) {
+        const linkedLoan = await prisma.loan.findFirst({
+          where: {
+            ownerUserId,
+            simulationId: id,
+          },
+          select: { id: true },
+        });
+
+        if (linkedLoan) {
+          createdLoanId = linkedLoan.id;
+          await prisma.loanSimulation.updateMany({
+            where: {
+              id,
+              ownerUserId,
+            },
+            data: {
+              status: LoanSimulationStatus.ACCEPTED,
+            },
+          });
+          break;
+        }
       }
-    }
 
-    if (!createdLoan) {
-      throw new Error("Falha ao criar emprestimo da simulacao.");
-    }
+      if (isIdUniqueViolation(error) && attempt < 2) {
+        continue;
+      }
 
-    row.status = "ACCEPTED";
-    row.loanId = createdLoan.id;
-    row.updatedAt = new Date().toISOString();
-    return res.json({ data: { ...mapRowForResponse(row, client), loanId: createdLoan.id } });
-  } finally {
-    simulationApprovalLocks.delete(approvalLockKey);
+      throw error;
+    }
   }
+
+  if (!createdLoanId) {
+    throw new AppError("Falha ao criar emprestimo da simulacao.");
+  }
+
+  const approvedSimulation = await readSimulation(ownerUserId, id);
+  if (!approvedSimulation) return res.status(404).json({ message: "Simulacao nao encontrada" });
+
+  return res.json({ data: mapRowForResponse(approvedSimulation) });
 });
 
 router.post("/:id/cancel", async (req, res) => {
@@ -617,13 +703,19 @@ router.post("/:id/cancel", async (req, res) => {
   if (!Number.isFinite(ownerUserId)) return res.status(401).json({ message: "Nao autenticado" });
 
   const id = String(req.params.id ?? "").trim();
-  const row = getUserStore(ownerUserId).get(id);
+  const row = await readSimulation(ownerUserId, id);
   if (!row) return res.status(404).json({ message: "Simulacao nao encontrada" });
 
-  row.status = "CANCELED";
-  row.updatedAt = new Date().toISOString();
-  const client = await findClient(ownerUserId, row.clientId);
-  return res.json({ data: mapRowForResponse(row, client) });
+  await prisma.loanSimulation.update({
+    where: { id: row.id },
+    data: {
+      status: LoanSimulationStatus.CANCELED,
+    },
+  });
+
+  const canceledSimulation = await readSimulation(ownerUserId, id);
+  if (!canceledSimulation) return res.status(404).json({ message: "Simulacao nao encontrada" });
+  return res.json({ data: mapRowForResponse(canceledSimulation) });
 });
 
 export { router as loanSimulationsRoutes };
