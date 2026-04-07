@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
 import {
   Hash,
   Banknote,
   BarChart3,
   Calendar,
   CheckCircle2,
-  Filter,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -18,7 +17,7 @@ import {
   FlaskConical,
   X,
 } from "lucide-react";
-import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
+import { ModalBase, ModalBtnGhost, ModalBtnPrimary } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { calculateLoanPreview } from "../../../../utils/loanCalculator";
 import { formatCurrencyInput, parseCurrencyInput } from "../../../../utils/currencyInput";
@@ -77,7 +76,7 @@ type Installment = {
   status?: string;
 };
 
-type LoanModalMode = "loan" | "simulation" | "edit" | "view";
+type LoanModalMode = "loan" | "simulation" | "edit";
 
 type EnrichedLoan = Loan & {
   debtor?: Debtor;
@@ -88,6 +87,7 @@ type EnrichedLoan = Loan & {
   installments: Installment[];
   hasPaidInstallments: boolean;
   canEdit: boolean;
+  canDelete: boolean;
   searchStr: string;
 };
 
@@ -177,6 +177,92 @@ function translateInstallmentStatus(status: string) {
   return "Pendente";
 }
 
+function isInstallmentPaid(installment: Installment) {
+  return (
+    Boolean(installment.payment_date ?? installment.paymentDate) ||
+    translateInstallmentStatus(String(installment.status || "")) === "Pago"
+  );
+}
+
+function getInstallmentStatusBadgeClass(installment: Installment) {
+  if (isInstallmentPaid(installment)) {
+    return "bg-emerald-100 text-emerald-700 border-emerald-200";
+  }
+
+  const label = translateInstallmentStatus(String(installment.status || ""));
+  if (label === "Atrasado") {
+    return "bg-rose-100 text-rose-700 border-rose-200";
+  }
+
+  return "bg-amber-100 text-amber-700 border-amber-200";
+}
+
+function formatDatePtBr(value: unknown) {
+  const parsed = parseDateValue(value);
+  if (!parsed) return "-";
+  return new Intl.DateTimeFormat("pt-BR").format(parsed);
+}
+
+function formatPercent(value: unknown) {
+  return `${toFiniteNumber(value).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
+function resolveInterestMode(loan: Loan, rawMeta: Record<string, any>) {
+  const metaMode = String(rawMeta.interestMode || "").trim().toLowerCase();
+  if (metaMode === "simples" || metaMode === "composto" || metaMode === "fixo") {
+    return metaMode as "simples" | "composto" | "fixo";
+  }
+
+  const rawLoanType = String(loan.interest_type || loan.interestType || "").trim().toLowerCase();
+  if (rawLoanType === "simples") return "simples";
+  if (rawLoanType === "fixo") return "fixo";
+  return "composto";
+}
+
+function translateInterestMode(mode: string) {
+  if (mode === "simples") return "Juros simples";
+  if (mode === "fixo") return "Acrescimo fixo";
+  return "Juros compostos";
+}
+
+function LoanViewStat({
+  label,
+  value,
+  hint,
+  valueClassName = "text-slate-900",
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="h-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+      <p className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</p>
+      <p className={`mt-2 text-lg font-bold ${valueClassName}`}>{value}</p>
+      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    </div>
+  );
+}
+
+function LoanViewInfo({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div className="h-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+      <p className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</p>
+      <p className="mt-1.5 text-sm font-semibold text-slate-800">{value}</p>
+    </div>
+  );
+}
+
 function readLoanMeta(rawValue: any) {
   const text = String(rawValue || "");
   const start = text.indexOf(LOAN_META_START);
@@ -220,10 +306,11 @@ export function EmprestimosClient() {
 
   // Modal state
   const [showLoanModal, setShowLoanModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [loanModalMode, setLoanModalMode] = useState<LoanModalMode>("loan");
   const [selectedLoanId, setSelectedLoanId] = useState<string | number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deletingLoan, setDeletingLoan] = useState<Loan | null>(null);
+  const [deletingLoan, setDeletingLoan] = useState<EnrichedLoan | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Form fields
@@ -558,24 +645,35 @@ export function EmprestimosClient() {
   }
 
   function openViewModal(loan: EnrichedLoan) {
-    populateFormFromLoan(loan);
-    setLoanModalMode("view");
-    setShowLoanModal(true);
+    setSelectedLoanId(loan.id);
+    setShowViewModal(true);
   }
 
   function openEditModal(loan: EnrichedLoan) {
+    setShowViewModal(false);
     populateFormFromLoan(loan);
     setLoanModalMode("edit");
     setShowLoanModal(true);
   }
 
-  function openDeleteModal(loan: Loan) {
+  function openDeleteModal(loan: EnrichedLoan) {
+    if (loan.hasPaidInstallments) {
+      const message = "Nao e permitido excluir emprestimo com parcela paga.";
+      setError(message);
+      window.alert(message);
+      return;
+    }
     setDeletingLoan(loan);
     setShowDeleteModal(true);
   }
 
   function closeLoanModal() {
     setShowLoanModal(false);
+    setSelectedLoanId(null);
+  }
+
+  function closeViewModal() {
+    setShowViewModal(false);
     setSelectedLoanId(null);
   }
 
@@ -654,6 +752,15 @@ export function EmprestimosClient() {
 
   async function handleDeleteLoan() {
     if (!deletingLoan) return;
+    if (deletingLoan.hasPaidInstallments) {
+      const message = "Nao e permitido excluir emprestimo com parcela paga.";
+      setError(message);
+      window.alert(message);
+      setShowDeleteModal(false);
+      setDeletingLoan(null);
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch("/api/tables/loans").then((r) => r.json());
@@ -686,7 +793,7 @@ export function EmprestimosClient() {
           const rightNumber = Number(right.installment_number ?? right.installmentNumber ?? 0);
           return leftNumber - rightNumber;
         });
-      const hasPaidInstallments = loanInstallments.some((item) => translateInstallmentStatus(String(item.status || "")) === "Pago");
+      const hasPaidInstallments = loanInstallments.some(isInstallmentPaid);
       const principalFromLoan =
         [
           loan.principal_amount,
@@ -722,6 +829,7 @@ export function EmprestimosClient() {
         installments: loanInstallments,
         hasPaidInstallments,
         canEdit: !hasPaidInstallments,
+        canDelete: !hasPaidInstallments,
         searchStr: `${loan.id} ${debtor?.name || ""} ${debtor?.document || debtor?.cpf || ""}`.toLowerCase(),
       };
     });
@@ -731,6 +839,74 @@ export function EmprestimosClient() {
     () => enrichedLoans.find((loan) => sameId(loan.id, selectedLoanId)) ?? null,
     [enrichedLoans, selectedLoanId],
   );
+
+  const selectedLoanView = useMemo(() => {
+    if (!selectedLoan) return null;
+
+    const loanMeta = readLoanMeta(selectedLoan.observations);
+    const interestMode = resolveInterestMode(selectedLoan, loanMeta.meta);
+    const installmentsCount = Math.max(
+      toFiniteNumber(selectedLoan.installments_count ?? selectedLoan.installmentsCount),
+      selectedLoan.installments.length,
+    );
+    const installmentAmount =
+      [
+        selectedLoan.installment_amount,
+        selectedLoan.installmentAmount,
+        selectedLoan.installments[0]?.amount,
+      ]
+        .map(toFiniteNumber)
+        .find((value) => value > 0) ?? 0;
+    const totalInterest = Math.max(0, selectedLoan.total - selectedLoan.principal);
+    const paidInstallments = selectedLoan.installments.filter(isInstallmentPaid);
+    const overdueInstallments = selectedLoan.installments.filter(
+      (item) => !isInstallmentPaid(item) && translateInstallmentStatus(String(item.status || "")) === "Atrasado",
+    );
+    const pendingInstallments = selectedLoan.installments.filter(
+      (item) => !isInstallmentPaid(item) && translateInstallmentStatus(String(item.status || "")) !== "Atrasado",
+    );
+    const fixedAddition = toFiniteNumber(loanMeta.meta.fixedAddition);
+    const interestRate = toFiniteNumber(selectedLoan.interest_rate ?? selectedLoan.interestRate);
+
+    return {
+      id: selectedLoan.id,
+      debtorName: selectedLoan.debtor?.name || `Cliente #${selectedLoan.debtor_id}`,
+      debtorDocument: formatDocument(selectedLoan.debtor?.document || selectedLoan.debtor?.cpf || selectedLoan.debtor?.cnpj),
+      status: selectedLoan.uiStatus,
+      statusBadgeClass: getStatusBadge(selectedLoan.uiStatus),
+      principal: selectedLoan.principal,
+      total: selectedLoan.total,
+      totalInterest,
+      installmentAmount,
+      installmentsCount,
+      paidCount: paidInstallments.length,
+      overdueCount: overdueInstallments.length,
+      pendingCount: pendingInstallments.length,
+      startDate: formatDatePtBr(selectedLoan.start_date || selectedLoan.date),
+      firstDueDate: formatDatePtBr(
+        selectedLoan.first_due_date || selectedLoan.due_date || selectedLoan.installments[0]?.due_date || selectedLoan.installments[0]?.dueDate,
+      ),
+      createdAt: formatDatePtBr(selectedLoan.created_at || selectedLoan.date || selectedLoan.start_date),
+      interestTypeLabel: translateInterestMode(interestMode),
+      rateLabel: interestMode === "fixo" ? "Acrescimo fixo" : "Taxa mensal",
+      rateValue: interestMode === "fixo" ? formatCurrency(fixedAddition) : formatPercent(interestRate),
+      observations: loanMeta.text,
+      installments: selectedLoan.installments.map((item) => {
+        const statusLabel = isInstallmentPaid(item) ? "Pago" : translateInstallmentStatus(String(item.status || ""));
+        return {
+          id: item.id,
+          number: Number(item.installment_number ?? item.installmentNumber ?? 0),
+          amount: toFiniteNumber(item.amount),
+          principalAmount: toFiniteNumber(item.principal_amount ?? item.principalAmount),
+          interestAmount: toFiniteNumber(item.interest_amount ?? item.interestAmount),
+          dueDate: formatDatePtBr(item.due_date ?? item.dueDate),
+          paymentDate: formatDatePtBr(item.payment_date ?? item.paymentDate),
+          statusLabel,
+          badgeClass: getInstallmentStatusBadgeClass(item),
+        };
+      }),
+    };
+  }, [selectedLoan]);
 
   const filteredAndSortedLoans = useMemo(() => {
     let result = [...enrichedLoans];
@@ -801,9 +977,9 @@ export function EmprestimosClient() {
     return <ArrowUpDown className="h-3 w-3 opacity-100 ml-1 inline text-blue-500" />;
   }
 
-  const isReadOnlyLoanModal = loanModalMode === "view";
   const isEditingLoanModal = loanModalMode === "edit";
   const isSimulationLoanModal = loanModalMode === "simulation";
+  const isLockedLoanModal = isEditingLoanModal && Boolean(selectedLoan?.hasPaidInstallments);
 
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
@@ -960,9 +1136,11 @@ export function EmprestimosClient() {
                             <Edit2 className="h-4 w-4" />
                           </button>
                         ) : null}
-                        <button onClick={() => openDeleteModal(loan)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20" title="Excluir">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {loan.canDelete ? (
+                          <button onClick={() => openDeleteModal(loan)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20" title="Excluir">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -1014,13 +1192,15 @@ export function EmprestimosClient() {
                         <Edit2 className="h-4 w-4" />
                       </button>
                     ) : null}
-                    <button
-                      onClick={() => openDeleteModal(loan)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
-                      title="Excluir"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {loan.canDelete ? (
+                      <button
+                        onClick={() => openDeleteModal(loan)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
+                        title="Excluir"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
                   </MobileDataCardActions>
                 )}
               >
@@ -1065,6 +1245,156 @@ export function EmprestimosClient() {
         )}
       </div>
 
+      {showViewModal && selectedLoanView ? (
+        <ModalBase
+          open={showViewModal}
+          onClose={closeViewModal}
+          title={`Emprestimo #${selectedLoanView.id}`}
+          subtitle="Resumo completo do contrato, cliente, taxa, juros e andamento das parcelas."
+          size="max-w-5xl"
+          bodyClassName="space-y-5 bg-slate-50"
+          footer={
+            <>
+              <ModalBtnGhost onClick={closeViewModal}>Fechar</ModalBtnGhost>
+              {selectedLoan && !selectedLoan.hasPaidInstallments ? (
+                <ModalBtnPrimary
+                  onClick={() => {
+                    closeViewModal();
+                    openEditModal(selectedLoan);
+                  }}
+                >
+                  Editar emprestimo
+                </ModalBtnPrimary>
+              ) : null}
+            </>
+          }
+        >
+          <div className="space-y-5">
+            <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr] xl:items-stretch">
+              <section className="space-y-5">
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Cliente</p>
+                      <h3 className="mt-2 text-xl font-bold text-slate-900">{selectedLoanView.debtorName}</h3>
+                      <p className="mt-1 text-sm text-slate-500">{selectedLoanView.debtorDocument}</p>
+                    </div>
+                    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${selectedLoanView.statusBadgeClass}`}>
+                      {selectedLoanView.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <LoanViewStat label="Valor emprestado" value={formatCurrency(selectedLoanView.principal)} />
+                  <LoanViewStat label="Total do contrato" value={formatCurrency(selectedLoanView.total)} />
+                  <LoanViewStat
+                    label="Juros / acrescimo"
+                    value={formatCurrency(selectedLoanView.totalInterest)}
+                    hint={selectedLoanView.interestTypeLabel}
+                  />
+                  <LoanViewStat
+                    label={selectedLoanView.rateLabel}
+                    value={selectedLoanView.rateValue}
+                    hint={selectedLoanView.interestTypeLabel}
+                  />
+                  <LoanViewStat
+                    label="Parcelas"
+                    value={`${selectedLoanView.installmentsCount}`}
+                    hint={`${selectedLoanView.paidCount} paga(s)`}
+                  />
+                  <LoanViewStat
+                    label="Valor da parcela"
+                    value={selectedLoanView.installmentAmount > 0 ? formatCurrency(selectedLoanView.installmentAmount) : "-"}
+                    hint={selectedLoanView.installmentsCount > 0 ? "Parcela prevista do contrato" : "Sem plano de parcelas"}
+                  />
+                </div>
+              </section>
+
+              <section className="h-full">
+                <div className="h-full rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+                  <h3 className="text-base font-bold text-slate-900">Parcelas</h3>
+                  <div className="mt-4 grid auto-rows-fr gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                    <LoanViewStat label="Pagas" value={selectedLoanView.paidCount} valueClassName="text-emerald-600" />
+                    <LoanViewStat label="Em aberto" value={selectedLoanView.pendingCount} valueClassName="text-amber-600" />
+                    <LoanViewStat label="Em atraso" value={selectedLoanView.overdueCount} valueClassName="text-rose-600" />
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr] xl:items-start">
+              <section className="flex flex-col gap-5">
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+                  <h3 className="text-base font-bold text-slate-900">Informacoes do emprestimo</h3>
+                  <div className="mt-4 grid auto-rows-fr gap-3 sm:grid-cols-2">
+                    <LoanViewInfo label="Data de inicio" value={selectedLoanView.startDate} />
+                    <LoanViewInfo label="Primeiro vencimento" value={selectedLoanView.firstDueDate} />
+                    <LoanViewInfo label="Criado em" value={selectedLoanView.createdAt} />
+                    <LoanViewInfo label="Tipo de juros" value={selectedLoanView.interestTypeLabel} />
+                  </div>
+                </div>
+
+                <div className="flex min-h-[180px] flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+                  <h3 className="text-base font-bold text-slate-900">Observacoes</h3>
+                  <div className="mt-4 flex flex-1 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <p className="text-sm leading-6 text-slate-600">
+                      {selectedLoanView.observations || "Nenhuma observacao informada para este emprestimo."}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="xl:h-[430px]">
+                <div className="flex h-full flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-base font-bold text-slate-900">Andamento das parcelas</h3>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                      {selectedLoanView.installments.length} registro(s)
+                    </span>
+                  </div>
+
+                  <div className="mt-4 min-h-0 flex-1 space-y-2.5">
+                    {selectedLoanView.installments.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                        Nenhuma parcela cadastrada para este emprestimo.
+                      </div>
+                    ) : (
+                      <div className="h-full space-y-2.5 overflow-y-auto pr-1">
+                        {selectedLoanView.installments.map((item) => (
+                          <article key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-bold text-slate-900">Parcela #{item.number || "-"}</p>
+                                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.68rem] font-semibold ${item.badgeClass}`}>
+                                    {item.statusLabel}
+                                  </span>
+                                </div>
+                                <div className="mt-2 grid auto-rows-fr gap-2 sm:grid-cols-2">
+                                  <LoanViewInfo label="Vencimento" value={item.dueDate} />
+                                  <LoanViewInfo label="Pagamento" value={item.statusLabel === "Pago" ? item.paymentDate : "-"} />
+                                </div>
+                              </div>
+                              <div className="sm:min-w-[160px] sm:text-right">
+                                <p className="text-lg font-bold text-slate-900">{formatCurrency(item.amount)}</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  Principal {formatCurrency(item.principalAmount)} | Juros {formatCurrency(item.interestAmount)}
+                                </p>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </ModalBase>
+      ) : null}
+
       {/* ===== MODAL: NOVO EMPRÉSTIMO / NOVA SIMULAÇÃO ===== */}
       {showLoanModal && (
         <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-hidden bg-black/60 px-4 pb-4 pt-14 backdrop-blur-sm sm:pt-16" onClick={closeLoanModal}>
@@ -1077,10 +1407,15 @@ export function EmprestimosClient() {
                     ? "Novo emprestimo"
                     : loanModalMode === "simulation"
                       ? "Nova simulacao"
-                      : loanModalMode === "edit"
-                        ? `Editar emprestimo #${selectedLoan?.id ?? ""}`
-                        : `Visualizar emprestimo #${selectedLoan?.id ?? ""}`}
+                      : `Editar emprestimo #${selectedLoan?.id ?? ""}`}
                 </h2>
+                {isEditingLoanModal ? (
+                  <p className="mt-1 text-sm text-slate-400">
+                    {isLockedLoanModal
+                      ? "Este emprestimo possui parcela paga e permanece bloqueado para alteracoes."
+                      : "Atualize as informacoes, condicoes e agenda do contrato."}
+                  </p>
+                ) : null}
                 <p className="mt-1 text-sm text-slate-400">{loanModalMode === "loan" ? "Defina as informações, condições e agenda do contrato." : "Monte a proposta, envie no WhatsApp e aprove para criar o emprestimo real."}</p>
               </div>
               <button onClick={closeLoanModal} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"><X className="h-5 w-5" /></button>
@@ -1090,7 +1425,12 @@ export function EmprestimosClient() {
             <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col xl:flex-row">
               {/* Left: Form */}
-              <fieldset disabled={isReadOnlyLoanModal} className="m-0 min-w-0 border-0 p-0 flex-1 space-y-4 px-5 py-4">
+              <fieldset disabled={isLockedLoanModal} className="m-0 min-w-0 border-0 p-0 flex-1 space-y-4 px-5 py-4">
+                {isLockedLoanModal ? (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                    Este emprestimo ja possui parcela paga. Por regra, ele nao pode mais ser alterado.
+                  </div>
+                ) : null}
                 {/* Informações Básicas */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Informacoes basicas</h3>
@@ -1205,7 +1545,7 @@ export function EmprestimosClient() {
                 <div>
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Previa das parcelas</h3>
-                    {!isReadOnlyLoanModal && formCustomDueDates.some((date) => isIsoDateString(date)) ? (
+                    {!isLockedLoanModal && formCustomDueDates.some((date) => isIsoDateString(date)) ? (
                       <button
                         className="text-[11px] font-semibold text-blue-400 transition-colors hover:text-blue-300"
                         onClick={clearCustomDueDates}
@@ -1274,7 +1614,7 @@ export function EmprestimosClient() {
 
             {/* Footer */}
             <div className="shrink-0 flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-3.5">
-              {isReadOnlyLoanModal ? (
+              {isLockedLoanModal ? (
                 <button onClick={closeLoanModal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-6 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700">
                   Fechar
                 </button>
