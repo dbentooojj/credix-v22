@@ -694,10 +694,10 @@ function MonthlyFlowChart({
         })}
       </svg>
 
-      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+      <div className="mt-4 flex flex-nowrap items-center gap-2 text-[10px] font-semibold sm:flex-wrap sm:text-xs">
         {legendItems.map((item) => (
           <span
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 ${item.chip}`}
+            className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1.5 ${item.chip} sm:flex-none sm:gap-2 sm:px-3`}
             key={item.label}
           >
             <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
@@ -755,9 +755,6 @@ function RecentMovements({
             <RefreshIcon className="h-6 w-6" />
           </div>
           <p className="mt-4 font-semibold text-slate-700">Sem movimentacoes recentes.</p>
-          <p className="mt-1.5 text-sm text-slate-400">
-            Quando houver recebimentos, ajustes ou lancamentos, eles aparecem aqui.
-          </p>
         </div>
       ) : (
         <>

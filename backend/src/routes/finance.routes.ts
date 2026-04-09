@@ -28,6 +28,7 @@ const transactionBaseFieldsSchema = z.object({
   amount: z.number().positive(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   description: z.string().trim().min(1).max(300),
+  notes: z.string().trim().max(1000).optional(),
   status: transactionStatusSchema,
 });
 
@@ -55,6 +56,7 @@ const updateTransactionSchema = transactionBaseFieldsSchema
     || payload.categoryId !== undefined
     || payload.date !== undefined
     || payload.description !== undefined
+    || payload.notes !== undefined
     || payload.status !== undefined
   );
 }, { message: "Nenhum campo para atualizar." });
@@ -209,6 +211,7 @@ function toApiTransaction(row: {
   categoryId: number | null;
   date: Date;
   description: string;
+  notes?: string | null;
   status: FinanceTransactionStatus;
   categoryRef?: {
     id: number;
@@ -228,6 +231,7 @@ function toApiTransaction(row: {
     categoryMeta: toApiCategory(row.categoryRef),
     date: toDateOnlyIso(row.date),
     description: row.description,
+    notes: row.notes || null,
     status: toApiStatus(row.status),
   };
 }
@@ -463,6 +467,7 @@ router.post("/transactions", async (req, res) => {
         category: resolvedCategory.name,
         date: baseDate,
         description: payload.description,
+        notes: payload.notes?.trim() || null,
         status,
       },
     });
@@ -498,6 +503,7 @@ router.post("/transactions", async (req, res) => {
             category: resolvedCategory.name,
             date: addMonthsDateOnlyUtc(baseDate, index),
             description: buildInstallmentDescription(payload.description, index + 1, installmentCount),
+            notes: payload.notes?.trim() || null,
             status,
           },
         });
@@ -536,6 +542,7 @@ router.post("/transactions", async (req, res) => {
           category: resolvedCategory.name,
           date: addMonthsDateOnlyUtc(baseDate, index),
           description: payload.description,
+          notes: payload.notes?.trim() || null,
           status,
         },
       });
@@ -646,6 +653,10 @@ router.patch("/transactions/:id", async (req, res) => {
     return res.status(404).json({ message: "Transacao nao encontrada." });
   }
 
+  if (existing.status === FinanceTransactionStatus.COMPLETED) {
+    return res.status(409).json({ message: "Lancamentos confirmados nao podem ser editados." });
+  }
+
   const nextType = payload.type ? toPrismaType(payload.type) : existing.type;
   let nextCategoryId: number | null | undefined;
   let nextCategoryName: string | undefined;
@@ -680,6 +691,7 @@ router.patch("/transactions/:id", async (req, res) => {
       category: nextCategoryName,
       date: payload.date ? parseDateOnly(payload.date) : undefined,
       description: payload.description,
+      notes: payload.notes !== undefined ? (payload.notes?.trim() || null) : undefined,
       status: payload.status ? toPrismaStatus(payload.status) : undefined,
     },
   });

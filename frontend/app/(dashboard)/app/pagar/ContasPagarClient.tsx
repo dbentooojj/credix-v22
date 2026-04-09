@@ -16,7 +16,8 @@ import {
   Circle,
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
-import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { useToast } from "../../../components/ToastProvider";
 import {
   FinanceCategoryManagerModal,
   FinanceCategoryPicker,
@@ -24,6 +25,7 @@ import {
   formatFinanceCategoryLabel,
   useFinanceCategoryCatalog,
 } from "../../../components/FinanceCategoryControls";
+import { readJsonOrThrow } from "../../../../utils/apiClient";
 import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
 import { getDateOnlyRelationToToday, getOverdueDays } from "../../../../utils/dateOnlyStatus";
 
@@ -32,6 +34,7 @@ type Transaction = {
   id: string | number;
   type?: string;
   description?: string;
+  notes?: string | null;
   categoryId?: string | number | null;
   category?: string;
   categoryMeta?: FinanceCategoryMeta | null;
@@ -111,23 +114,21 @@ function getDisplayStatus(item: Transaction): DisplayStatus {
 }
 
 function buildObservation(item: Transaction, ds: DisplayStatus) {
-  if (ds.key === "paid") return "Pagamento registrado no sistema.";
+  const customNotes = String(item.notes || "").trim();
+  if (customNotes) return customNotes;
+
+  if (ds.key === "paid") return "Conta marcada como paga.";
   if (ds.key === "overdue") {
     const diff = getOverdueDays(item.date) ?? 0;
     return `Em atraso ha ${diff} dia(s).`;
   }
-  if (ds.key === "due-today") return "Compromisso previsto para hoje.";
+  if (ds.key === "due-today") return "Vencimento previsto para hoje.";
   if (ds.key === "scheduled") return "Pagamento agendado para esta data.";
-  const dueDate = parseDateOnly(item.date);
-  const today = startOfDay(new Date());
-  if (ds.key === "paid") return "Pagamento registrado no sistema.";
-  if (ds.key === "overdue" && dueDate) {
-    const diff = Math.floor((today.getTime() - startOfDay(dueDate).getTime()) / 86400000);
-    return `Em atraso ha ${diff} dia(s).`;
-  }
-  if (ds.key === "due-today") return "Compromisso previsto para hoje.";
-  if (ds.key === "scheduled") return "Pagamento agendado para esta data.";
-  return "Aguardando baixa financeira.";
+  return "Aguardando confirmacao de pagamento.";
+}
+
+function isConfirmedTransaction(item: Transaction) {
+  return String(item.status || "").toLowerCase() === "completed";
 }
 
 function sameMonth(date: Date, cursor: Date) {
@@ -137,6 +138,7 @@ function sameMonth(date: Date, cursor: Date) {
 export function ContasPagarClient() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   const [search, setSearch] = useState("");
   const [monthCursor, setMonthCursor] = useState(() => {
@@ -149,19 +151,23 @@ export function ContasPagarClient() {
   // Modal state
   const [showFormModal, setShowFormModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showCategoryManagerModal, setShowCategoryManagerModal] = useState(false);
   const [editingItem, setEditingItem] = useState<Transaction | null>(null);
   const [viewingItem, setViewingItem] = useState<Transaction | null>(null);
   const [deletingItem, setDeletingItem] = useState<Transaction | null>(null);
+  const [completingItem, setCompletingItem] = useState<Transaction | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   // Form fields
   const [formDescription, setFormDescription] = useState("");
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formDate, setFormDate] = useState("");
+  const [formNotes, setFormNotes] = useState("");
   const [formStatus, setFormStatus] = useState("pending");
   const [formCreationMode, setFormCreationMode] = useState("single");
   const [formInstallmentCount, setFormInstallmentCount] = useState("4");
@@ -195,6 +201,7 @@ export function ContasPagarClient() {
     setFormCategoryId("");
     setFormAmount("");
     setFormDate(toDateInputValue(new Date()));
+    setFormNotes("");
     setFormStatus("pending");
     setFormCreationMode("single");
     setFormInstallmentCount("4");
@@ -204,11 +211,17 @@ export function ContasPagarClient() {
   }
 
   function openEditModal(item: Transaction) {
+    if (isConfirmedTransaction(item)) {
+      toast.info("Conta ja confirmada nao pode ser editada.");
+      return;
+    }
+
     setEditingItem(item);
     setFormDescription(item.description || "");
     setFormCategoryId(String(item.categoryId || item.categoryMeta?.id || ""));
     setFormAmount(formatCurrencyInputFromNumber(item.amount || 0));
     setFormDate(item.date || "");
+    setFormNotes(item.notes || "");
     setFormStatus(item.status || "pending");
     setFormCreationMode("single");
     setShowFormModal(true);
@@ -224,14 +237,21 @@ export function ContasPagarClient() {
     setShowDeleteModal(true);
   }
 
+  function openCompleteModal(item: Transaction) {
+    setCompletingItem(item);
+    setShowCompleteModal(true);
+  }
+
   async function handleSave() {
     const parsedAmount = parseCurrencyInput(formAmount);
-    if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return;
+    if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Preencha descricao, categoria, valor e vencimento validos.", "Dados incompletos");
+      return;
+    }
     setSaving(true);
     try {
       if (editingItem) {
-        // PATCH
-        await fetch(`/api/finance/transactions/${editingItem.id}`, {
+        const response = await fetch(`/api/finance/transactions/${editingItem.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -240,17 +260,19 @@ export function ContasPagarClient() {
             categoryId: formCategoryId,
             amount: parsedAmount,
             date: formDate,
+            notes: formNotes,
             status: formStatus,
           }),
         });
+        await readJsonOrThrow(response, "Nao foi possivel atualizar a conta.");
       } else {
-        // POST
         const body: any = {
           type: "expense",
           description: formDescription.trim(),
           categoryId: formCategoryId,
           amount: parsedAmount,
           date: formDate,
+          notes: formNotes,
           status: formStatus,
           creationMode: formCreationMode,
         };
@@ -261,16 +283,20 @@ export function ContasPagarClient() {
         if (formCreationMode === "recurring_monthly") {
           body.recurringMonths = Number(formRecurringMonths);
         }
-        await fetch("/api/finance/transactions", {
+        const response = await fetch("/api/finance/transactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+        await readJsonOrThrow(response, "Nao foi possivel criar a conta.");
       }
       setShowFormModal(false);
+      setEditingItem(null);
       await fetchData();
-    } catch {
-      // silent
+      toast.success(editingItem ? "Conta atualizada com sucesso." : "Conta cadastrada com sucesso.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel salvar a conta.";
+      toast.error(message, "Falha ao salvar conta");
     } finally {
       setSaving(false);
     }
@@ -280,27 +306,39 @@ export function ContasPagarClient() {
     if (!deletingItem) return;
     setDeleting(true);
     try {
-      await fetch(`/api/finance/transactions/${deletingItem.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/finance/transactions/${deletingItem.id}`, { method: "DELETE" });
+      await readJsonOrThrow(response, "Nao foi possivel excluir a conta.");
       setShowDeleteModal(false);
       setDeletingItem(null);
       await fetchData();
-    } catch {
-      // silent
+      toast.success("Conta excluida com sucesso.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel excluir a conta.";
+      toast.error(message, "Falha ao excluir conta");
     } finally {
       setDeleting(false);
     }
   }
 
-  async function handleComplete(item: Transaction) {
+  async function handleComplete() {
+    if (!completingItem) return;
+    setCompleting(true);
     try {
-      await fetch(`/api/finance/transactions/${item.id}`, {
+      const response = await fetch(`/api/finance/transactions/${completingItem.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "completed" }),
       });
+      await readJsonOrThrow(response, "Nao foi possivel marcar a conta como paga.");
+      setShowCompleteModal(false);
+      setCompletingItem(null);
       await fetchData();
-    } catch {
-      // silent
+      toast.success("Conta marcada como paga.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel marcar a conta como paga.";
+      toast.error(message, "Falha ao concluir pagamento");
+    } finally {
+      setCompleting(false);
     }
   }
 
@@ -386,7 +424,6 @@ export function ContasPagarClient() {
       <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Contas a Pagar</h1>
-          <p className="mt-1.5 text-sm text-slate-400">Gerencie despesas, vencimentos e pagamentos do seu negocio.</p>
         </div>
         <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-5 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98]">
           <Plus className="h-4 w-4" />
@@ -435,7 +472,7 @@ export function ContasPagarClient() {
                 <th className="px-4 py-3 text-right">Valor (R$)</th>
                 <th className="px-4 py-3">Vencimento</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Observacao</th>
+                <th className="px-4 py-3">Detalhe</th>
                 <th className="px-4 py-3 text-right">Acoes</th>
               </tr>
             </thead>
@@ -466,7 +503,7 @@ export function ContasPagarClient() {
                       <td className="px-4 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                           {ds.group !== "paid" && (
-                            <button onClick={() => handleComplete(item)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-rose-500" title="Marcar como paga">
+                            <button onClick={() => openCompleteModal(item)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-rose-500" title="Marcar como paga">
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               Pagar
                             </button>
@@ -474,9 +511,11 @@ export function ContasPagarClient() {
                           <button onClick={() => openViewModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900" title="Ver detalhes">
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button onClick={() => openEditModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100" title="Editar">
-                            <Edit2 className="h-4 w-4" />
-                          </button>
+                          {ds.group !== "paid" ? (
+                            <button onClick={() => openEditModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100" title="Editar">
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                          ) : null}
                           <button onClick={() => openDeleteModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100" title="Excluir">
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -504,6 +543,7 @@ export function ContasPagarClient() {
               const ds = item.displayStatus;
               const obs = buildObservation(item, ds);
               const canPay = ds.group !== "paid";
+              const canEdit = ds.group !== "paid";
 
               return (
                 <MobileDataCard
@@ -517,35 +557,44 @@ export function ContasPagarClient() {
                     </span>
                   )}
                   actions={(
-                    <MobileDataCardActions
-                      primary={canPay ? (
+                    <div className="flex items-center justify-end gap-2">
+                      {canPay ? (
                         <button
-                          onClick={() => handleComplete(item)}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-500"
+                          onClick={() => openCompleteModal(item)}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white shadow-[0_8px_18px_rgba(225,29,72,0.28)] transition-colors hover:bg-rose-500"
+                          title="Pagar"
+                          aria-label={`Pagar conta ${item.description || item.id}`}
                         >
                           <CheckCircle2 className="h-4 w-4" />
-                          Pagar
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => openViewModal(item)}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-700"
-                        >
-                          <Eye className="h-4 w-4" />
-                          Ver detalhes
-                        </button>
-                      )}
-                    >
-                      <button onClick={() => openViewModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900" title="Ver detalhes">
+                      ) : null}
+                      <button
+                        onClick={() => openViewModal(item)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                        title="Ver detalhes"
+                        aria-label={`Ver detalhes da conta ${item.description || item.id}`}
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button onClick={() => openEditModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100" title="Editar">
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => openDeleteModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100" title="Excluir">
+                      {canEdit ? (
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100"
+                          title="Editar"
+                          aria-label={`Editar conta ${item.description || item.id}`}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                      <button
+                        onClick={() => openDeleteModal(item)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"
+                        title="Excluir"
+                        aria-label={`Excluir conta ${item.description || item.id}`}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                    </MobileDataCardActions>
+                    </div>
                   )}
                 >
                   <div className="grid grid-cols-2 gap-2">
@@ -554,7 +603,7 @@ export function ContasPagarClient() {
                   </div>
                   <MobileDataCardRow
                     className="col-span-2"
-                    label="Observacao"
+                    label="Detalhe"
                     value={<span className="block truncate">{obs}</span>}
                     valueClassName="text-slate-300"
                   />
@@ -589,7 +638,6 @@ export function ContasPagarClient() {
         open={showFormModal}
         onClose={() => setShowFormModal(false)}
         title={isEditing ? "Editar conta" : "Nova conta a pagar"}
-        subtitle={isEditing ? "Altere os dados da despesa." : "Preencha os dados da nova despesa."}
         size="max-w-xl"
         footer={
           <>
@@ -655,6 +703,15 @@ export function ContasPagarClient() {
               <option value="completed">Paga</option>
             </select>
           </ModalField>
+          <ModalField label="Observacao (opcional)" full>
+            <textarea
+              className={`${modalInputClass} min-h-[96px] resize-none`}
+              maxLength={1000}
+              placeholder="Detalhes adicionais desta conta"
+              value={formNotes}
+              onChange={(e) => setFormNotes(e.target.value)}
+            />
+          </ModalField>
         </div>
       </ModalBase>
 
@@ -663,11 +720,12 @@ export function ContasPagarClient() {
         open={showViewModal}
         onClose={() => setShowViewModal(false)}
         title="Detalhes da conta"
-        subtitle="Visualize as informacoes desta conta."
         footer={
           <>
             <ModalBtnGhost onClick={() => setShowViewModal(false)}>Fechar</ModalBtnGhost>
-            <ModalBtnPrimary onClick={() => { setShowViewModal(false); if (viewingItem) openEditModal(viewingItem); }}>Editar conta</ModalBtnPrimary>
+            {viewingItem && !isConfirmedTransaction(viewingItem) ? (
+              <ModalBtnPrimary onClick={() => { setShowViewModal(false); if (viewingItem) openEditModal(viewingItem); }}>Editar conta</ModalBtnPrimary>
+            ) : null}
           </>
         }
       >
@@ -696,13 +754,30 @@ export function ContasPagarClient() {
                   <p className="mt-1 text-sm font-semibold text-slate-200">{formatDate(parseDateOnly(viewingItem.date))}</p>
                 </div>
                 <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Observacao</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Detalhe</p>
                   <p className="mt-1 text-sm font-medium text-slate-300">{obs}</p>
                 </div>
               </div>
             </div>
           );
         })()}
+      </ModalBase>
+
+      <ModalBase
+        open={showCompleteModal}
+        onClose={() => setShowCompleteModal(false)}
+        title="Confirmar pagamento"
+        subtitle={`Deseja marcar "${completingItem?.description || "esta conta"}" como paga?`}
+        footer={(
+          <>
+            <ModalBtnGhost onClick={() => setShowCompleteModal(false)} disabled={completing}>Cancelar</ModalBtnGhost>
+            <ModalBtnPrimary variant="red" onClick={handleComplete} disabled={completing}>
+              {completing ? "Confirmando..." : "Confirmar pagamento"}
+            </ModalBtnPrimary>
+          </>
+        )}
+      >
+        <p className="text-sm text-slate-400">A conta sera atualizada para o status de paga imediatamente.</p>
       </ModalBase>
 
       {/* ===== MODAL: EXCLUIR ===== */}

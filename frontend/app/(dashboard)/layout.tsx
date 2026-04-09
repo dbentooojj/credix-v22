@@ -4,6 +4,7 @@ import { ReactNode, useState } from "react";
 import { CashAdjustmentModalProvider } from "../components/CashAdjustmentModalProvider";
 import { Header } from "../components/Header";
 import { Sidebar } from "../components/Sidebar";
+import { ToastProvider } from "../components/ToastProvider";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -34,7 +35,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             isSidebarCollapsed ? "lg:ml-0" : "lg:ml-[272px]"
           }`}
         >
-          <CashAdjustmentModalProvider>{children}</CashAdjustmentModalProvider>
+          <ToastProvider>
+            <CashAdjustmentModalProvider>{children}</CashAdjustmentModalProvider>
+          </ToastProvider>
         </main>
       </div>
     </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
-import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
 
 import {
   UsersIcon,
@@ -510,7 +510,6 @@ export function ClientesClient() {
       <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Clientes</h1>
-          <p className="mt-1.5 text-sm text-slate-400">Consulte perfil, contato e situação de cada cliente.</p>
         </div>
         <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-5 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98]">
           <Plus className="h-4 w-4" /> Novo cliente
@@ -776,25 +775,24 @@ export function ClientesClient() {
                     </span>
                   )}
                   actions={(
-                    <MobileDataCardActions
-                      primary={(
-                        <button
-                          onClick={() => openEditModal(debtor)}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
-                        >
-                          <Edit2Icon className="h-4 w-4" />
-                          Editar
-                        </button>
-                      )}
-                    >
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openEditModal(debtor)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.28)] transition-colors hover:bg-emerald-500"
+                        title="Editar"
+                        aria-label={`Editar cliente ${debtor.name || debtor.id}`}
+                      >
+                        <Edit2Icon className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => openDeleteModal(debtor)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
                         title="Excluir"
+                        aria-label={`Excluir cliente ${debtor.name || debtor.id}`}
                       >
                         <Trash2Icon className="h-4 w-4" />
                       </button>
-                    </MobileDataCardActions>
+                    </div>
                   )}
                 >
                   <div className="grid grid-cols-2 gap-2">
@@ -863,7 +861,7 @@ export function ClientesClient() {
       </div>
 
       {/* ===== MODAL: CRIAR / EDITAR CLIENTE ===== */}
-      <ModalBase open={showFormModal} onClose={() => setShowFormModal(false)} title={editingDebtor ? "Editar cliente" : "Novo cliente"} subtitle={editingDebtor ? "Altere os dados do cliente." : "Preencha os dados do novo cliente."}
+      <ModalBase open={showFormModal} onClose={() => setShowFormModal(false)} title={editingDebtor ? "Editar cliente" : "Novo cliente"}
         footer={<><ModalBtnGhost onClick={() => setShowFormModal(false)} disabled={saving}>Cancelar</ModalBtnGhost><ModalBtnPrimary onClick={handleSaveClient} disabled={saving}>{saving ? "Salvando..." : editingDebtor ? "Salvar" : "Cadastrar"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">

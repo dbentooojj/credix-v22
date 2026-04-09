@@ -16,7 +16,8 @@ import {
   Circle,
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
-import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { useToast } from "../../../components/ToastProvider";
 import {
   FinanceCategoryManagerModal,
   FinanceCategoryPicker,
@@ -24,6 +25,7 @@ import {
   formatFinanceCategoryLabel,
   useFinanceCategoryCatalog,
 } from "../../../components/FinanceCategoryControls";
+import { readJsonOrThrow } from "../../../../utils/apiClient";
 import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
 import { getDateOnlyRelationToToday, getOverdueDays } from "../../../../utils/dateOnlyStatus";
 
@@ -32,6 +34,7 @@ type Transaction = {
   id: string | number;
   type?: string;
   description?: string;
+  notes?: string | null;
   categoryId?: string | number | null;
   category?: string;
   categoryMeta?: FinanceCategoryMeta | null;
@@ -111,23 +114,21 @@ function getDisplayStatus(item: Transaction): DisplayStatus {
 }
 
 function buildObservation(item: Transaction, ds: DisplayStatus) {
-  if (ds.key === "paid") return "Recebimento registrado no sistema.";
+  const customNotes = String(item.notes || "").trim();
+  if (customNotes) return customNotes;
+
+  if (ds.key === "paid") return "Receita marcada como recebida.";
   if (ds.key === "overdue") {
     const diff = getOverdueDays(item.date) ?? 0;
     return `Em atraso ha ${diff} dia(s).`;
   }
   if (ds.key === "due-today") return "Recebimento previsto para hoje.";
   if (ds.key === "scheduled") return "Recebimento agendado para esta data.";
-  const dueDate = parseDateOnly(item.date);
-  const today = startOfDay(new Date());
-  if (ds.key === "paid") return "Recebimento registrado no sistema.";
-  if (ds.key === "overdue" && dueDate) {
-    const diff = Math.floor((today.getTime() - startOfDay(dueDate).getTime()) / 86400000);
-    return `Em atraso ha ${diff} dia(s).`;
-  }
-  if (ds.key === "due-today") return "Recebimento previsto para hoje.";
-  if (ds.key === "scheduled") return "Recebimento agendado para esta data.";
   return "Aguardando confirmacao de recebimento.";
+}
+
+function isConfirmedTransaction(item: Transaction) {
+  return String(item.status || "").toLowerCase() === "completed";
 }
 
 function sameMonth(date: Date, cursor: Date) {
@@ -137,6 +138,7 @@ function sameMonth(date: Date, cursor: Date) {
 export function ContasReceberClient() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   const [search, setSearch] = useState("");
   const [monthCursor, setMonthCursor] = useState(() => {
@@ -149,19 +151,23 @@ export function ContasReceberClient() {
   // Modal state
   const [showFormModal, setShowFormModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showCategoryManagerModal, setShowCategoryManagerModal] = useState(false);
   const [editingItem, setEditingItem] = useState<Transaction | null>(null);
   const [viewingItem, setViewingItem] = useState<Transaction | null>(null);
   const [deletingItem, setDeletingItem] = useState<Transaction | null>(null);
+  const [completingItem, setCompletingItem] = useState<Transaction | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   // Form fields
   const [formDescription, setFormDescription] = useState("");
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formDate, setFormDate] = useState("");
+  const [formNotes, setFormNotes] = useState("");
   const [formStatus, setFormStatus] = useState("pending");
   const [formCreationMode, setFormCreationMode] = useState("single");
   const [formInstallmentCount, setFormInstallmentCount] = useState("4");
@@ -194,6 +200,7 @@ export function ContasReceberClient() {
     setFormCategoryId("");
     setFormAmount("");
     setFormDate(toDateInputValue(new Date()));
+    setFormNotes("");
     setFormStatus("pending");
     setFormCreationMode("single");
     setFormInstallmentCount("4");
@@ -203,11 +210,17 @@ export function ContasReceberClient() {
   }
 
   function openEditModal(item: Transaction) {
+    if (isConfirmedTransaction(item)) {
+      toast.info("Receita ja confirmada nao pode ser editada.");
+      return;
+    }
+
     setEditingItem(item);
     setFormDescription(item.description || "");
     setFormCategoryId(String(item.categoryId || item.categoryMeta?.id || ""));
     setFormAmount(formatCurrencyInputFromNumber(item.amount || 0));
     setFormDate(item.date || "");
+    setFormNotes(item.notes || "");
     setFormStatus(item.status || "pending");
     setFormCreationMode("single");
     setShowFormModal(true);
@@ -223,13 +236,21 @@ export function ContasReceberClient() {
     setShowDeleteModal(true);
   }
 
+  function openCompleteModal(item: Transaction) {
+    setCompletingItem(item);
+    setShowCompleteModal(true);
+  }
+
   async function handleSave() {
     const parsedAmount = parseCurrencyInput(formAmount);
-    if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return;
+    if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Preencha descricao, categoria, valor e vencimento validos.", "Dados incompletos");
+      return;
+    }
     setSaving(true);
     try {
       if (editingItem) {
-        await fetch(`/api/finance/transactions/${editingItem.id}`, {
+        const response = await fetch(`/api/finance/transactions/${editingItem.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -238,9 +259,11 @@ export function ContasReceberClient() {
             categoryId: formCategoryId,
             amount: parsedAmount,
             date: formDate,
+            notes: formNotes,
             status: formStatus,
           }),
         });
+        await readJsonOrThrow(response, "Nao foi possivel atualizar a receita.");
       } else {
         const body: any = {
           type: "income",
@@ -248,6 +271,7 @@ export function ContasReceberClient() {
           categoryId: formCategoryId,
           amount: parsedAmount,
           date: formDate,
+          notes: formNotes,
           status: formStatus,
           creationMode: formCreationMode,
         };
@@ -258,16 +282,20 @@ export function ContasReceberClient() {
         if (formCreationMode === "recurring_monthly") {
           body.recurringMonths = Number(formRecurringMonths);
         }
-        await fetch("/api/finance/transactions", {
+        const response = await fetch("/api/finance/transactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+        await readJsonOrThrow(response, "Nao foi possivel criar a receita.");
       }
       setShowFormModal(false);
+      setEditingItem(null);
       await fetchData();
-    } catch {
-      // silent
+      toast.success(editingItem ? "Receita atualizada com sucesso." : "Receita cadastrada com sucesso.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel salvar a receita.";
+      toast.error(message, "Falha ao salvar receita");
     } finally {
       setSaving(false);
     }
@@ -277,27 +305,39 @@ export function ContasReceberClient() {
     if (!deletingItem) return;
     setDeleting(true);
     try {
-      await fetch(`/api/finance/transactions/${deletingItem.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/finance/transactions/${deletingItem.id}`, { method: "DELETE" });
+      await readJsonOrThrow(response, "Nao foi possivel excluir a receita.");
       setShowDeleteModal(false);
       setDeletingItem(null);
       await fetchData();
-    } catch {
-      // silent
+      toast.success("Receita excluida com sucesso.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel excluir a receita.";
+      toast.error(message, "Falha ao excluir receita");
     } finally {
       setDeleting(false);
     }
   }
 
-  async function handleComplete(item: Transaction) {
+  async function handleComplete() {
+    if (!completingItem) return;
+    setCompleting(true);
     try {
-      await fetch(`/api/finance/transactions/${item.id}`, {
+      const response = await fetch(`/api/finance/transactions/${completingItem.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "completed" }),
       });
+      await readJsonOrThrow(response, "Nao foi possivel marcar a receita como recebida.");
+      setShowCompleteModal(false);
+      setCompletingItem(null);
       await fetchData();
-    } catch {
-      // silent
+      toast.success("Receita marcada como recebida.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel marcar a receita como recebida.";
+      toast.error(message, "Falha ao concluir recebimento");
+    } finally {
+      setCompleting(false);
     }
   }
 
@@ -381,7 +421,6 @@ export function ContasReceberClient() {
       <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Contas a Receber</h1>
-          <p className="mt-1.5 text-sm text-slate-400">Acompanhe receitas, cobrancas e recebimentos do seu negocio.</p>
         </div>
         <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white transition-all hover:bg-emerald-500 shadow-[0_4px_14px_rgba(5,150,105,0.35)] active:translate-y-px active:scale-[0.98]">
           <Plus className="h-4 w-4" />
@@ -418,7 +457,7 @@ export function ContasReceberClient() {
                 <th className="px-4 py-3 text-right">Valor (R$)</th>
                 <th className="px-4 py-3">Vencimento</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Observacao</th>
+                <th className="px-4 py-3">Detalhe</th>
                 <th className="px-4 py-3 text-right">Acoes</th>
               </tr>
             </thead>
@@ -449,12 +488,14 @@ export function ContasReceberClient() {
                       <td className="px-4 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                           {ds.group !== "paid" && (
-                            <button onClick={() => handleComplete(item)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500" title="Marcar como recebida">
+                            <button onClick={() => openCompleteModal(item)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500" title="Marcar como recebida">
                               <CheckCircle2 className="h-3.5 w-3.5" />Receber
                             </button>
                           )}
                           <button onClick={() => openViewModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900" title="Ver detalhes"><Eye className="h-4 w-4" /></button>
-                          <button onClick={() => openEditModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100" title="Editar"><Edit2 className="h-4 w-4" /></button>
+                          {ds.group !== "paid" ? (
+                            <button onClick={() => openEditModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100" title="Editar"><Edit2 className="h-4 w-4" /></button>
+                          ) : null}
                           <button onClick={() => openDeleteModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100" title="Excluir"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </td>
@@ -480,6 +521,7 @@ export function ContasReceberClient() {
               const ds = item.displayStatus;
               const obs = buildObservation(item, ds);
               const canReceive = ds.group !== "paid";
+              const canEdit = ds.group !== "paid";
 
               return (
                 <MobileDataCard
@@ -493,35 +535,44 @@ export function ContasReceberClient() {
                     </span>
                   )}
                   actions={(
-                    <MobileDataCardActions
-                      primary={canReceive ? (
+                    <div className="flex items-center justify-end gap-2">
+                      {canReceive ? (
                         <button
-                          onClick={() => handleComplete(item)}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                          onClick={() => openCompleteModal(item)}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.28)] transition-colors hover:bg-emerald-500"
+                          title="Receber"
+                          aria-label={`Receber conta ${item.description || item.id}`}
                         >
                           <CheckCircle2 className="h-4 w-4" />
-                          Receber
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => openViewModal(item)}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-700"
-                        >
-                          <Eye className="h-4 w-4" />
-                          Ver detalhes
-                        </button>
-                      )}
-                    >
-                      <button onClick={() => openViewModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900" title="Ver detalhes">
+                      ) : null}
+                      <button
+                        onClick={() => openViewModal(item)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                        title="Ver detalhes"
+                        aria-label={`Ver detalhes da receita ${item.description || item.id}`}
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button onClick={() => openEditModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100" title="Editar">
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => openDeleteModal(item)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100" title="Excluir">
+                      {canEdit ? (
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100"
+                          title="Editar"
+                          aria-label={`Editar receita ${item.description || item.id}`}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                      <button
+                        onClick={() => openDeleteModal(item)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"
+                        title="Excluir"
+                        aria-label={`Excluir receita ${item.description || item.id}`}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                    </MobileDataCardActions>
+                    </div>
                   )}
                 >
                   <div className="grid grid-cols-2 gap-2">
@@ -530,7 +581,7 @@ export function ContasReceberClient() {
                   </div>
                   <MobileDataCardRow
                     className="col-span-2"
-                    label="Observacao"
+                    label="Detalhe"
                     value={<span className="block truncate">{obs}</span>}
                     valueClassName="text-slate-300"
                   />
@@ -557,7 +608,7 @@ export function ContasReceberClient() {
       </div>
 
       {/* ===== MODAL: CRIAR / EDITAR ===== */}
-      <ModalBase open={showFormModal} onClose={() => setShowFormModal(false)} title={isEditing ? "Editar receita" : "Nova receita"} subtitle={isEditing ? "Altere os dados da receita." : "Preencha os dados da nova receita."} size="max-w-xl"
+      <ModalBase open={showFormModal} onClose={() => setShowFormModal(false)} title={isEditing ? "Editar receita" : "Nova receita"} size="max-w-xl"
         footer={<><ModalBtnGhost onClick={() => setShowFormModal(false)} disabled={saving}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={handleSave} disabled={saving}>{saving ? "Salvando..." : isEditing ? "Salvar alteracoes" : "Salvar receita"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
@@ -596,12 +647,21 @@ export function ContasReceberClient() {
               <option value="pending">Pendente</option><option value="scheduled">Agendada</option><option value="completed">Recebida</option>
             </select>
           </ModalField>
+          <ModalField label="Observacao (opcional)" full>
+            <textarea
+              className={`${modalInputClass} min-h-[96px] resize-none`}
+              maxLength={1000}
+              placeholder="Detalhes adicionais desta receita"
+              value={formNotes}
+              onChange={(e) => setFormNotes(e.target.value)}
+            />
+          </ModalField>
         </div>
       </ModalBase>
 
       {/* ===== MODAL: VER DETALHES ===== */}
-      <ModalBase open={showViewModal} onClose={() => setShowViewModal(false)} title="Detalhes da receita" subtitle="Visualize as informacoes desta receita."
-        footer={<><ModalBtnGhost onClick={() => setShowViewModal(false)}>Fechar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={() => { setShowViewModal(false); if (viewingItem) openEditModal(viewingItem); }}>Editar receita</ModalBtnPrimary></>}
+      <ModalBase open={showViewModal} onClose={() => setShowViewModal(false)} title="Detalhes da receita"
+        footer={<><ModalBtnGhost onClick={() => setShowViewModal(false)}>Fechar</ModalBtnGhost>{viewingItem && !isConfirmedTransaction(viewingItem) ? <ModalBtnPrimary variant="emerald" onClick={() => { setShowViewModal(false); if (viewingItem) openEditModal(viewingItem); }}>Editar receita</ModalBtnPrimary> : null}</>}
       >
         {viewingItem && (() => {
           const ds = getDisplayStatus(viewingItem);
@@ -616,11 +676,17 @@ export function ContasReceberClient() {
                 <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Categoria</p><p className="mt-1 text-sm font-semibold text-slate-200">{formatFinanceCategoryLabel(viewingItem.categoryMeta, viewingItem.category)}</p></div>
                 <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Valor</p><p className="mt-1 text-sm font-semibold text-emerald-400">{formatCurrency(viewingItem.amount)}</p></div>
                 <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Vencimento</p><p className="mt-1 text-sm font-semibold text-slate-200">{formatDate(parseDateOnly(viewingItem.date))}</p></div>
-                <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Observacao</p><p className="mt-1 text-sm font-medium text-slate-300">{obs}</p></div>
+                <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Detalhe</p><p className="mt-1 text-sm font-medium text-slate-300">{obs}</p></div>
               </div>
             </div>
           );
         })()}
+      </ModalBase>
+
+      <ModalBase open={showCompleteModal} onClose={() => setShowCompleteModal(false)} title="Confirmar recebimento" subtitle={`Deseja marcar "${completingItem?.description || "esta receita"}" como recebida?`}
+        footer={<><ModalBtnGhost onClick={() => setShowCompleteModal(false)} disabled={completing}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={handleComplete} disabled={completing}>{completing ? "Confirmando..." : "Confirmar recebimento"}</ModalBtnPrimary></>}
+      >
+        <p className="text-sm text-slate-400">A receita sera atualizada para o status de recebida imediatamente.</p>
       </ModalBase>
 
       {/* ===== MODAL: EXCLUIR ===== */}

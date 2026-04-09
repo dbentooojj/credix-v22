@@ -15,7 +15,9 @@ import {
   DollarSign,
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
-import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { useToast } from "../../../components/ToastProvider";
+import { readJsonOrThrow } from "../../../../utils/apiClient";
 import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
 import { getDateOnlyRelationToToday } from "../../../../utils/dateOnlyStatus";
 
@@ -114,6 +116,7 @@ export function ParcelasClient() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   // Filtros
   const [search, setSearch] = useState("");
@@ -179,10 +182,13 @@ export function ParcelasClient() {
 
   async function handlePay() {
     const parsedAmount = parseCurrencyInput(payAmount);
-    if (!selectedInst || !payDate || !payAmount || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return;
+    if (!selectedInst || !payDate || !payAmount || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Preencha valor e data validos para registrar o pagamento.", "Dados incompletos");
+      return;
+    }
     setActionLoading(true);
     try {
-      await fetch("/api/payments", {
+      const response = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -194,29 +200,47 @@ export function ParcelasClient() {
           notes: payNotes.trim() || undefined,
         }),
       });
+      await readJsonOrThrow(response, "Nao foi possivel registrar o pagamento.");
       setShowPayModal(false);
+      setSelectedInst(null);
       await fetchData();
-    } catch { /* silent */ } finally { setActionLoading(false); }
+      toast.success("Pagamento registrado com sucesso.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel registrar o pagamento.";
+      toast.error(message, "Falha ao registrar pagamento");
+    } finally { setActionLoading(false); }
   }
 
   async function handleRevert() {
     if (!selectedInst) return;
     setActionLoading(true);
     try {
-      await fetch(`/api/payments/installments/${selectedInst.id}/revert`, { method: "POST" });
+      const response = await fetch(`/api/payments/installments/${selectedInst.id}/revert`, { method: "POST" });
+      await readJsonOrThrow(response, "Nao foi possivel estornar o pagamento.");
       setShowRevertModal(false);
+      setSelectedInst(null);
       await fetchData();
-    } catch { /* silent */ } finally { setActionLoading(false); }
+      toast.success("Pagamento estornado com sucesso.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel estornar o pagamento.";
+      toast.error(message, "Falha ao estornar pagamento");
+    } finally { setActionLoading(false); }
   }
 
   async function handleDeleteInst() {
     if (!selectedInst) return;
     setActionLoading(true);
     try {
-      await fetch(`/api/payments/installments/${selectedInst.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/payments/installments/${selectedInst.id}`, { method: "DELETE" });
+      await readJsonOrThrow(response, "Nao foi possivel excluir a parcela.");
       setShowDeleteModal(false);
+      setSelectedInst(null);
       await fetchData();
-    } catch { /* silent */ } finally { setActionLoading(false); }
+      toast.success("Parcela excluida com sucesso.");
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : "Nao foi possivel excluir a parcela.";
+      toast.error(message, "Falha ao excluir parcela");
+    } finally { setActionLoading(false); }
   }
 
   // Enriquecer dados
@@ -373,7 +397,6 @@ export function ParcelasClient() {
       <section className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Controle de Cobrança</h1>
-          <p className="mt-1.5 text-sm text-slate-400">Acompanhe pendências, atrasos e recebimentos com ação rápida.</p>
         </div>
       </section>
 
@@ -604,33 +627,35 @@ export function ParcelasClient() {
                     </span>
                   )}
                   actions={(
-                    <MobileDataCardActions
-                      primary={isPaid ? (
+                    <div className="flex items-center justify-end gap-2">
+                      {isPaid ? (
                         <button
                           onClick={() => openRevertModal(inst)}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-amber-500/90 px-4 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/90 text-slate-950 shadow-[0_8px_18px_rgba(245,158,11,0.28)] transition-colors hover:bg-amber-400"
+                          title="Estornar pagamento"
+                          aria-label={`Estornar parcela ${inst.installmentNumber} do emprestimo ${inst.loan_id}`}
                         >
                           <RotateCcw className="h-4 w-4" />
-                          Estornar
                         </button>
                       ) : (
                         <button
                           onClick={() => openPayModal(inst)}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.28)] transition-colors hover:bg-emerald-500"
+                          title="Pagar parcela"
+                          aria-label={`Pagar parcela ${inst.installmentNumber} do emprestimo ${inst.loan_id}`}
                         >
                           <DollarSign className="h-4 w-4" />
-                          Pagar
                         </button>
                       )}
-                    >
                       <button
                         onClick={() => openDeleteModal(inst)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
                         title="Excluir parcela"
+                        aria-label={`Excluir parcela ${inst.installmentNumber} do emprestimo ${inst.loan_id}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                    </MobileDataCardActions>
+                    </div>
                   )}
                 >
                   <div className="grid grid-cols-2 gap-2">

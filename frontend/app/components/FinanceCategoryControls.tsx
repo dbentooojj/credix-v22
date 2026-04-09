@@ -512,7 +512,6 @@ export function FinanceCategoryManagerModal({
       onClose={onClose}
       open={open}
       size="max-w-3xl"
-      subtitle="Categorias padrao podem ser arquivadas. Categorias custom podem ser editadas e reutilizadas nos relatorios."
       title={title}
     >
       <div className="relative">

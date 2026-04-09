@@ -142,7 +142,6 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
         onClose={closeCashAdjustmentModal}
         open={open}
         size="max-w-[760px]"
-        subtitle="Registre entrada ou retirada para atualizar o saldo atual."
         title="Ajustar caixa"
       >
         <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
