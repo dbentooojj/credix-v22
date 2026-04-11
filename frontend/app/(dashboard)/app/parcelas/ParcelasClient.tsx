@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -396,21 +396,21 @@ export function ParcelasClient() {
       {/* Header */}
       <section className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Controle de Cobrança</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Controle de CobranÃ§a</h1>
         </div>
       </section>
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-        {/* Recebido no mês */}
+        {/* Recebido no mÃªs */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500" />
           <div className="flex items-start justify-between">
-            <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Recebido no mês</p>
+            <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Recebido no mÃªs</p>
             <CheckCircle2 className="h-5 w-5 text-emerald-500" />
           </div>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : formatCurrency(kpis.receivedValue)}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
             <CheckCircle2 className="inline h-3 w-3 mr-1 text-emerald-500" />
             {loading ? "..." : `${kpis.receivedCount} parcela(s) paga(s)`}
           </p>
@@ -423,7 +423,7 @@ export function ParcelasClient() {
             <Clock className="h-5 w-5 text-amber-500" />
           </div>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-amber-400">{loading ? "..." : formatCurrency(kpis.pendingValue)}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
             <Clock className="inline h-3 w-3 mr-1 text-amber-500" />
             {loading ? "..." : `${kpis.pendingCount} parcela(s) em aberto`}
           </p>
@@ -436,7 +436,7 @@ export function ParcelasClient() {
             <AlertTriangle className="h-5 w-5 text-red-500" />
           </div>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-red-400">{loading ? "..." : formatCurrency(kpis.overdueValue)}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
             <AlertTriangle className="inline h-3 w-3 mr-1 text-red-500" />
             {loading ? "..." : `${kpis.overdueCount} parcela(s) em atraso`}
           </p>
@@ -453,7 +453,7 @@ export function ParcelasClient() {
               <input
                 type="text"
                 className="w-full rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                placeholder="Nome, telefone, empréstimo ou parcela"
+                placeholder="Nome, telefone, emprÃ©stimo ou parcela"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -486,7 +486,7 @@ export function ParcelasClient() {
             </select>
           </div>
           <div className="xl:col-span-2">
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Período</label>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">PerÃ­odo</label>
             <select
               className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
               value={periodFilter}
@@ -494,9 +494,9 @@ export function ParcelasClient() {
             >
               <option value="all">Todos</option>
               <option value="today">Hoje</option>
-              <option value="next7">Próximos 7 dias</option>
-              <option value="month_current">Mês atual</option>
-              <option value="last30">Últimos 30 dias</option>
+              <option value="next7">PrÃ³ximos 7 dias</option>
+              <option value="month_current">MÃªs atual</option>
+              <option value="last30">Ãšltimos 30 dias</option>
             </select>
           </div>
           <div className="xl:col-span-2">
@@ -509,8 +509,8 @@ export function ParcelasClient() {
               <option value="Todas">Todas</option>
               <option value="Pix">Pix</option>
               <option value="Dinheiro">Dinheiro</option>
-              <option value="Transferência">Transferência</option>
-              <option value="Cartão">Cartão</option>
+              <option value="TransferÃªncia">TransferÃªncia</option>
+              <option value="CartÃ£o">CartÃ£o</option>
               <option value="Outro">Outro</option>
             </select>
           </div>
@@ -526,7 +526,7 @@ export function ParcelasClient() {
 
         {/* Tabela */}
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-100">Parcelas da cobrança</h3>
+          <h3 className="text-lg font-bold text-slate-100">Parcelas da cobranÃ§a</h3>
           <span className="text-sm text-slate-400">
             Resultados: <strong className="text-slate-200">{filtered.length}</strong>
           </span>
@@ -540,7 +540,7 @@ export function ParcelasClient() {
                   Cliente {renderSortIcon("client")}
                 </th>
                 <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("loan")}>
-                  Empréstimo {renderSortIcon("loan")}
+                  EmprÃ©stimo {renderSortIcon("loan")}
                 </th>
                 <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("number")}>
                   Parcela {renderSortIcon("number")}
@@ -554,7 +554,7 @@ export function ParcelasClient() {
                 <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("status")}>
                   Status {renderSortIcon("status")}
                 </th>
-                <th className="px-4 py-3 text-right">Ações</th>
+                <th className="px-4 py-3 text-right">AÃ§Ãµes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
@@ -566,7 +566,7 @@ export function ParcelasClient() {
                 pageRows.map((inst) => (
                   <tr key={inst.id} className="transition-colors hover:bg-slate-800/40">
                     <td className="px-4 py-4">
-                      <div className="font-semibold text-slate-100">{inst.debtor?.name || "—"}</div>
+                      <div className="font-semibold text-slate-100">{inst.debtor?.name || "â€”"}</div>
                     </td>
                     <td className="px-4 py-4 text-slate-300">#{inst.loan_id}</td>
                     <td className="px-4 py-4 text-slate-300">{inst.installmentNumber}/{enriched.filter(e => sameId(e.loan_id, inst.loan_id)).length}</td>
@@ -601,7 +601,7 @@ export function ParcelasClient() {
           </table>
         </div>
 
-        {/* Paginação */}
+        {/* PaginaÃ§Ã£o */}
         <div className="grid gap-3 md:hidden">
           {loading ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
@@ -620,7 +620,7 @@ export function ParcelasClient() {
                 <MobileDataCard
                   key={inst.id}
                   title={inst.debtor?.name || "Cliente"}
-                  subtitle={`Emprestimo #${inst.loan_id} • Parcela ${inst.installmentNumber}/${totalLoanInstallments}`}
+                  subtitle={`Emprestimo #${inst.loan_id} â€¢ Parcela ${inst.installmentNumber}/${totalLoanInstallments}`}
                   badge={(
                     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(inst.uiStatus)}`}>
                       {inst.uiStatus}
@@ -671,7 +671,7 @@ export function ParcelasClient() {
         {!loading && (
           <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
-              Mostrando <span className="text-slate-200">{filtered.length > 0 ? startIdx + 1 : 0}</span> até{" "}
+              Mostrando <span className="text-slate-200">{filtered.length > 0 ? startIdx + 1 : 0}</span> atÃ©{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filtered.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filtered.length}</span> resultados
             </p>
@@ -684,7 +684,7 @@ export function ParcelasClient() {
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-sm font-medium text-slate-400">
-                Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
+                PÃ¡gina <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
@@ -699,34 +699,35 @@ export function ParcelasClient() {
       </div>
 
       {/* ===== MODAL: REGISTRAR PAGAMENTO ===== */}
-      <ModalBase open={showPayModal} onClose={() => setShowPayModal(false)} title="Registrar pagamento" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} — ${selectedInst.debtor?.name || "Cliente"}` : ""}
+      <ModalBase open={showPayModal} onClose={() => setShowPayModal(false)} title="Registrar pagamento" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} â€” ${selectedInst.debtor?.name || "Cliente"}` : ""}
         footer={<><ModalBtnGhost onClick={() => setShowPayModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={handlePay} disabled={actionLoading}>{actionLoading ? "Salvando..." : "Confirmar pagamento"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
           <ModalField label="Valor (R$)"><input className={modalInputClass} inputMode="decimal" maxLength={24} type="text" value={payAmount} onChange={(e) => setPayAmount(formatCurrencyInput(e.target.value))} /></ModalField>
           <ModalField label="Data do pagamento"><input className={modalInputClass} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></ModalField>
-          <ModalField label="Método de pagamento">
+          <ModalField label="MÃ©todo de pagamento">
             <select className={modalInputClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="TRANSFERENCIA">Transferência</option><option value="CARTAO">Cartão</option><option value="BOLETO">Boleto</option><option value="OUTRO">Outro</option>
+              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="TRANSFERENCIA">TransferÃªncia</option><option value="CARTAO">CartÃ£o</option><option value="BOLETO">Boleto</option><option value="OUTRO">Outro</option>
             </select>
           </ModalField>
-          <ModalField label="Observações"><input className={modalInputClass} placeholder="Opcional" maxLength={200} value={payNotes} onChange={(e) => setPayNotes(e.target.value)} /></ModalField>
+          <ModalField label="ObservaÃ§Ãµes"><input className={modalInputClass} placeholder="Opcional" maxLength={200} value={payNotes} onChange={(e) => setPayNotes(e.target.value)} /></ModalField>
         </div>
       </ModalBase>
 
       {/* ===== MODAL: ESTORNAR PAGAMENTO ===== */}
-      <ModalBase open={showRevertModal} onClose={() => setShowRevertModal(false)} title="Estornar pagamento" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} — ${selectedInst.debtor?.name || "Cliente"}` : ""}
+      <ModalBase open={showRevertModal} onClose={() => setShowRevertModal(false)} title="Estornar pagamento" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} â€” ${selectedInst.debtor?.name || "Cliente"}` : ""}
         footer={<><ModalBtnGhost onClick={() => setShowRevertModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleRevert} disabled={actionLoading}>{actionLoading ? "Estornando..." : "Confirmar estorno"}</ModalBtnPrimary></>}
       >
-        <p className="text-sm text-slate-400">O pagamento será removido e a parcela voltará ao status anterior (Pendente ou Atrasado). Esta ação não pode ser desfeita.</p>
+        <p className="text-sm text-slate-400">O pagamento serÃ¡ removido e a parcela voltarÃ¡ ao status anterior (Pendente ou Atrasado). Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
       </ModalBase>
 
       {/* ===== MODAL: EXCLUIR PARCELA ===== */}
-      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Excluir parcela" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} — ${selectedInst.debtor?.name || "Cliente"}` : ""}
-        footer={<><ModalBtnGhost onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleDeleteInst} disabled={actionLoading}>{actionLoading ? "Excluindo..." : "Confirmar exclusão"}</ModalBtnPrimary></>}
+      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Excluir parcela" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} â€” ${selectedInst.debtor?.name || "Cliente"}` : ""}
+        footer={<><ModalBtnGhost onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleDeleteInst} disabled={actionLoading}>{actionLoading ? "Excluindo..." : "Confirmar exclusÃ£o"}</ModalBtnPrimary></>}
       >
-        <p className="text-sm text-slate-400">A parcela será removida permanentemente do empréstimo. Parcelas pagas devem ser estornadas antes de serem excluídas.</p>
+        <p className="text-sm text-slate-400">A parcela serÃ¡ removida permanentemente do emprÃ©stimo. Parcelas pagas devem ser estornadas antes de serem excluÃ­das.</p>
       </ModalBase>
     </div>
   );
 }
+

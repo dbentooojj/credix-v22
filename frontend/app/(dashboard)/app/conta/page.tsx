@@ -34,7 +34,7 @@ function ContaPageContent() {
     <div className="mx-auto w-full max-w-[1000px]">
       <div className="mb-6 lg:mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">Conta</h1>
-        <p className="mt-1.5 text-sm text-slate-500">Gerencie perfil, seguranca e suporte.</p>
+        <p className="mt-1.5 hidden text-sm text-slate-500 sm:block">Gerencie perfil, seguranca e suporte.</p>
       </div>
 
       <div className="flex flex-col gap-6">

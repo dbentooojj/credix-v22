@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
 import {
@@ -490,7 +490,7 @@ export function EmprestimosClient() {
       if (resInstallments.data) setInstallments(resInstallments.data);
       if (resSimulations.data) setSimulations(resSimulations.data);
     } catch (err) {
-      setError("Erro ao carregar dados. Verifique a conexão.");
+      setError("Erro ao carregar dados. Verifique a conexÃ£o.");
     } finally {
       setLoading(false);
     }
@@ -498,7 +498,7 @@ export function EmprestimosClient() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // --- Cálculo dinâmico do resumo ---
+  // --- CÃ¡lculo dinÃ¢mico do resumo ---
   const baseLoanCalculation = useMemo(() => {
     return calculateLoanPreview({
       principal: formPrincipal,
@@ -1489,14 +1489,14 @@ export function EmprestimosClient() {
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
       <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Empréstimos</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">EmprÃ©stimos</h1>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:justify-end">
           <button onClick={openSimulationModal} className="inline-flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-semibold text-slate-300 transition-all hover:bg-slate-700 active:scale-[0.98] sm:px-5">
-            <FlaskConical className="h-4 w-4" /> Nova simulação
+            <FlaskConical className="h-4 w-4" /> Nova simulaÃ§Ã£o
           </button>
           <button onClick={openLoanModal} className="inline-flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-3 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98] sm:px-5">
-            <Plus className="h-4 w-4" /> Novo empréstimo
+            <Plus className="h-4 w-4" /> Novo emprÃ©stimo
           </button>
         </div>
       </section>
@@ -1506,30 +1506,30 @@ export function EmprestimosClient() {
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-[#4F7EF7]" />
           <Hash className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
-          <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Empréstimos</p>
+          <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">EmprÃ©stimos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : totalCount}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">Na base de dados</p>
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Na base de dados</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500" />
           <Banknote className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Principal total</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : formatCurrency(totalPrincipal)}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">Capital emprestado</p>
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Capital emprestado</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-violet-500" />
           <BarChart3 className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Total contratado</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : formatCurrency(totalContracted)}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">Custo Efetivo + Juros</p>
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Custo Efetivo + Juros</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-sky-500" />
           <CheckCircle2 className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Ativos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-sky-400">{loading ? "..." : activeCount}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">Contratos vigentes</p>
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Contratos vigentes</p>
         </div>
       </div>
 
@@ -1788,7 +1788,7 @@ export function EmprestimosClient() {
             <input
               type="text"
               className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-              placeholder="Cliente ou ID do empréstimo"
+              placeholder="Cliente ou ID do emprÃ©stimo"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -1832,24 +1832,24 @@ export function EmprestimosClient() {
                 <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("status")}>
                   Status {renderSortIcon("status")}
                 </th>
-                <th className="px-4 py-3 text-right">Ações</th>
+                <th className="px-4 py-3 text-right">AÃ§Ãµes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">Carregando empréstimos...</td>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">Carregando emprÃ©stimos...</td>
                 </tr>
               ) : pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">Nenhum empréstimo encontrado.</td>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">Nenhum emprÃ©stimo encontrado.</td>
                 </tr>
               ) : (
                 pageRows.map(loan => (
                   <tr key={loan.id} className="transition-colors hover:bg-slate-800/40">
                     <td className="px-4 py-4 font-semibold text-slate-200">#{loan.id}</td>
                     <td className="px-4 py-4">
-                      <div className="font-semibold text-slate-100">{loan.debtor?.name || "Cliente excluído"}</div>
+                      <div className="font-semibold text-slate-100">{loan.debtor?.name || "Cliente excluÃ­do"}</div>
                       <div className="mt-1 text-xs text-slate-400">
                         {formatDocument(loan.debtor?.document || loan.debtor?.cpf) || "Sem documento"}
                       </div>
@@ -1900,7 +1900,7 @@ export function EmprestimosClient() {
           </table>
         </div>
 
-        {/* Rodapé Tabela (Paginação) */}
+        {/* RodapÃ© Tabela (PaginaÃ§Ã£o) */}
         <div className="grid gap-3 md:hidden">
           {loading ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
@@ -1973,7 +1973,7 @@ export function EmprestimosClient() {
         {!loading && (
           <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
-              Mostrando <span className="text-slate-200">{filteredAndSortedLoans.length > 0 ? startIdx + 1 : 0}</span> até{" "}
+              Mostrando <span className="text-slate-200">{filteredAndSortedLoans.length > 0 ? startIdx + 1 : 0}</span> atÃ©{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filteredAndSortedLoans.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filteredAndSortedLoans.length}</span> resultados
             </p>
@@ -1986,7 +1986,7 @@ export function EmprestimosClient() {
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-sm font-medium text-slate-400">
-                Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
+                PÃ¡gina <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
@@ -2151,7 +2151,7 @@ export function EmprestimosClient() {
         </ModalBase>
       ) : null}
 
-      {/* ===== MODAL: NOVO EMPRÉSTIMO / NOVA SIMULAÇÃO ===== */}
+      {/* ===== MODAL: NOVO EMPRÃ‰STIMO / NOVA SIMULAÃ‡ÃƒO ===== */}
       {showLoanModal && (
         <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-hidden bg-black/60 px-4 pb-4 pt-14 backdrop-blur-sm sm:pt-16" onClick={closeLoanModal}>
           <div className="flex max-h-[calc(100vh-4.5rem)] w-full max-w-[840px] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl sm:max-h-[calc(100vh-5rem)]" onClick={(e) => e.stopPropagation()}>
@@ -2179,7 +2179,7 @@ export function EmprestimosClient() {
                     Este emprestimo ja possui parcela paga. Por regra, ele nao pode mais ser alterado.
                   </div>
                 ) : null}
-                {/* Informações Básicas */}
+                {/* InformaÃ§Ãµes BÃ¡sicas */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Informacoes basicas</h3>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -2197,7 +2197,7 @@ export function EmprestimosClient() {
                   </div>
                 </div>
 
-                {/* Condições */}
+                {/* CondiÃ§Ãµes */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Condicoes</h3>
                   <div className="grid gap-4 md:grid-cols-3">
@@ -2375,7 +2375,7 @@ export function EmprestimosClient() {
                   <label className="mb-1 block text-xs font-semibold text-slate-400">Detalhes adicionais</label>
                   <textarea
                     className="min-h-[180px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none resize-none"
-                    placeholder="Observações sobre o emprestimo"
+                    placeholder="ObservaÃ§Ãµes sobre o emprestimo"
                     value={formObservations}
                     onChange={(e) => setFormObservations(e.target.value)}
                   />
@@ -2392,7 +2392,7 @@ export function EmprestimosClient() {
                 </button>
               ) : loanModalMode === "loan" ? (
                 <button onClick={handleSaveLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
-                  {saving ? "Salvando..." : "Salvar empréstimo"}
+                  {saving ? "Salvando..." : "Salvar emprÃ©stimo"}
                 </button>
               ) : isEditingLoanModal ? (
                 <button onClick={handleUpdateLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
@@ -2451,16 +2451,16 @@ export function EmprestimosClient() {
         </ModalBase>
       ) : null}
 
-      {/* ===== MODAL: EXCLUIR EMPRÉSTIMO ===== */}
+      {/* ===== MODAL: EXCLUIR EMPRÃ‰STIMO ===== */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
           <div className="w-full max-w-md mx-4 rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-slate-100">Confirmar exclusão</h2>
-            <p className="mt-1 text-sm text-slate-400">Deseja excluir o empréstimo #{deletingLoan?.id}?</p>
-            <p className="mt-3 text-sm text-slate-400">Esta ação não pode ser desfeita. O empréstimo e suas parcelas serão removidos permanentemente.</p>
+            <h2 className="text-lg font-bold text-slate-100">Confirmar exclusÃ£o</h2>
+            <p className="mt-1 text-sm text-slate-400">Deseja excluir o emprÃ©stimo #{deletingLoan?.id}?</p>
+            <p className="mt-3 text-sm text-slate-400">Esta aÃ§Ã£o nÃ£o pode ser desfeita. O emprÃ©stimo e suas parcelas serÃ£o removidos permanentemente.</p>
             <div className="mt-5 flex justify-end gap-3">
               <button onClick={() => setShowDeleteModal(false)} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-5 text-sm font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50">Cancelar</button>
-              <button onClick={handleDeleteLoan} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">{saving ? "Excluindo..." : "Excluir empréstimo"}</button>
+              <button onClick={handleDeleteLoan} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">{saving ? "Excluindo..." : "Excluir emprÃ©stimo"}</button>
             </div>
           </div>
         </div>
@@ -2468,4 +2468,5 @@ export function EmprestimosClient() {
     </div>
   );
 }
+
 

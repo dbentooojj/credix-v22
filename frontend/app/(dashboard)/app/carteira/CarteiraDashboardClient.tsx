@@ -316,7 +316,7 @@ function SmallMetricCard({
         </div>
         <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl', accent)}>{icon}</span>
       </div>
-      <p className="mt-2.5 text-sm text-slate-500">{note}</p>
+      <p className="mt-2.5 hidden text-sm text-slate-500 sm:block">{note}</p>
     </article>
   );
 }
@@ -336,7 +336,7 @@ function SupportMetricCard({
     <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
       <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
       <p className={cn('mt-2 text-[1.35rem] font-bold tracking-tight text-slate-800', valueClassName)}>{value}</p>
-      <p className="mt-1.5 text-sm text-slate-500">{note}</p>
+      <p className="mt-1.5 hidden text-sm text-slate-500 sm:block">{note}</p>
     </div>
   );
 }
@@ -369,7 +369,7 @@ function ActionCard({
           <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
           <p className={cn('mt-3 text-[2rem] font-bold leading-none tracking-tight', toneClassName)}>{count}</p>
           <p className="mt-2 text-sm font-semibold text-slate-800">{value}</p>
-          <p className="mt-2 text-sm text-slate-500">{note}</p>
+          <p className="mt-2 hidden text-sm text-slate-500 sm:block">{note}</p>
         </div>
         <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl', iconClassName)}>{icon}</span>
       </div>
@@ -701,9 +701,9 @@ export default function CarteiraDashboardClient() {
     <div className="mx-auto min-h-screen w-full max-w-[1600px] space-y-6 bg-transparent pb-24 font-sans lg:pb-8">
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400">Carteira de emprestimos</p>
-          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-800 sm:text-[2rem]">Painel da carteira</h2>
-          <p className="mt-1.5 max-w-2xl text-sm text-slate-500">
+          <p className="hidden text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">Carteira de emprestimos</p>
+          <h2 className="mt-1 text-[1.55rem] font-bold tracking-tight text-slate-800 sm:mt-2 sm:text-[2rem]">Painel da carteira</h2>
+          <p className="mt-1.5 hidden max-w-2xl text-sm text-slate-500 md:block">
             Tela operacional para acompanhar cobranca, vencimentos, retorno e pressao de risco da carteira.
           </p>
         </div>
@@ -719,16 +719,16 @@ export default function CarteiraDashboardClient() {
         <article className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#eef4ff_100%)] p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
           <div className="grid gap-5 xl:grid-cols-[1.35fr_.95fr] xl:items-start">
             <div className="max-w-none">
-              <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400">Visao imediata da carteira</p>
-              <h3 className="mt-2 text-[1.15rem] font-bold text-slate-800">A receber</h3>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="hidden text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">Visao imediata da carteira</p>
+              <h3 className="mt-1 text-[1.05rem] font-bold text-slate-800 sm:mt-2 sm:text-[1.15rem]">A receber</h3>
+              <p className="mt-2 hidden text-sm text-slate-500 sm:block">
                 Total aberto da carteira somando parcelas futuras e parcelas em atraso.
               </p>
-              <p className="mt-6 text-[2.9rem] font-bold leading-none tracking-tight text-slate-900">
+              <p className="mt-4 text-[2.35rem] font-bold leading-none tracking-tight text-slate-900 sm:mt-6 sm:text-[2.9rem]">
                 {formatCurrency(kpis.totalOpenReceivable || 0)}
               </p>
-              <p className="mt-3 text-sm text-slate-500">
-                Caixa previsto da carteira ativa no curto prazo.
+              <p className="mt-2 text-xs text-slate-500 sm:mt-3 sm:text-sm">
+                Caixa previsto no curto prazo.
               </p>
             </div>
 
@@ -738,7 +738,7 @@ export default function CarteiraDashboardClient() {
                 <p className="mt-2 text-[1.8rem] font-bold tracking-tight text-slate-800">
                   {formatCurrency(kpis.openReceivableFuture || 0)}
                 </p>
-                <p className="mt-1.5 text-sm text-slate-500">Parcelas em dia aguardando vencimento.</p>
+                <p className="mt-1.5 hidden text-sm text-slate-500 sm:block">Parcelas em dia aguardando vencimento.</p>
               </div>
 
               <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
@@ -746,7 +746,7 @@ export default function CarteiraDashboardClient() {
                 <p className="mt-2 text-[1.8rem] font-bold tracking-tight text-rose-600">
                   {formatCurrency(kpis.openReceivableOverdue || 0)}
                 </p>
-                <p className="mt-1.5 text-sm text-rose-500">Exige cobranca e acompanhamento mais proximo.</p>
+                <p className="mt-1.5 hidden text-sm text-rose-500 sm:block">Exige cobranca e acompanhamento mais proximo.</p>
               </div>
             </div>
           </div>
@@ -798,7 +798,7 @@ export default function CarteiraDashboardClient() {
         <div className="mb-5 flex flex-col gap-1">
           <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400">Acoes do dia</p>
           <h3 className="text-[1.15rem] font-bold text-slate-800">O que pede atencao agora</h3>
-          <p className="text-sm text-slate-500">Prioridades operacionais para baixar, cobrar e planejar os proximos dias.</p>
+          <p className="hidden text-sm text-slate-500 sm:block">Prioridades operacionais para baixar, cobrar e planejar os proximos dias.</p>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-3">
@@ -844,7 +844,7 @@ export default function CarteiraDashboardClient() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h3 className="text-[1.15rem] font-bold text-slate-800">Performance mensal da carteira</h3>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 hidden text-sm text-slate-500 sm:block">
                   Recebido como serie principal, com apoio de aberto e atraso por mes.
                 </p>
               </div>
@@ -959,7 +959,7 @@ export default function CarteiraDashboardClient() {
                       Sem base
                     </p>
                   )}
-                  <p className="mt-3 text-sm text-slate-500">{healthDescriptor.note}</p>
+                  <p className="mt-3 hidden text-sm text-slate-500 sm:block">{healthDescriptor.note}</p>
                 </div>
                 <span className={cn('rounded-full border px-3 py-1.5 text-xs font-semibold', healthDescriptor.chip)}>
                   {healthDescriptor.label}
@@ -991,7 +991,7 @@ export default function CarteiraDashboardClient() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-[1.15rem] font-bold text-slate-800">Proximos vencimentos</h3>
-              <p className="mt-1 text-sm text-slate-500">Fila operacional para baixa rapida e acompanhamento da semana.</p>
+              <p className="mt-1 hidden text-sm text-slate-500 sm:block">Fila operacional para baixa rapida e acompanhamento da semana.</p>
             </div>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">
               {upcomingItems.length} registro(s)
@@ -1039,7 +1039,7 @@ export default function CarteiraDashboardClient() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-[1.15rem] font-bold text-slate-800">Cobrancas em atraso</h3>
-              <p className="mt-1 text-sm text-slate-500">Fila de cobranca com baixa rapida e contato por WhatsApp.</p>
+              <p className="mt-1 hidden text-sm text-slate-500 sm:block">Fila de cobranca com baixa rapida e contato por WhatsApp.</p>
             </div>
             <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600">{overdueItems.length} registro(s)</span>
           </div>

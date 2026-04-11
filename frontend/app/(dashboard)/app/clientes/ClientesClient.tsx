@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
@@ -138,7 +138,7 @@ function getScoreIndicator(scoreValue: number) {
       badgeClass: "border-orange-300 bg-orange-50 text-orange-700",
       dotClass: "bg-orange-500",
       textClass: "text-orange-700",
-      label: "Risco médio",
+      label: "Risco mÃ©dio",
     };
   }
   return {
@@ -276,7 +276,7 @@ export function ClientesClient() {
     } finally { setSaving(false); }
   }
 
-  // --- ENGINE DE PROCESSAMENTO (Réplica exata do backend/ejs) ---
+  // --- ENGINE DE PROCESSAMENTO (RÃ©plica exata do backend/ejs) ---
   const enrichedDebtors = useMemo(() => {
     const today = startOfDay(new Date());
 
@@ -292,7 +292,7 @@ export function ClientesClient() {
 
       let hasActiveLoan = false;
 
-      // Histórico de parcelas passadas
+      // HistÃ³rico de parcelas passadas
       const history: any[] = [];
 
       debInstallments.forEach((inst) => {
@@ -337,7 +337,7 @@ export function ClientesClient() {
         }
       }
 
-      // --- CÁLCULO ÍNDICE CREDIX ---
+      // --- CÃLCULO ÃNDICE CREDIX ---
       let scoreRaw = 500;
       history.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
 
@@ -404,7 +404,7 @@ export function ClientesClient() {
 
       const totalDueCount = history.filter((i) => i.dueDate <= today!).length;
       const score = Math.max(0, Math.min(1000, Math.round(scoreRaw)));
-      // Fim Índice
+      // Fim Ãndice
 
       return {
         ...debtor,
@@ -419,7 +419,7 @@ export function ClientesClient() {
     });
   }, [debtors, installments, loans]);
 
-  // Aplicação de Filtros e Ordenação
+  // AplicaÃ§Ã£o de Filtros e OrdenaÃ§Ã£o
   const filteredAndSorted = useMemo(() => {
     let result = [...enrichedDebtors];
 
@@ -465,7 +465,7 @@ export function ClientesClient() {
     return result;
   }, [enrichedDebtors, search, statusFilter, sortBy, sortDir]);
 
-  // Paginação
+  // PaginaÃ§Ã£o
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / pageSize));
   const currentPageSafe = Math.min(Math.max(1, page), totalPages);
   const startIdx = (currentPageSafe - 1) * pageSize;
@@ -523,7 +523,7 @@ export function ClientesClient() {
           <UsersIcon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Total de clientes</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : totalDebtors}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
             {loading ? "Carregando..." : `${totalDebtors} registros`}
           </p>
         </div>
@@ -532,7 +532,7 @@ export function ClientesClient() {
           <CheckCircle2Icon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Clientes ativos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : activeDebtors}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
             {loading ? "Carregando..." : `${((activeDebtors / (totalDebtors || 1)) * 100).toFixed(1)}% da base`}
           </p>
         </div>
@@ -541,14 +541,14 @@ export function ClientesClient() {
           <ClockIcon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Clientes inativos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : inactiveDebtors}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">{loading ? "Carregando..." : "Sem pendências"}</p>
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">{loading ? "Carregando..." : "Sem pendÃªncias"}</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-red-500" />
           <AlertTriangleIcon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Com atraso</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-red-400">{loading ? "..." : overdueDebtors}</p>
-          <p className="mt-1 sm:mt-1.5 text-xs font-semibold text-slate-500">
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
             {loading ? "Carregando..." : "Boletos vencidos"}
           </p>
         </div>
@@ -631,8 +631,8 @@ export function ClientesClient() {
                 >
                   Status {renderSortIcon("status")}
                 </th>
-                <th className="px-4 py-3">Situação</th>
-                <th className="px-4 py-3 text-center">Índice Credix</th>
+                <th className="px-4 py-3">SituaÃ§Ã£o</th>
+                <th className="px-4 py-3 text-center">Ãndice Credix</th>
                 <th
                   className="px-4 py-3 text-right cursor-pointer hover:bg-slate-800 transition-colors"
                   onClick={() => toggleSort("overdue_count")}
@@ -645,7 +645,7 @@ export function ClientesClient() {
                 >
                   Total em aberto {renderSortIcon("open_total")}
                 </th>
-                <th className="px-4 py-3 text-right">Ações</th>
+                <th className="px-4 py-3 text-right">AÃ§Ãµes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
@@ -672,7 +672,7 @@ export function ClientesClient() {
                       <td className="px-4 py-4">
                         <div className="font-semibold text-slate-100">{debtor.name || "-"}</div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {formatDocument(debtor.document || debtor.cpf) || "Sem doc."} • {formatPhone(debtor.phone) || "Sem cel."}
+                          {formatDocument(debtor.document || debtor.cpf) || "Sem doc."} â€¢ {formatPhone(debtor.phone) || "Sem cel."}
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -710,7 +710,7 @@ export function ClientesClient() {
                             </span>
                           </div>
                         ) : (
-                          <span className="text-xs font-semibold text-slate-600">Sem histórico</span>
+                          <span className="text-xs font-semibold text-slate-600">Sem histÃ³rico</span>
                         )}
                       </td>
                       <td className="px-4 py-4 text-right">
@@ -745,7 +745,7 @@ export function ClientesClient() {
           </table>
         </div>
 
-        {/* Rodapé Tabela (Paginação) */}
+        {/* RodapÃ© Tabela (PaginaÃ§Ã£o) */}
         <div className="grid gap-3 md:hidden">
           {loading ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
@@ -768,7 +768,7 @@ export function ClientesClient() {
                 <MobileDataCard
                   key={debtor.id}
                   title={debtor.name || "-"}
-                  subtitle={`${formatDocument(debtor.document || debtor.cpf) || "Sem doc."} • ${formatPhone(debtor.phone) || "Sem cel."}`}
+                  subtitle={`${formatDocument(debtor.document || debtor.cpf) || "Sem doc."} â€¢ ${formatPhone(debtor.phone) || "Sem cel."}`}
                   badge={(
                     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(debtor.uiStatus)}`}>
                       {debtor.uiStatus}
@@ -833,7 +833,7 @@ export function ClientesClient() {
         {!loading && (
           <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
-              Mostrando <span className="text-slate-200">{filteredAndSorted.length > 0 ? startIdx + 1 : 0}</span> até{" "}
+              Mostrando <span className="text-slate-200">{filteredAndSorted.length > 0 ? startIdx + 1 : 0}</span> atÃ©{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filteredAndSorted.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filteredAndSorted.length}</span> resultados
             </p>
@@ -846,7 +846,7 @@ export function ClientesClient() {
                 <ChevronLeftIcon className="h-4 w-4" />
               </button>
               <span className="text-sm font-medium text-slate-400">
-                Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
+                PÃ¡gina <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
@@ -865,7 +865,7 @@ export function ClientesClient() {
         footer={<><ModalBtnGhost onClick={() => setShowFormModal(false)} disabled={saving}>Cancelar</ModalBtnGhost><ModalBtnPrimary onClick={handleSaveClient} disabled={saving}>{saving ? "Salvando..." : editingDebtor ? "Salvar" : "Cadastrar"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
-          <ModalField label="Nome completo" full><input className={modalInputClass} maxLength={200} placeholder="Ex: João Silva" value={formName} onChange={(e) => setFormName(e.target.value)} /></ModalField>
+          <ModalField label="Nome completo" full><input className={modalInputClass} maxLength={200} placeholder="Ex: JoÃ£o Silva" value={formName} onChange={(e) => setFormName(e.target.value)} /></ModalField>
           <ModalField label="CPF / CNPJ"><input className={modalInputClass} maxLength={18} placeholder="000.000.000-00" value={formDocument} onChange={(e) => setFormDocument(e.target.value)} /></ModalField>
           <ModalField label="Telefone"><input className={modalInputClass} maxLength={15} placeholder="(00) 90000-0000" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></ModalField>
           <ModalField label="E-mail"><input className={modalInputClass} type="email" placeholder="email@exemplo.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></ModalField>
@@ -874,11 +874,12 @@ export function ClientesClient() {
       </ModalBase>
 
       {/* ===== MODAL: EXCLUIR CLIENTE ===== */}
-      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Confirmar exclusão" subtitle={`Deseja excluir "${deletingDebtor?.name || "este cliente"}"?`}
+      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Confirmar exclusÃ£o" subtitle={`Deseja excluir "${deletingDebtor?.name || "este cliente"}"?`}
         footer={<><ModalBtnGhost onClick={() => setShowDeleteModal(false)} disabled={saving}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleDeleteClient} disabled={saving}>{saving ? "Excluindo..." : "Excluir cliente"}</ModalBtnPrimary></>}
       >
-        <p className="text-sm text-slate-400">Esta ação não pode ser desfeita. O cliente e seu histórico serão removidos permanentemente.</p>
+        <p className="text-sm text-slate-400">Esta aÃ§Ã£o nÃ£o pode ser desfeita. O cliente e seu histÃ³rico serÃ£o removidos permanentemente.</p>
       </ModalBase>
     </div>
   );
 }
+

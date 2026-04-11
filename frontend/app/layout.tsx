@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
+import { PwaServiceWorkerRegister } from "../components/pwa-service-worker-register";
 import "./globals.css";
 
 const inter = Inter({
@@ -44,7 +45,10 @@ type RootLayoutProps = {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} bg-[#F0F4FA] text-slate-800 antialiased`}>{children}</body>
+      <body className={`${inter.className} bg-[#F0F4FA] text-slate-800 antialiased`}>
+        <PwaServiceWorkerRegister />
+        {children}
+      </body>
     </html>
   );
 }

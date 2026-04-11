@@ -378,8 +378,8 @@ function MetricCard({
       </div>
       <p className="mt-3 text-sm font-medium text-slate-500">{label}</p>
       <p className="mt-1 text-[1.75rem] font-bold tracking-tight text-slate-800">{value}</p>
-      <p className="mt-1.5 text-sm text-slate-500">{note}</p>
-      <p className="mt-1 text-xs text-slate-400">{meta}</p>
+      <p className="mt-1.5 hidden text-sm text-slate-500 sm:block">{note}</p>
+      <p className="mt-1 hidden text-xs text-slate-400 sm:block">{meta}</p>
     </>
   );
 
@@ -485,7 +485,7 @@ function DailySummaryCard({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-slate-600">{title}</p>
           <p className={`mt-2 text-[1.6rem] font-bold tracking-tight ${toneClass.value}`}>{value}</p>
-          <p className="mt-1.5 text-xs text-slate-500">{meta}</p>
+          <p className="mt-1.5 hidden text-xs text-slate-500 sm:block">{meta}</p>
         </div>
       </div>
     </article>
@@ -1243,7 +1243,7 @@ export function OverviewPageClient() {
             <h1 className="text-2xl sm:text-[clamp(1.6rem,1.2vw+1rem,2.1rem)] font-bold leading-tight tracking-tight text-slate-800">
               Visao geral
             </h1>
-            <p className="mt-1.5 text-sm text-slate-500">
+            <p className="mt-1.5 hidden text-sm text-slate-500 md:block">
               Resumo do caixa, recebimentos e compromissos financeiros.
             </p>
           </div>
@@ -1321,7 +1321,7 @@ export function OverviewPageClient() {
         <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:flex xl:h-[430px] xl:flex-col">
           <div className="border-b border-slate-100 px-5 py-4">
             <h3 className="text-base font-bold text-slate-800">Alertas financeiros</h3>
-            <p className="mt-0.5 text-sm text-slate-500">Leitura rapida dos compromissos e riscos do dia.</p>
+            <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">Leitura rapida dos compromissos e riscos do dia.</p>
           </div>
           <div className="grid flex-1 content-start gap-2.5 overflow-y-auto p-4">
             {alerts.map((alert) => (
@@ -1337,7 +1337,7 @@ export function OverviewPageClient() {
         <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:h-full">
           <div className="border-b border-slate-100 px-5 py-4">
             <h3 className="text-base font-bold text-slate-800">{flowHeader.title}</h3>
-            <p className="mt-0.5 text-sm text-slate-500">{flowHeader.subtitle}</p>
+            <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">{flowHeader.subtitle}</p>
           </div>
           <div className="p-5">
             {/* Mini stats row */}
@@ -1378,7 +1378,7 @@ export function OverviewPageClient() {
                   {flowInsight.summary}
                 </p>
                 <p
-                  className="mt-1 text-xs text-slate-500"
+                  className="mt-1 hidden text-xs text-slate-500 sm:block"
                 >
                   {previousPoint
                     ? `${currentPoint?.label || "Mes atual"}: ${formatCurrency(currentValue)} | ${previousPoint.label || "Mes anterior"}: ${formatCurrency(previousValue)}`
@@ -1407,7 +1407,7 @@ export function OverviewPageClient() {
         <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:flex xl:h-full xl:flex-col">
           <div className="border-b border-slate-100 px-5 py-4">
             <h3 className="text-base font-bold text-slate-800">Resumo do dia</h3>
-            <p className="mt-0.5 text-sm text-slate-500">Entradas, saidas e projecao imediata do caixa.</p>
+            <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">Entradas, saidas e projecao imediata do caixa.</p>
           </div>
           <div className="grid gap-3 p-5 xl:flex-1 xl:auto-rows-fr">
             <DailySummaryCard
