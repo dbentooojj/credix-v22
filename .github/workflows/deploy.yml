@@ -37,7 +37,7 @@ jobs:
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
           file: ./backend/Dockerfile
           push: true
           provenance: false
@@ -88,6 +88,42 @@ jobs:
               echo "Diretorio do projeto nao encontrado (esperado: $HOME/credix ou /opt/credix)."
               exit 1
             fi
+
+            print_disk() {
+              echo "=== $1 ==="
+              df -h
+              docker system df || true
+            }
+
+            print_disk "ANTES DA LIMPEZA"
             echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-            docker compose pull
-            docker compose up -d
+
+            # Limpeza segura: sem remover volumes do PostgreSQL.
+            docker container prune -f || true
+            docker image prune -af || true
+            docker builder prune -af || true
+            docker network prune -f || true
+
+            print_disk "APOS LIMPEZA PRE-DEPLOY"
+
+            # Atualiza por servico para reduzir pico de uso de disco.
+            docker compose pull backend
+            docker compose up -d backend
+
+            # Remove imagens/cache nao referenciados antes de puxar o frontend.
+            docker image prune -af || true
+            docker builder prune -af || true
+
+            print_disk "APOS ATUALIZAR BACKEND"
+
+            docker compose pull frontend
+            docker compose up -d frontend
+
+            # Limpeza final segura, sem --volumes.
+            docker container prune -f || true
+            docker image prune -af || true
+            docker builder prune -af || true
+            docker network prune -f || true
+
+            print_disk "APOS DEPLOY"
+            docker compose ps

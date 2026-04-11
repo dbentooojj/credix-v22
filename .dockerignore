@@ -21,3 +21,8 @@
 .github
 .vscode
 .dev-logs
+docs
+README.md
+CHECKLIST.md
+AGENTS.md
+login_page.html
