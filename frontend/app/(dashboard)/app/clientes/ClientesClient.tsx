@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { useToast } from "../../../components/ToastProvider";
 
 import {
   UsersIcon,
@@ -150,6 +151,7 @@ function getScoreIndicator(scoreValue: number) {
 }
 
 export function ClientesClient() {
+  const toast = useToast();
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -253,12 +255,13 @@ export function ClientesClient() {
     } catch (err: any) {
       const message = err instanceof Error ? err.message : "Não foi possível salvar o cliente.";
       setError(message);
-      window.alert(message);
+      toast.error(message, "Falha ao salvar cliente");
     } finally { setSaving(false); }
   }
 
   async function handleDeleteClient() {
     if (!deletingDebtor) return;
+    const debtorName = deletingDebtor.name || `#${deletingDebtor.id}`;
     setSaving(true);
     try {
       const res = await fetch("/api/tables/debtors").then((r) => r.json());
@@ -269,10 +272,13 @@ export function ClientesClient() {
       }
       setShowDeleteModal(false); setDeletingDebtor(null);
       await fetchData();
+      toast.success(`Cliente ${debtorName} excluido com sucesso.`);
     } catch (err: any) {
       const message = err instanceof Error ? err.message : "Não foi possível excluir o cliente.";
+      setShowDeleteModal(false);
+      setDeletingDebtor(null);
       setError(message);
-      window.alert(message);
+      toast.error(message, "Falha ao excluir cliente");
     } finally { setSaving(false); }
   }
 

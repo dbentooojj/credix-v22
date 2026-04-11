@@ -26,7 +26,7 @@ import { useToast } from "../../../components/ToastProvider";
 import { useGlobalScrollLock } from "../../../components/useGlobalScrollLock";
 import { readJsonOrThrow } from "../../../../utils/apiClient";
 import { calculateLoanPreview } from "../../../../utils/loanCalculator";
-import { formatCurrencyInput, parseCurrencyInput } from "../../../../utils/currencyInput";
+import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
 
 // --- TYPES ---
 type Debtor = {
@@ -697,18 +697,18 @@ export function EmprestimosClient() {
 
     setSelectedLoanId(loan.id);
     setFormClientId(String(loan.debtor_id));
-    setFormPrincipal(formatCurrencyInput(String(loan.principal || 0)));
+    setFormPrincipal(formatCurrencyInputFromNumber(loan.principal || 0));
     setFormInterestType(interestMode);
     setFormRate(interestMode === "fixo" ? "" : String(Number(loan.interest_rate ?? 0) || ""));
-    setFormFixedAddition(interestMode === "fixo" ? formatCurrencyInput(String(fixedAddition || 0)) : "");
+    setFormFixedAddition(interestMode === "fixo" ? formatCurrencyInputFromNumber(fixedAddition || 0) : "");
     setFormInstallments(String(loan.installments_count || dueDates.length || ""));
-    setFormMaxInstallment(maxInstallment > 0 ? formatCurrencyInput(String(maxInstallment)) : "");
+    setFormMaxInstallment(maxInstallment > 0 ? formatCurrencyInputFromNumber(maxInstallment) : "");
     setFormCalcByInstallment(maxInstallment > 0);
     setFormStartDate(startDate);
     setFormFirstDue(firstDueDate);
     setFormObservations(loanMeta.text);
     setFormCustomDueDates(dueDates);
-    setSettledFormMaxInstallment(maxInstallment > 0 ? formatCurrencyInput(String(maxInstallment)) : "");
+    setSettledFormMaxInstallment(maxInstallment > 0 ? formatCurrencyInputFromNumber(maxInstallment) : "");
   }
 
   function clearCustomDueDates() {
