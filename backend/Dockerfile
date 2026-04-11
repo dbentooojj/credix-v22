@@ -29,19 +29,17 @@ RUN npm run build --workspace backend
 
 FROM node:20-alpine AS runner
 
-WORKDIR /app
+WORKDIR /app/backend
 ENV NODE_ENV=production
 
 RUN apk add --no-cache openssl
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/package-lock.json ./package-lock.json
-COPY --from=builder /app/backend/package.json ./backend/package.json
-COPY --from=builder /app/backend/prisma ./backend/prisma
-COPY --from=builder /app/backend/dist ./backend/dist
-COPY --from=builder /app/backend/src/public ./backend/src/public
+COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app/backend/package.json ./package.json
+COPY --from=builder /app/backend/prisma ./prisma
+COPY --from=builder /app/backend/dist ./dist
+COPY --from=builder /app/backend/src/public ./src/public
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "npm run prisma:migrate:deploy --workspace backend && node backend/dist/server.js"]
+CMD ["sh", "-c", "npm run prisma:migrate:deploy && node dist/server.js"]
