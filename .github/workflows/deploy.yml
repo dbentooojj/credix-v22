@@ -15,6 +15,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Free disk space on runner
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet /usr/local/.ghcup || true
+          docker system prune -af || true
+          echo "Disk after cleanup:"
+          df -h
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -30,9 +40,14 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/credix-backend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/credix-backend:${{ github.sha }}
+
+      - name: Prune Buildx cache after backend build
+        run: docker buildx prune -af || true
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
@@ -40,6 +55,8 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/credix-frontend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/credix-frontend:${{ github.sha }}
