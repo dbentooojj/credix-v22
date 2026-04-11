@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -183,7 +183,7 @@ export function ParcelasClient() {
   async function handlePay() {
     const parsedAmount = parseCurrencyInput(payAmount);
     if (!selectedInst || !payDate || !payAmount || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      toast.error("Preencha valor e data validos para registrar o pagamento.", "Dados incompletos");
+      toast.error("Preencha valor e data válidos para registrar o pagamento.", "Dados incompletos");
       return;
     }
     setActionLoading(true);
@@ -200,13 +200,13 @@ export function ParcelasClient() {
           notes: payNotes.trim() || undefined,
         }),
       });
-      await readJsonOrThrow(response, "Nao foi possivel registrar o pagamento.");
+      await readJsonOrThrow(response, "Não foi possível registrar o pagamento.");
       setShowPayModal(false);
       setSelectedInst(null);
       await fetchData();
       toast.success("Pagamento registrado com sucesso.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel registrar o pagamento.";
+      const message = err instanceof Error ? err.message : "Não foi possível registrar o pagamento.";
       toast.error(message, "Falha ao registrar pagamento");
     } finally { setActionLoading(false); }
   }
@@ -216,13 +216,13 @@ export function ParcelasClient() {
     setActionLoading(true);
     try {
       const response = await fetch(`/api/payments/installments/${selectedInst.id}/revert`, { method: "POST" });
-      await readJsonOrThrow(response, "Nao foi possivel estornar o pagamento.");
+      await readJsonOrThrow(response, "Não foi possível estornar o pagamento.");
       setShowRevertModal(false);
       setSelectedInst(null);
       await fetchData();
       toast.success("Pagamento estornado com sucesso.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel estornar o pagamento.";
+      const message = err instanceof Error ? err.message : "Não foi possível estornar o pagamento.";
       toast.error(message, "Falha ao estornar pagamento");
     } finally { setActionLoading(false); }
   }
@@ -232,13 +232,13 @@ export function ParcelasClient() {
     setActionLoading(true);
     try {
       const response = await fetch(`/api/payments/installments/${selectedInst.id}`, { method: "DELETE" });
-      await readJsonOrThrow(response, "Nao foi possivel excluir a parcela.");
+      await readJsonOrThrow(response, "Não foi possível excluir a parcela.");
       setShowDeleteModal(false);
       setSelectedInst(null);
       await fetchData();
-      toast.success("Parcela excluida com sucesso.");
+      toast.success("Parcela excluída com sucesso.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel excluir a parcela.";
+      const message = err instanceof Error ? err.message : "Não foi possível excluir a parcela.";
       toast.error(message, "Falha ao excluir parcela");
     } finally { setActionLoading(false); }
   }
@@ -396,17 +396,17 @@ export function ParcelasClient() {
       {/* Header */}
       <section className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Controle de CobranÃ§a</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Controle de Cobrança</h1>
         </div>
       </section>
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-        {/* Recebido no mÃªs */}
+        {/* Recebido no mês */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500" />
           <div className="flex items-start justify-between">
-            <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Recebido no mÃªs</p>
+            <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Recebido no mês</p>
             <CheckCircle2 className="h-5 w-5 text-emerald-500" />
           </div>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : formatCurrency(kpis.receivedValue)}</p>
@@ -453,7 +453,7 @@ export function ParcelasClient() {
               <input
                 type="text"
                 className="w-full rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                placeholder="Nome, telefone, emprÃ©stimo ou parcela"
+                placeholder="Nome, telefone, empréstimo ou parcela"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -486,7 +486,7 @@ export function ParcelasClient() {
             </select>
           </div>
           <div className="xl:col-span-2">
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">PerÃ­odo</label>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Período</label>
             <select
               className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
               value={periodFilter}
@@ -494,9 +494,9 @@ export function ParcelasClient() {
             >
               <option value="all">Todos</option>
               <option value="today">Hoje</option>
-              <option value="next7">PrÃ³ximos 7 dias</option>
-              <option value="month_current">MÃªs atual</option>
-              <option value="last30">Ãšltimos 30 dias</option>
+              <option value="next7">Próximos 7 dias</option>
+              <option value="month_current">Mês atual</option>
+              <option value="last30">Últimos 30 dias</option>
             </select>
           </div>
           <div className="xl:col-span-2">
@@ -509,8 +509,8 @@ export function ParcelasClient() {
               <option value="Todas">Todas</option>
               <option value="Pix">Pix</option>
               <option value="Dinheiro">Dinheiro</option>
-              <option value="TransferÃªncia">TransferÃªncia</option>
-              <option value="CartÃ£o">CartÃ£o</option>
+              <option value="Transferência">Transferência</option>
+              <option value="Cartão">Cartão</option>
               <option value="Outro">Outro</option>
             </select>
           </div>
@@ -526,7 +526,7 @@ export function ParcelasClient() {
 
         {/* Tabela */}
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-100">Parcelas da cobranÃ§a</h3>
+          <h3 className="text-lg font-bold text-slate-100">Parcelas da cobrança</h3>
           <span className="text-sm text-slate-400">
             Resultados: <strong className="text-slate-200">{filtered.length}</strong>
           </span>
@@ -540,7 +540,7 @@ export function ParcelasClient() {
                   Cliente {renderSortIcon("client")}
                 </th>
                 <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("loan")}>
-                  EmprÃ©stimo {renderSortIcon("loan")}
+                  Empréstimo {renderSortIcon("loan")}
                 </th>
                 <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("number")}>
                   Parcela {renderSortIcon("number")}
@@ -554,7 +554,7 @@ export function ParcelasClient() {
                 <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("status")}>
                   Status {renderSortIcon("status")}
                 </th>
-                <th className="px-4 py-3 text-right">AÃ§Ãµes</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
@@ -566,7 +566,7 @@ export function ParcelasClient() {
                 pageRows.map((inst) => (
                   <tr key={inst.id} className="transition-colors hover:bg-slate-800/40">
                     <td className="px-4 py-4">
-                      <div className="font-semibold text-slate-100">{inst.debtor?.name || "â€”"}</div>
+                      <div className="font-semibold text-slate-100">{inst.debtor?.name || "-"}</div>
                     </td>
                     <td className="px-4 py-4 text-slate-300">#{inst.loan_id}</td>
                     <td className="px-4 py-4 text-slate-300">{inst.installmentNumber}/{enriched.filter(e => sameId(e.loan_id, inst.loan_id)).length}</td>
@@ -601,7 +601,7 @@ export function ParcelasClient() {
           </table>
         </div>
 
-        {/* PaginaÃ§Ã£o */}
+        {/* Paginação */}
         <div className="grid gap-3 md:hidden">
           {loading ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
@@ -620,7 +620,7 @@ export function ParcelasClient() {
                 <MobileDataCard
                   key={inst.id}
                   title={inst.debtor?.name || "Cliente"}
-                  subtitle={`Emprestimo #${inst.loan_id} â€¢ Parcela ${inst.installmentNumber}/${totalLoanInstallments}`}
+                  subtitle={`Empréstimo #${inst.loan_id} • Parcela ${inst.installmentNumber}/${totalLoanInstallments}`}
                   badge={(
                     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(inst.uiStatus)}`}>
                       {inst.uiStatus}
@@ -633,7 +633,7 @@ export function ParcelasClient() {
                           onClick={() => openRevertModal(inst)}
                           className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/90 text-slate-950 shadow-[0_8px_18px_rgba(245,158,11,0.28)] transition-colors hover:bg-amber-400"
                           title="Estornar pagamento"
-                          aria-label={`Estornar parcela ${inst.installmentNumber} do emprestimo ${inst.loan_id}`}
+                          aria-label={`Estornar parcela ${inst.installmentNumber} do empréstimo ${inst.loan_id}`}
                         >
                           <RotateCcw className="h-4 w-4" />
                         </button>
@@ -642,7 +642,7 @@ export function ParcelasClient() {
                           onClick={() => openPayModal(inst)}
                           className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.28)] transition-colors hover:bg-emerald-500"
                           title="Pagar parcela"
-                          aria-label={`Pagar parcela ${inst.installmentNumber} do emprestimo ${inst.loan_id}`}
+                          aria-label={`Pagar parcela ${inst.installmentNumber} do empréstimo ${inst.loan_id}`}
                         >
                           <DollarSign className="h-4 w-4" />
                         </button>
@@ -651,7 +651,7 @@ export function ParcelasClient() {
                         onClick={() => openDeleteModal(inst)}
                         className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
                         title="Excluir parcela"
-                        aria-label={`Excluir parcela ${inst.installmentNumber} do emprestimo ${inst.loan_id}`}
+                        aria-label={`Excluir parcela ${inst.installmentNumber} do empréstimo ${inst.loan_id}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -671,7 +671,7 @@ export function ParcelasClient() {
         {!loading && (
           <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
-              Mostrando <span className="text-slate-200">{filtered.length > 0 ? startIdx + 1 : 0}</span> atÃ©{" "}
+              Mostrando <span className="text-slate-200">{filtered.length > 0 ? startIdx + 1 : 0}</span> até{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filtered.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filtered.length}</span> resultados
             </p>
@@ -684,7 +684,7 @@ export function ParcelasClient() {
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-sm font-medium text-slate-400">
-                PÃ¡gina <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
+                Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
@@ -699,33 +699,33 @@ export function ParcelasClient() {
       </div>
 
       {/* ===== MODAL: REGISTRAR PAGAMENTO ===== */}
-      <ModalBase open={showPayModal} onClose={() => setShowPayModal(false)} title="Registrar pagamento" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} â€” ${selectedInst.debtor?.name || "Cliente"}` : ""}
+      <ModalBase open={showPayModal} onClose={() => setShowPayModal(false)} title="Registrar pagamento" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} - ${selectedInst.debtor?.name || "Cliente"}` : ""}
         footer={<><ModalBtnGhost onClick={() => setShowPayModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={handlePay} disabled={actionLoading}>{actionLoading ? "Salvando..." : "Confirmar pagamento"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
           <ModalField label="Valor (R$)"><input className={modalInputClass} inputMode="decimal" maxLength={24} type="text" value={payAmount} onChange={(e) => setPayAmount(formatCurrencyInput(e.target.value))} /></ModalField>
           <ModalField label="Data do pagamento"><input className={modalInputClass} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></ModalField>
-          <ModalField label="MÃ©todo de pagamento">
+          <ModalField label="Método de pagamento">
             <select className={modalInputClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="TRANSFERENCIA">TransferÃªncia</option><option value="CARTAO">CartÃ£o</option><option value="BOLETO">Boleto</option><option value="OUTRO">Outro</option>
+              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="TRANSFERENCIA">Transferência</option><option value="CARTAO">Cartão</option><option value="BOLETO">Boleto</option><option value="OUTRO">Outro</option>
             </select>
           </ModalField>
-          <ModalField label="ObservaÃ§Ãµes"><input className={modalInputClass} placeholder="Opcional" maxLength={200} value={payNotes} onChange={(e) => setPayNotes(e.target.value)} /></ModalField>
+          <ModalField label="Observações"><input className={modalInputClass} placeholder="Opcional" maxLength={200} value={payNotes} onChange={(e) => setPayNotes(e.target.value)} /></ModalField>
         </div>
       </ModalBase>
 
       {/* ===== MODAL: ESTORNAR PAGAMENTO ===== */}
-      <ModalBase open={showRevertModal} onClose={() => setShowRevertModal(false)} title="Estornar pagamento" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} â€” ${selectedInst.debtor?.name || "Cliente"}` : ""}
+      <ModalBase open={showRevertModal} onClose={() => setShowRevertModal(false)} title="Estornar pagamento" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} - ${selectedInst.debtor?.name || "Cliente"}` : ""}
         footer={<><ModalBtnGhost onClick={() => setShowRevertModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleRevert} disabled={actionLoading}>{actionLoading ? "Estornando..." : "Confirmar estorno"}</ModalBtnPrimary></>}
       >
-        <p className="text-sm text-slate-400">O pagamento serÃ¡ removido e a parcela voltarÃ¡ ao status anterior (Pendente ou Atrasado). Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
+        <p className="text-sm text-slate-400">O pagamento será removido e a parcela voltará ao status anterior (Pendente ou Atrasado). Esta ação não pode ser desfeita.</p>
       </ModalBase>
 
       {/* ===== MODAL: EXCLUIR PARCELA ===== */}
-      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Excluir parcela" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} â€” ${selectedInst.debtor?.name || "Cliente"}` : ""}
-        footer={<><ModalBtnGhost onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleDeleteInst} disabled={actionLoading}>{actionLoading ? "Excluindo..." : "Confirmar exclusÃ£o"}</ModalBtnPrimary></>}
+      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Excluir parcela" subtitle={selectedInst ? `Parcela #${selectedInst.installmentNumber} - ${selectedInst.debtor?.name || "Cliente"}` : ""}
+        footer={<><ModalBtnGhost onClick={() => setShowDeleteModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleDeleteInst} disabled={actionLoading}>{actionLoading ? "Excluindo..." : "Confirmar exclusão"}</ModalBtnPrimary></>}
       >
-        <p className="text-sm text-slate-400">A parcela serÃ¡ removida permanentemente do emprÃ©stimo. Parcelas pagas devem ser estornadas antes de serem excluÃ­das.</p>
+        <p className="text-sm text-slate-400">A parcela será removida permanentemente do empréstimo. Parcelas pagas devem ser estornadas antes de serem excluídas.</p>
       </ModalBase>
     </div>
   );

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
@@ -138,7 +138,7 @@ function getScoreIndicator(scoreValue: number) {
       badgeClass: "border-orange-300 bg-orange-50 text-orange-700",
       dotClass: "bg-orange-500",
       textClass: "text-orange-700",
-      label: "Risco mÃ©dio",
+      label: "Risco medio",
     };
   }
   return {
@@ -246,12 +246,12 @@ export function ClientesClient() {
       }
       const putResponse = await fetch("/api/tables/debtors", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
       if (!putResponse.ok) {
-        throw new Error(await readApiMessage(putResponse, "Nao foi possivel salvar o cliente."));
+        throw new Error(await readApiMessage(putResponse, "Não foi possível salvar o cliente."));
       }
       setShowFormModal(false);
       await fetchData();
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel salvar o cliente.";
+      const message = err instanceof Error ? err.message : "Não foi possível salvar o cliente.";
       setError(message);
       window.alert(message);
     } finally { setSaving(false); }
@@ -265,18 +265,18 @@ export function ClientesClient() {
       const rows = (res.data || []).filter((r: any) => String(r.id) !== String(deletingDebtor.id));
       const putResponse = await fetch("/api/tables/debtors", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
       if (!putResponse.ok) {
-        throw new Error(await readApiMessage(putResponse, "Nao foi possivel excluir o cliente."));
+        throw new Error(await readApiMessage(putResponse, "Não foi possível excluir o cliente."));
       }
       setShowDeleteModal(false); setDeletingDebtor(null);
       await fetchData();
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel excluir o cliente.";
+      const message = err instanceof Error ? err.message : "Não foi possível excluir o cliente.";
       setError(message);
       window.alert(message);
     } finally { setSaving(false); }
   }
 
-  // --- ENGINE DE PROCESSAMENTO (RÃ©plica exata do backend/ejs) ---
+  // --- ENGINE DE PROCESSAMENTO (Réplica exata do backend/ejs) ---
   const enrichedDebtors = useMemo(() => {
     const today = startOfDay(new Date());
 
@@ -292,7 +292,7 @@ export function ClientesClient() {
 
       let hasActiveLoan = false;
 
-      // HistÃ³rico de parcelas passadas
+      // Histórico de parcelas passadas
       const history: any[] = [];
 
       debInstallments.forEach((inst) => {
@@ -337,7 +337,7 @@ export function ClientesClient() {
         }
       }
 
-      // --- CÃLCULO ÃNDICE CREDIX ---
+      // --- CÁLCULO ÍNDICE CREDIX ---
       let scoreRaw = 500;
       history.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
 
@@ -404,7 +404,7 @@ export function ClientesClient() {
 
       const totalDueCount = history.filter((i) => i.dueDate <= today!).length;
       const score = Math.max(0, Math.min(1000, Math.round(scoreRaw)));
-      // Fim Ãndice
+      // Fim Índice
 
       return {
         ...debtor,
@@ -419,7 +419,7 @@ export function ClientesClient() {
     });
   }, [debtors, installments, loans]);
 
-  // AplicaÃ§Ã£o de Filtros e OrdenaÃ§Ã£o
+  // Aplicação de Filtros e Ordenação
   const filteredAndSorted = useMemo(() => {
     let result = [...enrichedDebtors];
 
@@ -465,7 +465,7 @@ export function ClientesClient() {
     return result;
   }, [enrichedDebtors, search, statusFilter, sortBy, sortDir]);
 
-  // PaginaÃ§Ã£o
+  // Paginação
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / pageSize));
   const currentPageSafe = Math.min(Math.max(1, page), totalPages);
   const startIdx = (currentPageSafe - 1) * pageSize;
@@ -517,7 +517,7 @@ export function ClientesClient() {
       </section>
 
       {/* KPIs */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-[#4F7EF7]" />
           <UsersIcon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
@@ -541,7 +541,7 @@ export function ClientesClient() {
           <ClockIcon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Clientes inativos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : inactiveDebtors}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">{loading ? "Carregando..." : "Sem pendÃªncias"}</p>
+          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">{loading ? "Carregando..." : "Sem pendencias"}</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-red-500" />
@@ -631,8 +631,8 @@ export function ClientesClient() {
                 >
                   Status {renderSortIcon("status")}
                 </th>
-                <th className="px-4 py-3">SituaÃ§Ã£o</th>
-                <th className="px-4 py-3 text-center">Ãndice Credix</th>
+                <th className="px-4 py-3">Situacao</th>
+                <th className="px-4 py-3 text-center">Indice Credix</th>
                 <th
                   className="px-4 py-3 text-right cursor-pointer hover:bg-slate-800 transition-colors"
                   onClick={() => toggleSort("overdue_count")}
@@ -645,7 +645,7 @@ export function ClientesClient() {
                 >
                   Total em aberto {renderSortIcon("open_total")}
                 </th>
-                <th className="px-4 py-3 text-right">AÃ§Ãµes</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
@@ -672,7 +672,7 @@ export function ClientesClient() {
                       <td className="px-4 py-4">
                         <div className="font-semibold text-slate-100">{debtor.name || "-"}</div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {formatDocument(debtor.document || debtor.cpf) || "Sem doc."} â€¢ {formatPhone(debtor.phone) || "Sem cel."}
+                          {formatDocument(debtor.document || debtor.cpf) || "Sem doc."} - {formatPhone(debtor.phone) || "Sem cel."}
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -710,7 +710,7 @@ export function ClientesClient() {
                             </span>
                           </div>
                         ) : (
-                          <span className="text-xs font-semibold text-slate-600">Sem histÃ³rico</span>
+                          <span className="text-xs font-semibold text-slate-600">Sem histórico</span>
                         )}
                       </td>
                       <td className="px-4 py-4 text-right">
@@ -745,7 +745,7 @@ export function ClientesClient() {
           </table>
         </div>
 
-        {/* RodapÃ© Tabela (PaginaÃ§Ã£o) */}
+        {/* Rodapé Tabela (Paginação) */}
         <div className="grid gap-3 md:hidden">
           {loading ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
@@ -758,6 +758,8 @@ export function ClientesClient() {
           ) : (
             pageRows.map((debtor) => {
               const scoreInfo = getScoreIndicator(debtor.score);
+              const documentText = formatDocument(debtor.document || debtor.cpf) || "Sem documento";
+              const phoneText = formatPhone(debtor.phone) || "Sem telefone";
               const situation = debtor.overdueCount > 0
                 ? `${debtor.overdueCount} boleto(s) pendente(s)`
                 : debtor.openTotal > 0
@@ -768,7 +770,18 @@ export function ClientesClient() {
                 <MobileDataCard
                   key={debtor.id}
                   title={debtor.name || "-"}
-                  subtitle={`${formatDocument(debtor.document || debtor.cpf) || "Sem doc."} â€¢ ${formatPhone(debtor.phone) || "Sem cel."}`}
+                  subtitle={(
+                    <div className="space-y-1">
+                      <p className="truncate">
+                        <span className="font-semibold text-slate-600">CPF/CNPJ:</span>{" "}
+                        <span>{documentText}</span>
+                      </p>
+                      <p className="truncate">
+                        <span className="font-semibold text-slate-600">Telefone:</span>{" "}
+                        <span>{phoneText}</span>
+                      </p>
+                    </div>
+                  )}
                   badge={(
                     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(debtor.uiStatus)}`}>
                       {debtor.uiStatus}
@@ -795,7 +808,7 @@ export function ClientesClient() {
                     </div>
                   )}
                 >
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
                     <MobileDataCardRow
                       label="Situacao"
                       value={(
@@ -808,20 +821,26 @@ export function ClientesClient() {
                           ) : null}
                         </div>
                       )}
+                      className="bg-slate-50"
                     />
-                    <MobileDataCardRow
-                      label="Indice Credix"
-                      value={debtor.totalDueCount > 0 ? debtor.score : "Sem historico"}
-                      valueClassName={debtor.totalDueCount > 0 ? scoreInfo.textClass : "text-slate-400"}
-                    />
-                    <MobileDataCardRow
-                      label="Atrasos"
-                      value={debtor.overdueCount > 0 ? debtor.overdueCount : "0"}
-                      valueClassName={debtor.overdueCount > 0 ? "text-red-400" : "text-slate-300"}
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <MobileDataCardRow
+                        label="Indice Credix"
+                        value={debtor.totalDueCount > 0 ? debtor.score : "Sem histórico"}
+                        valueClassName={debtor.totalDueCount > 0 ? scoreInfo.textClass : "text-slate-400"}
+                        className="bg-slate-50"
+                      />
+                      <MobileDataCardRow
+                        label="Atrasos"
+                        value={debtor.overdueCount > 0 ? debtor.overdueCount : "0"}
+                        valueClassName={debtor.overdueCount > 0 ? "text-red-400" : "text-slate-300"}
+                        className="bg-slate-50"
+                      />
+                    </div>
                     <MobileDataCardRow
                       label="Total em aberto"
                       value={debtor.openTotal > 0 ? formatCurrency(debtor.openTotal) : "R$ 0,00"}
+                      className="bg-slate-50"
                     />
                   </div>
                 </MobileDataCard>
@@ -833,7 +852,7 @@ export function ClientesClient() {
         {!loading && (
           <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
-              Mostrando <span className="text-slate-200">{filteredAndSorted.length > 0 ? startIdx + 1 : 0}</span> atÃ©{" "}
+              Mostrando <span className="text-slate-200">{filteredAndSorted.length > 0 ? startIdx + 1 : 0}</span> ate{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filteredAndSorted.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filteredAndSorted.length}</span> resultados
             </p>
@@ -846,7 +865,7 @@ export function ClientesClient() {
                 <ChevronLeftIcon className="h-4 w-4" />
               </button>
               <span className="text-sm font-medium text-slate-400">
-                PÃ¡gina <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
+                Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
@@ -865,7 +884,7 @@ export function ClientesClient() {
         footer={<><ModalBtnGhost onClick={() => setShowFormModal(false)} disabled={saving}>Cancelar</ModalBtnGhost><ModalBtnPrimary onClick={handleSaveClient} disabled={saving}>{saving ? "Salvando..." : editingDebtor ? "Salvar" : "Cadastrar"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
-          <ModalField label="Nome completo" full><input className={modalInputClass} maxLength={200} placeholder="Ex: JoÃ£o Silva" value={formName} onChange={(e) => setFormName(e.target.value)} /></ModalField>
+          <ModalField label="Nome completo" full><input className={modalInputClass} maxLength={200} placeholder="Ex: Joao Silva" value={formName} onChange={(e) => setFormName(e.target.value)} /></ModalField>
           <ModalField label="CPF / CNPJ"><input className={modalInputClass} maxLength={18} placeholder="000.000.000-00" value={formDocument} onChange={(e) => setFormDocument(e.target.value)} /></ModalField>
           <ModalField label="Telefone"><input className={modalInputClass} maxLength={15} placeholder="(00) 90000-0000" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></ModalField>
           <ModalField label="E-mail"><input className={modalInputClass} type="email" placeholder="email@exemplo.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></ModalField>
@@ -874,10 +893,10 @@ export function ClientesClient() {
       </ModalBase>
 
       {/* ===== MODAL: EXCLUIR CLIENTE ===== */}
-      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Confirmar exclusÃ£o" subtitle={`Deseja excluir "${deletingDebtor?.name || "este cliente"}"?`}
+      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Confirmar exclusão" subtitle={`Deseja excluir "${deletingDebtor?.name || "este cliente"}"?`}
         footer={<><ModalBtnGhost onClick={() => setShowDeleteModal(false)} disabled={saving}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleDeleteClient} disabled={saving}>{saving ? "Excluindo..." : "Excluir cliente"}</ModalBtnPrimary></>}
       >
-        <p className="text-sm text-slate-400">Esta aÃ§Ã£o nÃ£o pode ser desfeita. O cliente e seu histÃ³rico serÃ£o removidos permanentemente.</p>
+        <p className="text-sm text-slate-400">Esta ação não pode ser desfeita. O cliente e seu histórico serão removidos permanentemente.</p>
       </ModalBase>
     </div>
   );

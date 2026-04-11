@@ -68,10 +68,10 @@ export default function LoginPage() {
         {/* Tagline */}
         <div className="relative z-10">
           <h2 className="text-3xl font-bold leading-tight text-white">
-            Gerencie seus<br />emprestimos com<br />inteligencia
+            Gerencie seus<br />empréstimos com<br />inteligência
           </h2>
           <p className="mt-4 text-blue-100/80 text-base leading-relaxed max-w-xs">
-            Controle total sobre caixa, parcelas, clientes e financeiro em um unico lugar.
+            Controle total sobre caixa, parcelas, clientes e financeiro em um único lugar.
           </p>
 
           {/* Stats row */}
@@ -80,7 +80,7 @@ export default function LoginPage() {
               { label: "Controle de caixa", icon: "💰" },
               { label: "Clientes e contratos", icon: "👥" },
               { label: "Parcelas e vencimentos", icon: "📅" },
-              { label: "Relatorios financeiros", icon: "📊" },
+              { label: "Relatórios financeiros", icon: "📊" },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3 py-2.5">
                 <span className="text-lg">{item.icon}</span>

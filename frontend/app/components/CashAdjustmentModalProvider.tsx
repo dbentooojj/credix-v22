@@ -108,7 +108,7 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
       onSuccess?.();
     } catch (error) {
       setCashError(
-        error instanceof Error ? error.message : "Nao foi possivel registrar o ajuste.",
+        error instanceof Error ? error.message : "Não foi possível registrar o ajuste.",
       );
     } finally {
       setCashSaving(false);

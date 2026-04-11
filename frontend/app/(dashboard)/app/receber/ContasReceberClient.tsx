@@ -211,7 +211,7 @@ export function ContasReceberClient() {
 
   function openEditModal(item: Transaction) {
     if (isConfirmedTransaction(item)) {
-      toast.info("Receita ja confirmada nao pode ser editada.");
+      toast.info("Receita já confirmada não pode ser editada.");
       return;
     }
 
@@ -244,7 +244,7 @@ export function ContasReceberClient() {
   async function handleSave() {
     const parsedAmount = parseCurrencyInput(formAmount);
     if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      toast.error("Preencha descricao, categoria, valor e vencimento validos.", "Dados incompletos");
+      toast.error("Preencha descrição, categoria, valor e vencimento válidos.", "Dados incompletos");
       return;
     }
     setSaving(true);
@@ -263,7 +263,7 @@ export function ContasReceberClient() {
             status: formStatus,
           }),
         });
-        await readJsonOrThrow(response, "Nao foi possivel atualizar a receita.");
+        await readJsonOrThrow(response, "Não foi possível atualizar a receita.");
       } else {
         const body: any = {
           type: "income",
@@ -287,14 +287,14 @@ export function ContasReceberClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        await readJsonOrThrow(response, "Nao foi possivel criar a receita.");
+        await readJsonOrThrow(response, "Não foi possível criar a receita.");
       }
       setShowFormModal(false);
       setEditingItem(null);
       await fetchData();
       toast.success(editingItem ? "Receita atualizada com sucesso." : "Receita cadastrada com sucesso.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel salvar a receita.";
+      const message = err instanceof Error ? err.message : "Não foi possível salvar a receita.";
       toast.error(message, "Falha ao salvar receita");
     } finally {
       setSaving(false);
@@ -306,13 +306,13 @@ export function ContasReceberClient() {
     setDeleting(true);
     try {
       const response = await fetch(`/api/finance/transactions/${deletingItem.id}`, { method: "DELETE" });
-      await readJsonOrThrow(response, "Nao foi possivel excluir a receita.");
+      await readJsonOrThrow(response, "Não foi possível excluir a receita.");
       setShowDeleteModal(false);
       setDeletingItem(null);
       await fetchData();
       toast.success("Receita excluida com sucesso.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel excluir a receita.";
+      const message = err instanceof Error ? err.message : "Não foi possível excluir a receita.";
       toast.error(message, "Falha ao excluir receita");
     } finally {
       setDeleting(false);
@@ -328,13 +328,13 @@ export function ContasReceberClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "completed" }),
       });
-      await readJsonOrThrow(response, "Nao foi possivel marcar a receita como recebida.");
+      await readJsonOrThrow(response, "Não foi possível marcar a receita como recebida.");
       setShowCompleteModal(false);
       setCompletingItem(null);
       await fetchData();
       toast.success("Receita marcada como recebida.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel marcar a receita como recebida.";
+      const message = err instanceof Error ? err.message : "Não foi possível marcar a receita como recebida.";
       toast.error(message, "Falha ao concluir recebimento");
     } finally {
       setCompleting(false);
@@ -431,7 +431,7 @@ export function ContasReceberClient() {
       <section className="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_auto] xl:items-center">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-          <input type="text" className="w-full rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none" placeholder="Buscar por descricao ou categoria" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input type="text" className="w-full rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none" placeholder="Buscar por descrição ou categoria" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex items-center gap-2">
           <button onClick={prevMonth} className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700"><ChevronLeft className="h-4 w-4" /></button>
@@ -453,19 +453,19 @@ export function ContasReceberClient() {
           <table className="w-full text-left text-sm text-slate-300" style={{ minWidth: 900 }}>
             <thead className="bg-slate-900/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
               <tr>
-                <th className="px-4 py-3">Descricao</th>
+                <th className="px-4 py-3">Descrição</th>
                 <th className="px-4 py-3 text-right">Valor (R$)</th>
                 <th className="px-4 py-3">Vencimento</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Detalhe</th>
-                <th className="px-4 py-3 text-right">Acoes</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
               {loading ? (
                 <tr><td colSpan={6} className="py-8 text-center text-slate-500">Carregando receitas...</td></tr>
               ) : pageRows.length === 0 ? (
-                <tr><td colSpan={6} className="py-8 text-center text-slate-500">Nenhuma receita encontrada neste mes.</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-slate-500">Nenhuma receita encontrada neste mês.</td></tr>
               ) : (
                 pageRows.map((item) => {
                   const ds = item.displayStatus;
@@ -473,7 +473,7 @@ export function ContasReceberClient() {
                   return (
                     <tr key={item.id} className="transition-colors hover:bg-slate-800/40">
                       <td className="px-4 py-4">
-                        <div className="font-semibold text-slate-100">{item.description || "Sem descricao"}</div>
+                        <div className="font-semibold text-slate-100">{item.description || "Sem descrição"}</div>
                         <div className="mt-1 text-xs text-slate-400">{formatFinanceCategoryLabel(item.categoryMeta, item.category)}</div>
                       </td>
                       <td className="px-4 py-4 text-right font-bold text-emerald-400">{formatCurrency(item.amount)}</td>
@@ -514,7 +514,7 @@ export function ContasReceberClient() {
             </div>
           ) : pageRows.length === 0 ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
-              Nenhuma receita encontrada neste mes.
+              Nenhuma receita encontrada neste mês.
             </div>
           ) : (
             pageRows.map((item) => {
@@ -526,7 +526,7 @@ export function ContasReceberClient() {
               return (
                 <MobileDataCard
                   key={item.id}
-                  title={item.description || "Sem descricao"}
+                  title={item.description || "Sem descrição"}
                   subtitle={formatFinanceCategoryLabel(item.categoryMeta, item.category)}
                   badge={(
                     <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ds.color}`}>
@@ -600,7 +600,7 @@ export function ContasReceberClient() {
             </p>
             <div className="flex items-center justify-end gap-2">
               <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 disabled:opacity-50"><ChevronLeft className="h-4 w-4" /></button>
-              <span className="text-sm font-medium text-slate-400">Pagina <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}</span>
+              <span className="text-sm font-medium text-slate-400">Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}</span>
               <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 disabled:opacity-50"><ChevronRight className="h-4 w-4" /></button>
             </div>
           </div>
@@ -612,7 +612,7 @@ export function ContasReceberClient() {
         footer={<><ModalBtnGhost onClick={() => setShowFormModal(false)} disabled={saving}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={handleSave} disabled={saving}>{saving ? "Salvando..." : isEditing ? "Salvar alteracoes" : "Salvar receita"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
-          <ModalField label="Descricao" full><input className={modalInputClass} maxLength={300} placeholder="Ex: Consultoria mensal" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} /></ModalField>
+          <ModalField label="Descrição" full><input className={modalInputClass} maxLength={300} placeholder="Ex: Consultoria mensal" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} /></ModalField>
           <ModalField label="Categoria">
             <FinanceCategoryPicker
               categories={categories}
@@ -669,7 +669,7 @@ export function ContasReceberClient() {
           return (
             <div className="space-y-4">
               <div className="flex items-start justify-between rounded-xl border border-slate-700/50 bg-slate-800/40 p-4">
-                <p className="font-bold text-slate-100">{viewingItem.description || "Sem descricao"}</p>
+                <p className="font-bold text-slate-100">{viewingItem.description || "Sem descrição"}</p>
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ds.color}`}>{ds.label}</span>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -690,10 +690,10 @@ export function ContasReceberClient() {
       </ModalBase>
 
       {/* ===== MODAL: EXCLUIR ===== */}
-      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Confirmar exclusao" subtitle={`Deseja excluir "${deletingItem?.description || "esta receita"}"?`}
+      <ModalBase open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Confirmar exclusão" subtitle={`Deseja excluir "${deletingItem?.description || "esta receita"}"?`}
         footer={<><ModalBtnGhost onClick={() => setShowDeleteModal(false)} disabled={deleting}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="red" onClick={handleDelete} disabled={deleting}>{deleting ? "Excluindo..." : "Excluir receita"}</ModalBtnPrimary></>}
       >
-        <p className="text-sm text-slate-400">Esta acao nao pode ser desfeita. A receita sera removida permanentemente.</p>
+        <p className="text-sm text-slate-400">Esta ação não pode ser desfeita. A receita será removida permanentemente.</p>
       </ModalBase>
 
       <FinanceCategoryManagerModal

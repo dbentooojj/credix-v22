@@ -72,13 +72,13 @@ export function Sidebar({
           <section className="mb-6">
             <Link className={linkClass("/app/visao-geral")} href="/app/visao-geral" onClick={onClose}>
               <LayoutDashboard className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/visao-geral")}`} />
-              <span className="truncate">Visao geral</span>
+              <span className="truncate">Visão geral</span>
             </Link>
           </section>
 
           <section className="mb-6">
             <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-              Emprestimos
+              Empréstimos
             </h3>
             <div className="flex flex-col gap-1">
               <Link className={linkClass("/app/carteira")} href="/app/carteira" onClick={onClose}>
@@ -91,7 +91,7 @@ export function Sidebar({
               </Link>
               <Link className={linkClass("/app/emprestimos")} href="/app/emprestimos" onClick={onClose}>
                 <CreditCard className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/emprestimos")}`} />
-                <span className="truncate">Emprestimos</span>
+                <span className="truncate">Empréstimos</span>
               </Link>
               <Link className={linkClass("/app/parcelas")} href="/app/parcelas" onClick={onClose}>
                 <BarChart3 className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/parcelas")}`} />
@@ -119,12 +119,12 @@ export function Sidebar({
           {showReportsNav && (
             <section className="mb-6">
               <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-                Analises
+                Análises
               </h3>
               <div className="flex flex-col gap-1">
                 <Link className={linkClass("/app/relatorios")} href="/app/relatorios" onClick={onClose}>
                   <FileText className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/relatorios")}`} />
-                  <span className="truncate">Relatorios</span>
+                  <span className="truncate">Relatórios</span>
                 </Link>
               </div>
             </section>

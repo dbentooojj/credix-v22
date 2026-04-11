@@ -169,8 +169,8 @@ function buildFlowHeader(period?: string) {
 
   if (!match) {
     return {
-      title: "Fluxo dos ultimos meses",
-      subtitle: "Recebido, a vencer e em atraso por mes.",
+      title: "Fluxo dos últimos meses",
+      subtitle: "Recebido, a vencer e em atraso por mês.",
     } as const;
   }
 
@@ -179,21 +179,21 @@ function buildFlowHeader(period?: string) {
 
   if (unit === "m") {
     return {
-      title: `Fluxo dos ultimos ${amount} ${amount === 1 ? "mes" : "meses"}`,
-      subtitle: "Recebido, a vencer e em atraso por mes.",
+      title: `Fluxo dos últimos ${amount} ${amount === 1 ? "mês" : "meses"}`,
+      subtitle: "Recebido, a vencer e em atraso por mês.",
     } as const;
   }
 
   if (unit === "d") {
     return {
-      title: `Fluxo dos ultimos ${amount} ${amount === 1 ? "dia" : "dias"}`,
-      subtitle: "Recebido, a vencer e em atraso no periodo.",
+      title: `Fluxo dos últimos ${amount} ${amount === 1 ? "dia" : "dias"}`,
+      subtitle: "Recebido, a vencer e em atraso no período.",
     } as const;
   }
 
   return {
-    title: `Fluxo dos ultimos ${amount} ${amount === 1 ? "ano" : "anos"}`,
-    subtitle: "Recebido, a vencer e em atraso por mes.",
+    title: `Fluxo dos últimos ${amount} ${amount === 1 ? "ano" : "anos"}`,
+    subtitle: "Recebido, a vencer e em atraso por mês.",
   } as const;
 }
 
@@ -206,7 +206,7 @@ function buildInsight(currentValue: unknown, previousValue: unknown) {
       return {
         tone: "neutral",
         headline: "0,00%",
-        summary: "Sem variacao relevante em relacao ao mes anterior.",
+        summary: "Sem variação relevante em relação ao mês anterior.",
         hasBaseline: false,
       } as const;
     }
@@ -214,7 +214,7 @@ function buildInsight(currentValue: unknown, previousValue: unknown) {
     return {
       tone: current >= 0 ? "positive" : "negative",
       headline: "Sem base",
-      summary: "Ainda nao existe um mes anterior com valor para comparar.",
+      summary: "Ainda não existe um mês anterior com valor para comparar.",
       hasBaseline: false,
     } as const;
   }
@@ -224,7 +224,7 @@ function buildInsight(currentValue: unknown, previousValue: unknown) {
     return {
       tone: "neutral",
       headline: "0,00%",
-      summary: "Mesmo ritmo do mes anterior.",
+      summary: "Mesmo ritmo do mês anterior.",
       hasBaseline: true,
     } as const;
   }
@@ -237,7 +237,7 @@ function buildInsight(currentValue: unknown, previousValue: unknown) {
   return {
     tone: percentage > 0 ? "positive" : "negative",
     headline: `${percentage > 0 ? "+" : "-"}${percentageText}%`,
-    summary: percentage > 0 ? "acima do mes anterior" : "abaixo do mes anterior",
+    summary: percentage > 0 ? "acima do mês anterior" : "abaixo do mês anterior",
     hasBaseline: true,
   } as const;
 }
@@ -284,11 +284,11 @@ async function fetchOverview(page: number, signal: AbortSignal) {
 
   if (response.status === 401) {
     window.location.href = "/login";
-    throw new Error("Sessao expirada.");
+    throw new Error("Sessão expirada.");
   }
 
   if (!response.ok || !payload) {
-    throw new Error(typeof payload?.message === "string" ? payload.message : "Falha ao carregar a visao geral.");
+    throw new Error(typeof payload?.message === "string" ? payload.message : "Falha ao carregar a visão geral.");
   }
 
   return payload as DashboardPayload;
@@ -566,11 +566,11 @@ function MonthlyFlowChart({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[0.64rem] font-bold uppercase tracking-[0.12em] text-slate-400">Escala em R$</p>
         <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[0.68rem] font-semibold text-blue-600">
-          Ultimo ponto: {points[currentIndex]?.label || "mes atual"}
+          Último ponto: {points[currentIndex]?.label || "mês atual"}
         </span>
       </div>
       <svg
-        aria-label="Fluxo dos ultimos meses"
+        aria-label="Fluxo dos últimos meses"
         className="block h-[270px] w-full"
         role="img"
         viewBox={`0 0 ${width} ${height}`}
@@ -766,7 +766,7 @@ function RecentMovements({
                   <th className="px-5 py-3.5">Data</th>
                   <th className="px-5 py-3.5">Tipo</th>
                   <th className="px-5 py-3.5">Origem</th>
-                  <th className="px-5 py-3.5">Descricao</th>
+                  <th className="px-5 py-3.5">Descrição</th>
                   <th className="px-5 py-3.5 text-right">Entrada</th>
                   <th className="px-5 py-3.5 text-right">Saida</th>
                 </tr>
@@ -1137,7 +1137,7 @@ export function OverviewPageClient() {
         if (!active || controller.signal.aborted) return;
         console.error(nextError);
         setError(
-          nextError instanceof Error ? nextError.message : "Falha ao carregar a visao geral.",
+          nextError instanceof Error ? nextError.message : "Falha ao carregar a visão geral.",
         );
       })
       .finally(() => {
@@ -1211,8 +1211,8 @@ export function OverviewPageClient() {
     {
       icon: <CalendarCheckIcon className="h-4 w-4" />,
       label: upcoming7OutgoingCount
-        ? `${upcoming7OutgoingCount} ${upcoming7OutgoingCount === 1 ? "vencimento nos proximos 7 dias" : "vencimentos nos proximos 7 dias"} (${formatCurrency(upcoming7OutgoingValue)})`
-        : "Nenhum vencimento nos proximos 7 dias",
+        ? `${upcoming7OutgoingCount} ${upcoming7OutgoingCount === 1 ? "vencimento nos próximos 7 dias" : "vencimentos nos próximos 7 dias"} (${formatCurrency(upcoming7OutgoingValue)})`
+        : "Nenhum vencimento nos próximos 7 dias",
       tone: upcoming7OutgoingCount ? "sky" : "slate",
     },
   ];
@@ -1241,7 +1241,7 @@ export function OverviewPageClient() {
         <div>
           <div>
             <h1 className="text-2xl sm:text-[clamp(1.6rem,1.2vw+1rem,2.1rem)] font-bold leading-tight tracking-tight text-slate-800">
-              Visao geral
+              Visão geral
             </h1>
             <p className="mt-1.5 hidden text-sm text-slate-500 md:block">
               Resumo do caixa, recebimentos e compromissos financeiros.
@@ -1268,7 +1268,7 @@ export function OverviewPageClient() {
           icon={<WalletIcon className="h-5 w-5" />}
           label="Saldo em caixa"
           meta={`Ajustes: ${formatCurrency(payload?.cashAdjustment?.net)}`}
-          note={overview?.cashBalance?.note || "Disponivel agora"}
+          note={overview?.cashBalance?.note || "Disponível agora"}
           tone="cash"
           value={formatCurrency(overview?.cashBalance?.value)}
         />
@@ -1292,7 +1292,7 @@ export function OverviewPageClient() {
           icon={<TrendUpIcon className="h-5 w-5" />}
           label="Saldo previsto"
           meta={`Entradas: ${formatCurrency(overview?.projectedBalance?.receivableValue)} | Saidas: ${formatCurrency(overview?.projectedBalance?.payableValue)}`}
-          note={overview?.projectedBalance?.note || "Apos entradas e saidas"}
+          note={overview?.projectedBalance?.note || "Após entradas e saídas"}
           tone="projected"
           value={formatCurrency(overview?.projectedBalance?.value)}
         />
@@ -1321,7 +1321,7 @@ export function OverviewPageClient() {
         <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:flex xl:h-[430px] xl:flex-col">
           <div className="border-b border-slate-100 px-5 py-4">
             <h3 className="text-base font-bold text-slate-800">Alertas financeiros</h3>
-            <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">Leitura rapida dos compromissos e riscos do dia.</p>
+            <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">Leitura rápida dos compromissos e riscos do dia.</p>
           </div>
           <div className="grid flex-1 content-start gap-2.5 overflow-y-auto p-4">
             {alerts.map((alert) => (
@@ -1343,18 +1343,18 @@ export function OverviewPageClient() {
             {/* Mini stats row */}
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
-                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">{metricLabel} no mes</p>
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">{metricLabel} no mês</p>
                 <p className="mt-1.5 text-[1.35rem] font-bold tracking-tight text-slate-800">
                   {currentPoint ? formatCurrency(currentValue) : "--"}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   {currentPoint
-                    ? `${metricLabel} registrado em ${currentPoint.label || "mes atual"}.`
-                    : "Sem dados no periodo atual."}
+                    ? `${metricLabel} registrado em ${currentPoint.label || "mês atual"}.`
+                    : "Sem dados no período atual."}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
-                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Variacao vs mes anterior</p>
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Variação vs mês anterior</p>
                 <p
                   className={`mt-1.5 text-[1.35rem] font-bold tracking-tight ${
                     flowInsight.tone === "positive"
@@ -1381,12 +1381,12 @@ export function OverviewPageClient() {
                   className="mt-1 hidden text-xs text-slate-500 sm:block"
                 >
                   {previousPoint
-                    ? `${currentPoint?.label || "Mes atual"}: ${formatCurrency(currentValue)} | ${previousPoint.label || "Mes anterior"}: ${formatCurrency(previousValue)}`
-                    : "Quando houver dois meses no periodo, o comparativo aparece aqui."}
+                    ? `${currentPoint?.label || "Mês atual"}: ${formatCurrency(currentValue)} | ${previousPoint.label || "Mês anterior"}: ${formatCurrency(previousValue)}`
+                    : "Quando houver dois meses no período, o comparativo aparece aqui."}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3.5">
-                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Pendencias deste mes</p>
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-400">Pendências deste mês</p>
                 <p className="mt-1.5 text-[1.35rem] font-bold tracking-tight text-slate-800">
                   {formatCurrency(pendingCurrentMonth)}
                 </p>
@@ -1396,7 +1396,7 @@ export function OverviewPageClient() {
               </div>
             </div>
             <MonthlyFlowChart
-              emptyMessage={chart?.emptyMessage || "Sem dados no periodo."}
+              emptyMessage={chart?.emptyMessage || "Sem dados no período."}
               hasData={Boolean(chart?.hasData)}
               points={chartPoints}
             />
@@ -1407,7 +1407,7 @@ export function OverviewPageClient() {
         <article className="self-start overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_rgba(15,23,42,0.05)] xl:flex xl:h-full xl:flex-col">
           <div className="border-b border-slate-100 px-5 py-4">
             <h3 className="text-base font-bold text-slate-800">Resumo do dia</h3>
-            <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">Entradas, saidas e projecao imediata do caixa.</p>
+            <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">Entradas, saídas e projeção imediata do caixa.</p>
           </div>
           <div className="grid gap-3 p-5 xl:flex-1 xl:auto-rows-fr">
             <DailySummaryCard
@@ -1425,8 +1425,8 @@ export function OverviewPageClient() {
               icon={<ArrowDownLeftIcon className="h-4.5 w-4.5" />}
               meta={
                 paymentsTodayItems.length
-                  ? `${paymentsTodayItems.length} ${paymentsTodayItems.length === 1 ? "saida prevista para hoje." : "saidas previstas para hoje."}`
-                  : "Nenhuma saida prevista para hoje."
+                  ? `${paymentsTodayItems.length} ${paymentsTodayItems.length === 1 ? "saída prevista para hoje." : "saídas previstas para hoje."}`
+                  : "Nenhuma saída prevista para hoje."
               }
               title="Saidas previstas hoje"
               tone="outgoing"
@@ -1434,7 +1434,7 @@ export function OverviewPageClient() {
             />
             <DailySummaryCard
               icon={<WalletIcon className="h-4.5 w-4.5" />}
-              meta={`Caixa atual ${formatCurrency(cashBalance)} + entradas − saidas do dia.`}
+              meta={`Caixa atual ${formatCurrency(cashBalance)} + entradas − saídas do dia.`}
               title="Saldo projetado do dia"
               tone="projected"
               value={formatCurrency(projectedDayValue)}

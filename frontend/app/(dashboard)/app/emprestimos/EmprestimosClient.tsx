@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
 import {
@@ -23,6 +23,7 @@ import {
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { useToast } from "../../../components/ToastProvider";
+import { useGlobalScrollLock } from "../../../components/useGlobalScrollLock";
 import { readJsonOrThrow } from "../../../../utils/apiClient";
 import { calculateLoanPreview } from "../../../../utils/loanCalculator";
 import { formatCurrencyInput, parseCurrencyInput } from "../../../../utils/currencyInput";
@@ -490,7 +491,7 @@ export function EmprestimosClient() {
       if (resInstallments.data) setInstallments(resInstallments.data);
       if (resSimulations.data) setSimulations(resSimulations.data);
     } catch (err) {
-      setError("Erro ao carregar dados. Verifique a conexÃ£o.");
+      setError("Erro ao carregar dados. Verifique a conexão.");
     } finally {
       setLoading(false);
     }
@@ -498,7 +499,9 @@ export function EmprestimosClient() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // --- CÃ¡lculo dinÃ¢mico do resumo ---
+  useGlobalScrollLock(showLoanModal || showDeleteModal);
+
+  // --- Cálculo dinâmico do resumo ---
   const baseLoanCalculation = useMemo(() => {
     return calculateLoanPreview({
       principal: formPrincipal,
@@ -754,9 +757,9 @@ export function EmprestimosClient() {
 
   function openDeleteModal(loan: EnrichedLoan) {
     if (loan.hasPaidInstallments) {
-      const message = "Nao e permitido excluir emprestimo com parcela paga.";
+      const message = "Não é permitido excluir empréstimo com parcela paga.";
       setError(message);
-      toast.error(message, "Exclusao bloqueada");
+      toast.error(message, "Exclusão bloqueada");
       return;
     }
     setDeletingLoan(loan);
@@ -775,13 +778,13 @@ export function EmprestimosClient() {
 
   function openLinkedLoanFromSimulation(simulation: LoanSimulation) {
     if (!simulation.loanId) {
-      toast.info("Esta simulacao ainda nao foi convertida em emprestimo.");
+      toast.info("Esta simulação ainda não foi convertida em empréstimo.");
       return;
     }
 
     const linkedLoan = enrichedLoans.find((loan) => sameId(loan.id, simulation.loanId));
     if (!linkedLoan) {
-      toast.info("O emprestimo vinculado nao foi encontrado na lista atual.");
+      toast.info("O empréstimo vinculado não foi encontrado na lista atual.");
       return;
     }
 
@@ -797,11 +800,11 @@ export function EmprestimosClient() {
 
     const simulationPayload = await readJsonOrThrow<{ data?: { id?: string | number } }>(
       simulationResponse,
-      "Nao foi possivel salvar a simulacao.",
+      "Não foi possível salvar a simulação.",
     );
 
     if (!simulationPayload?.data?.id) {
-      throw new Error("A simulacao foi salva sem identificador valido.");
+      throw new Error("A simulação foi salva sem identificador válido.");
     }
 
     return simulationPayload.data;
@@ -816,7 +819,7 @@ export function EmprestimosClient() {
       const sendResponse = await fetch(`/api/loan-simulations/${simulationId}/send`, { method: "POST" });
       const sendPayload = await readJsonOrThrow<{ data?: { whatsappUrl?: string } }>(
         sendResponse,
-        "Nao foi possivel reenviar a simulacao pelo WhatsApp.",
+        "Não foi possível reenviar a simulação pelo WhatsApp.",
       );
 
       if (sendPayload?.data?.whatsappUrl) {
@@ -824,9 +827,9 @@ export function EmprestimosClient() {
       }
 
       await fetchData();
-      toast.success("Simulacao pronta para envio no WhatsApp.");
+      toast.success("Simulação pronta para envio no WhatsApp.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel reenviar a simulacao pelo WhatsApp.";
+      const message = err instanceof Error ? err.message : "Não foi possível reenviar a simulação pelo WhatsApp.";
       setError(message);
       toast.error(message, "Falha no WhatsApp");
     } finally {
@@ -851,25 +854,25 @@ export function EmprestimosClient() {
       await readJsonOrThrow(
         response,
         type === "approve"
-          ? "Nao foi possivel aprovar a simulacao."
-          : "Nao foi possivel cancelar a simulacao.",
+          ? "Não foi possível aprovar a simulação."
+          : "Não foi possível cancelar a simulação.",
       );
 
       setSimulationConfirmAction(null);
       await fetchData();
       toast.success(
         type === "approve"
-          ? "Simulacao aprovada e convertida em emprestimo."
-          : "Simulacao cancelada com sucesso.",
+          ? "Simulação aprovada e convertida em empréstimo."
+          : "Simulação cancelada com sucesso.",
       );
     } catch (err: any) {
       const message = err instanceof Error
         ? err.message
         : (type === "approve"
-          ? "Nao foi possivel aprovar a simulacao."
-          : "Nao foi possivel cancelar a simulacao.");
+          ? "Não foi possível aprovar a simulação."
+          : "Não foi possível cancelar a simulação.");
       setError(message);
-      toast.error(message, type === "approve" ? "Falha ao aprovar simulacao" : "Falha ao cancelar simulacao");
+      toast.error(message, type === "approve" ? "Falha ao aprovar simulação" : "Falha ao cancelar simulação");
     } finally {
       setSimulationActionLoadingId(null);
     }
@@ -881,14 +884,14 @@ export function EmprestimosClient() {
     try {
       const simulation = await createSimulation();
       const approveResponse = await fetch(`/api/loan-simulations/${simulation.id}/approve`, { method: "POST" });
-      await readJsonOrThrow(approveResponse, "Nao foi possivel criar o emprestimo.");
+      await readJsonOrThrow(approveResponse, "Não foi possível criar o empréstimo.");
       closeLoanModal();
       await fetchData();
-      toast.success("Emprestimo criado com sucesso.");
+      toast.success("Empréstimo criado com sucesso.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel criar o emprestimo.";
+      const message = err instanceof Error ? err.message : "Não foi possível criar o empréstimo.";
       setError(message);
-      toast.error(message, "Falha ao criar emprestimo");
+      toast.error(message, "Falha ao criar empréstimo");
     } finally {
       setSaving(false);
     }
@@ -904,14 +907,14 @@ export function EmprestimosClient() {
         body: JSON.stringify(buildLoanUpdatePayload()),
       });
 
-      await readJsonOrThrow(response, "Nao foi possivel atualizar o emprestimo.");
+      await readJsonOrThrow(response, "Não foi possível atualizar o empréstimo.");
       closeLoanModal();
       await fetchData();
-      toast.success("Emprestimo atualizado com sucesso.");
+      toast.success("Empréstimo atualizado com sucesso.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel atualizar o emprestimo.";
+      const message = err instanceof Error ? err.message : "Não foi possível atualizar o empréstimo.";
       setError(message);
-      toast.error(message, "Falha ao atualizar emprestimo");
+      toast.error(message, "Falha ao atualizar empréstimo");
     } finally {
       setSaving(false);
     }
@@ -925,13 +928,13 @@ export function EmprestimosClient() {
       closeLoanModal();
       await fetchData();
       if (showSuccessToast) {
-        toast.success("Simulacao salva com sucesso.");
+        toast.success("Simulação salva com sucesso.");
       }
       return simulation;
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel salvar a simulacao.";
+      const message = err instanceof Error ? err.message : "Não foi possível salvar a simulação.";
       setError(message);
-      toast.error(message, "Falha ao salvar simulacao");
+      toast.error(message, "Falha ao salvar simulação");
     } finally {
       setSaving(false);
     }
@@ -946,18 +949,18 @@ export function EmprestimosClient() {
       const sendResponse = await fetch(`/api/loan-simulations/${simulation.id}/send`, { method: "POST" });
       const sendPayload = await readJsonOrThrow<{ data?: { whatsappUrl?: string } }>(
         sendResponse,
-        "Nao foi possivel gerar o link do WhatsApp.",
+        "Não foi possível gerar o link do WhatsApp.",
       );
 
       if (!sendPayload?.data?.whatsappUrl) {
-        throw new Error("Nao foi possivel gerar o link do WhatsApp.");
+        throw new Error("Não foi possível gerar o link do WhatsApp.");
       }
 
       window.open(sendPayload.data.whatsappUrl, "_blank");
       await fetchData();
-      toast.success("Simulacao salva e pronta para envio no WhatsApp.");
+      toast.success("Simulação salva e pronta para envio no WhatsApp.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel enviar a simulacao pelo WhatsApp.";
+      const message = err instanceof Error ? err.message : "Não foi possível enviar a simulação pelo WhatsApp.";
       setError(message);
       toast.error(message, "Falha no WhatsApp");
     }
@@ -966,9 +969,9 @@ export function EmprestimosClient() {
   async function handleDeleteLoan() {
     if (!deletingLoan) return;
     if (deletingLoan.hasPaidInstallments) {
-      const message = "Nao e permitido excluir emprestimo com parcela paga.";
+      const message = "Não é permitido excluir empréstimo com parcela paga.";
       setError(message);
-      toast.error(message, "Exclusao bloqueada");
+      toast.error(message, "Exclusão bloqueada");
       setShowDeleteModal(false);
       setDeletingLoan(null);
       return;
@@ -984,15 +987,15 @@ export function EmprestimosClient() {
         body: JSON.stringify({ rows }),
       });
 
-      await readJsonOrThrow(putResponse, "Nao foi possivel excluir o emprestimo.");
+      await readJsonOrThrow(putResponse, "Não foi possível excluir o empréstimo.");
       setShowDeleteModal(false);
       setDeletingLoan(null);
       await fetchData();
-      toast.success("Emprestimo excluido com sucesso.");
+      toast.success("Empréstimo excluído com sucesso.");
     } catch (err: any) {
-      const message = err instanceof Error ? err.message : "Nao foi possivel excluir o emprestimo.";
+      const message = err instanceof Error ? err.message : "Não foi possível excluir o empréstimo.";
       setError(message);
-      toast.error(message, "Falha ao excluir emprestimo");
+      toast.error(message, "Falha ao excluir empréstimo");
     } finally {
       setSaving(false);
     }
@@ -1241,22 +1244,22 @@ export function EmprestimosClient() {
           <h2 className="text-lg font-bold text-slate-100">Simulacoes salvas</h2>
           <p className="mt-1 text-sm text-slate-400">
             {loading
-              ? "Carregando simulacoes..."
-              : `${simulations.length} simulacao(oes) registradas, ${manageableSimulationsCount} aguardando acao.`}
+              ? "Carregando simulações..."
+              : `${simulations.length} simulação(ões) registradas, ${manageableSimulationsCount} aguardando ação.`}
           </p>
         </div>
         <p className="max-w-2xl text-xs text-slate-500">
-          Aqui ficam os rascunhos e propostas enviadas antes de virarem emprestimos aprovados.
+          Aqui ficam os rascunhos e propostas enviadas antes de virarem empréstimos aprovados.
         </p>
       </div>
 
       <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-12">
         <div className="md:col-span-8">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Buscar simulacao</label>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Buscar simulação</label>
           <input
             type="text"
             className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-            placeholder="Cliente, telefone ou ID da simulacao"
+            placeholder="Cliente, telefone ou ID da simulação"
             value={simulationSearch}
             onChange={(event) => setSimulationSearch(event.target.value)}
           />
@@ -1290,17 +1293,17 @@ export function EmprestimosClient() {
               <th className="px-4 py-3">Juros</th>
               <th className="px-4 py-3">Validade</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 text-right">Acoes</th>
+              <th className="px-4 py-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
             {loading ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-slate-500">Carregando simulacoes...</td>
+                <td colSpan={8} className="py-8 text-center text-slate-500">Carregando simulações...</td>
               </tr>
             ) : filteredSimulations.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-slate-500">Nenhuma simulacao encontrada.</td>
+                <td colSpan={8} className="py-8 text-center text-slate-500">Nenhuma simulação encontrada.</td>
               </tr>
             ) : (
               filteredSimulations.map((simulation) => {
@@ -1339,7 +1342,7 @@ export function EmprestimosClient() {
                         {getSimulationStatusLabel(simulation)}
                       </span>
                       {simulation.loanId ? (
-                        <div className="mt-1 text-xs text-slate-500">Emprestimo #{simulation.loanId}</div>
+                        <div className="mt-1 text-xs text-slate-500">Empréstimo #{simulation.loanId}</div>
                       ) : null}
                     </td>
                     <td className="px-4 py-4">
@@ -1349,7 +1352,7 @@ export function EmprestimosClient() {
                             onClick={() => openLinkedLoanFromSimulation(simulation)}
                             className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-blue-500 hover:text-blue-300 disabled:opacity-50"
                             disabled={isActionLoading}
-                            title="Ver emprestimo vinculado"
+                            title="Ver empréstimo vinculado"
                           >
                             <Eye className="h-4 w-4" />
                           </button>
@@ -1368,7 +1371,7 @@ export function EmprestimosClient() {
                               onClick={() => setSimulationConfirmAction({ type: "approve", simulation })}
                               className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-50"
                               disabled={isActionLoading}
-                              title="Aprovar simulacao"
+                              title="Aprovar simulação"
                             >
                               <Check className="h-4 w-4" />
                             </button>
@@ -1376,7 +1379,7 @@ export function EmprestimosClient() {
                               onClick={() => setSimulationConfirmAction({ type: "cancel", simulation })}
                               className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                               disabled={isActionLoading}
-                              title="Cancelar simulacao"
+                              title="Cancelar simulação"
                             >
                               <Ban className="h-4 w-4" />
                             </button>
@@ -1398,11 +1401,11 @@ export function EmprestimosClient() {
       <div className="grid gap-3 md:hidden">
         {loading ? (
           <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
-            Carregando simulacoes...
+            Carregando simulações...
           </div>
         ) : filteredSimulations.length === 0 ? (
           <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
-            Nenhuma simulacao encontrada.
+            Nenhuma simulação encontrada.
           </div>
         ) : (
           filteredSimulations.map((simulation) => {
@@ -1414,7 +1417,7 @@ export function EmprestimosClient() {
               <MobileDataCard
                 key={simulationId}
                 title={simulation.clientName || simulation.client?.name || `Cliente #${simulation.clientId}`}
-                subtitle={`Simulacao #${simulationId.slice(0, 8)}`}
+                subtitle={`Simulação #${simulationId.slice(0, 8)}`}
                 badge={(
                   <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getSimulationStatusBadge(String(simulation.status || ""))}`}>
                     {getSimulationStatusLabel(simulation)}
@@ -1429,7 +1432,7 @@ export function EmprestimosClient() {
                         disabled={isActionLoading}
                       >
                         <Eye className="h-4 w-4" />
-                        Ver emprestimo
+                        Ver empréstimo
                       </button>
                     ) : undefined}
                   >
@@ -1448,7 +1451,7 @@ export function EmprestimosClient() {
                         onClick={() => setSimulationConfirmAction({ type: "approve", simulation })}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-50"
                         disabled={isActionLoading}
-                        title="Aprovar simulacao"
+                        title="Aprovar simulação"
                       >
                         <Check className="h-4 w-4" />
                       </button>
@@ -1458,7 +1461,7 @@ export function EmprestimosClient() {
                         onClick={() => setSimulationConfirmAction({ type: "cancel", simulation })}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                         disabled={isActionLoading}
-                        title="Cancelar simulacao"
+                        title="Cancelar simulação"
                       >
                         <Ban className="h-4 w-4" />
                       </button>
@@ -1474,7 +1477,7 @@ export function EmprestimosClient() {
                   <MobileDataCardRow label="Juros" value={formatSimulationInterestPrimary(simulation)} />
                   <MobileDataCardRow
                     label="Vinculo"
-                    value={simulation.loanId ? `Emprestimo #${simulation.loanId}` : "Sem emprestimo"}
+                    value={simulation.loanId ? `Empréstimo #${simulation.loanId}` : "Sem empréstimo"}
                   />
                 </div>
               </MobileDataCard>
@@ -1489,14 +1492,14 @@ export function EmprestimosClient() {
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
       <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">EmprÃ©stimos</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Empréstimos</h1>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:justify-end">
           <button onClick={openSimulationModal} className="inline-flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-semibold text-slate-300 transition-all hover:bg-slate-700 active:scale-[0.98] sm:px-5">
-            <FlaskConical className="h-4 w-4" /> Nova simulaÃ§Ã£o
+            <FlaskConical className="h-4 w-4" /> Nova simulação
           </button>
           <button onClick={openLoanModal} className="inline-flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-3 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98] sm:px-5">
-            <Plus className="h-4 w-4" /> Novo emprÃ©stimo
+            <Plus className="h-4 w-4" /> Novo empréstimo
           </button>
         </div>
       </section>
@@ -1506,7 +1509,7 @@ export function EmprestimosClient() {
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-[#4F7EF7]" />
           <Hash className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
-          <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">EmprÃ©stimos</p>
+          <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Empréstimos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : totalCount}</p>
           <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Na base de dados</p>
         </div>
@@ -1540,19 +1543,19 @@ export function EmprestimosClient() {
             <h2 className="text-lg font-bold text-slate-100">Simulacoes salvas</h2>
             <p className="mt-1 text-sm text-slate-400">
               {loading
-                ? "Carregando simulacoes..."
-                : `${simulations.length} simulacao(oes) registradas, ${manageableSimulationsCount} aguardando acao.`}
+                ? "Carregando simulações..."
+                : `${simulations.length} simulação(ões) registradas, ${manageableSimulationsCount} aguardando ação.`}
             </p>
           </div>
         </div>
 
         <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-12">
           <div className="md:col-span-8">
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Buscar simulacao</label>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Buscar simulação</label>
             <input
               type="text"
               className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-              placeholder="Cliente, telefone ou ID da simulacao"
+              placeholder="Cliente, telefone ou ID da simulação"
               value={simulationSearch}
               onChange={(event) => setSimulationSearch(event.target.value)}
             />
@@ -1585,17 +1588,17 @@ export function EmprestimosClient() {
                 <th className="px-4 py-3">Juros</th>
                 <th className="px-4 py-3">Validade</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Acoes</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500">Carregando simulacoes...</td>
+                  <td colSpan={8} className="py-8 text-center text-slate-500">Carregando simulações...</td>
                 </tr>
               ) : filteredSimulations.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500">Nenhuma simulacao encontrada.</td>
+                  <td colSpan={8} className="py-8 text-center text-slate-500">Nenhuma simulação encontrada.</td>
                 </tr>
               ) : (
                 filteredSimulations.map((simulation) => {
@@ -1634,7 +1637,7 @@ export function EmprestimosClient() {
                           {getSimulationStatusLabel(simulation)}
                         </span>
                         {simulation.loanId ? (
-                          <div className="mt-1 text-xs text-slate-500">Emprestimo #{simulation.loanId}</div>
+                          <div className="mt-1 text-xs text-slate-500">Empréstimo #{simulation.loanId}</div>
                         ) : null}
                       </td>
                       <td className="px-4 py-4">
@@ -1644,7 +1647,7 @@ export function EmprestimosClient() {
                               onClick={() => openLinkedLoanFromSimulation(simulation)}
                               className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-blue-500 hover:text-blue-300 disabled:opacity-50"
                               disabled={isActionLoading}
-                              title="Ver emprestimo vinculado"
+                              title="Ver empréstimo vinculado"
                             >
                               <Eye className="h-4 w-4" />
                             </button>
@@ -1663,7 +1666,7 @@ export function EmprestimosClient() {
                                 onClick={() => setSimulationConfirmAction({ type: "approve", simulation })}
                                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-50"
                                 disabled={isActionLoading}
-                                title="Aprovar simulacao"
+                                title="Aprovar simulação"
                               >
                                 <Check className="h-4 w-4" />
                               </button>
@@ -1671,7 +1674,7 @@ export function EmprestimosClient() {
                                 onClick={() => setSimulationConfirmAction({ type: "cancel", simulation })}
                                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                                 disabled={isActionLoading}
-                                title="Cancelar simulacao"
+                                title="Cancelar simulação"
                               >
                                 <Ban className="h-4 w-4" />
                               </button>
@@ -1693,11 +1696,11 @@ export function EmprestimosClient() {
         <div className="grid gap-3 md:hidden">
           {loading ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
-              Carregando simulacoes...
+              Carregando simulações...
             </div>
           ) : filteredSimulations.length === 0 ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
-              Nenhuma simulacao encontrada.
+              Nenhuma simulação encontrada.
             </div>
           ) : (
             filteredSimulations.map((simulation) => {
@@ -1709,7 +1712,7 @@ export function EmprestimosClient() {
                 <MobileDataCard
                   key={simulationId}
                   title={simulation.clientName || simulation.client?.name || `Cliente #${simulation.clientId}`}
-                  subtitle={`Simulacao #${simulationId.slice(0, 8)}`}
+                  subtitle={`Simulação #${simulationId.slice(0, 8)}`}
                   badge={(
                     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getSimulationStatusBadge(String(simulation.status || ""))}`}>
                       {getSimulationStatusLabel(simulation)}
@@ -1724,7 +1727,7 @@ export function EmprestimosClient() {
                           disabled={isActionLoading}
                         >
                           <Eye className="h-4 w-4" />
-                          Ver emprestimo
+                          Ver empréstimo
                         </button>
                       ) : undefined}
                     >
@@ -1743,7 +1746,7 @@ export function EmprestimosClient() {
                           onClick={() => setSimulationConfirmAction({ type: "approve", simulation })}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-50"
                           disabled={isActionLoading}
-                          title="Aprovar simulacao"
+                          title="Aprovar simulação"
                         >
                           <Check className="h-4 w-4" />
                         </button>
@@ -1753,7 +1756,7 @@ export function EmprestimosClient() {
                           onClick={() => setSimulationConfirmAction({ type: "cancel", simulation })}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                           disabled={isActionLoading}
-                          title="Cancelar simulacao"
+                          title="Cancelar simulação"
                         >
                           <Ban className="h-4 w-4" />
                         </button>
@@ -1769,7 +1772,7 @@ export function EmprestimosClient() {
                     <MobileDataCardRow label="Juros" value={formatSimulationInterestPrimary(simulation)} />
                     <MobileDataCardRow
                       label="Vinculo"
-                      value={simulation.loanId ? `Emprestimo #${simulation.loanId}` : "Sem emprestimo"}
+                      value={simulation.loanId ? `Empréstimo #${simulation.loanId}` : "Sem empréstimo"}
                     />
                   </div>
                 </MobileDataCard>
@@ -1788,7 +1791,7 @@ export function EmprestimosClient() {
             <input
               type="text"
               className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-              placeholder="Cliente ou ID do emprÃ©stimo"
+              placeholder="Cliente ou ID do empréstimo"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -1832,24 +1835,24 @@ export function EmprestimosClient() {
                 <th className="px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => toggleSort("status")}>
                   Status {renderSortIcon("status")}
                 </th>
-                <th className="px-4 py-3 text-right">AÃ§Ãµes</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">Carregando emprÃ©stimos...</td>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">Carregando empréstimos...</td>
                 </tr>
               ) : pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">Nenhum emprÃ©stimo encontrado.</td>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">Nenhum empréstimo encontrado.</td>
                 </tr>
               ) : (
                 pageRows.map(loan => (
                   <tr key={loan.id} className="transition-colors hover:bg-slate-800/40">
                     <td className="px-4 py-4 font-semibold text-slate-200">#{loan.id}</td>
                     <td className="px-4 py-4">
-                      <div className="font-semibold text-slate-100">{loan.debtor?.name || "Cliente excluÃ­do"}</div>
+                      <div className="font-semibold text-slate-100">{loan.debtor?.name || "Cliente excluido"}</div>
                       <div className="mt-1 text-xs text-slate-400">
                         {formatDocument(loan.debtor?.document || loan.debtor?.cpf) || "Sem documento"}
                       </div>
@@ -1900,15 +1903,15 @@ export function EmprestimosClient() {
           </table>
         </div>
 
-        {/* RodapÃ© Tabela (PaginaÃ§Ã£o) */}
+        {/* Rodapé Tabela (Paginação) */}
         <div className="grid gap-3 md:hidden">
           {loading ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
-              Carregando emprestimos...
+              Carregando empréstimos...
             </div>
           ) : pageRows.length === 0 ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-8 text-center text-sm text-slate-500">
-              Nenhum emprestimo encontrado.
+              Nenhum empréstimo encontrado.
             </div>
           ) : (
             pageRows.map((loan) => {
@@ -1931,7 +1934,7 @@ export function EmprestimosClient() {
                         onClick={() => openViewModal(loan)}
                         className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#4F7EF7] text-white shadow-[0_8px_18px_rgba(79,126,247,0.3)] transition-colors hover:bg-[#3b6ef0]"
                         title="Visualizar"
-                        aria-label={`Visualizar emprestimo #${loan.id}`}
+                        aria-label={`Visualizar empréstimo #${loan.id}`}
                       >
                         <Eye className="h-4 w-4" />
                       </button>
@@ -1940,7 +1943,7 @@ export function EmprestimosClient() {
                           onClick={() => openEditModal(loan)}
                           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:bg-amber-100"
                           title="Editar"
-                          aria-label={`Editar emprestimo #${loan.id}`}
+                          aria-label={`Editar empréstimo #${loan.id}`}
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
@@ -1950,7 +1953,7 @@ export function EmprestimosClient() {
                           onClick={() => openDeleteModal(loan)}
                           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
                           title="Excluir"
-                          aria-label={`Excluir emprestimo #${loan.id}`}
+                          aria-label={`Excluir empréstimo #${loan.id}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -1973,7 +1976,7 @@ export function EmprestimosClient() {
         {!loading && (
           <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
-              Mostrando <span className="text-slate-200">{filteredAndSortedLoans.length > 0 ? startIdx + 1 : 0}</span> atÃ©{" "}
+              Mostrando <span className="text-slate-200">{filteredAndSortedLoans.length > 0 ? startIdx + 1 : 0}</span> ate{" "}
               <span className="text-slate-200">{Math.min(startIdx + pageSize, filteredAndSortedLoans.length)}</span> de{" "}
               <span className="font-semibold text-slate-200">{filteredAndSortedLoans.length}</span> resultados
             </p>
@@ -1986,7 +1989,7 @@ export function EmprestimosClient() {
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-sm font-medium text-slate-400">
-                PÃ¡gina <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
+                Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
@@ -2006,7 +2009,7 @@ export function EmprestimosClient() {
         <ModalBase
           open={showViewModal}
           onClose={closeViewModal}
-          title={`Emprestimo #${selectedLoanView.id}`}
+          title={`Empréstimo #${selectedLoanView.id}`}
           size="max-w-5xl"
           bodyClassName="space-y-5 bg-slate-50"
           footer={
@@ -2019,7 +2022,7 @@ export function EmprestimosClient() {
                     openEditModal(selectedLoan);
                   }}
                 >
-                  Editar emprestimo
+                  Editar empréstimo
                 </ModalBtnPrimary>
               ) : null}
             </>
@@ -2082,7 +2085,7 @@ export function EmprestimosClient() {
             <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr] xl:items-start">
               <section className="flex flex-col gap-5">
                 <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-                  <h3 className="text-base font-bold text-slate-900">Informacoes do emprestimo</h3>
+                  <h3 className="text-base font-bold text-slate-900">Informações do empréstimo</h3>
                   <div className="mt-4 grid auto-rows-fr gap-3 sm:grid-cols-2">
                     <LoanViewInfo label="Data de inicio" value={selectedLoanView.startDate} />
                     <LoanViewInfo label="Primeiro vencimento" value={selectedLoanView.firstDueDate} />
@@ -2092,10 +2095,10 @@ export function EmprestimosClient() {
                 </div>
 
                 <div className="flex min-h-[180px] flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
-                  <h3 className="text-base font-bold text-slate-900">Observacoes</h3>
+                  <h3 className="text-base font-bold text-slate-900">Observações</h3>
                   <div className="mt-4 flex flex-1 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                     <p className="text-sm leading-6 text-slate-600">
-                      {selectedLoanView.observations || "Nenhuma observacao informada para este emprestimo."}
+                      {selectedLoanView.observations || "Nenhuma observação informada para este empréstimo."}
                     </p>
                   </div>
                 </div>
@@ -2113,7 +2116,7 @@ export function EmprestimosClient() {
                   <div className="mt-4 min-h-0 flex-1 space-y-2.5">
                     {selectedLoanView.installments.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                        Nenhuma parcela cadastrada para este emprestimo.
+                        Nenhuma parcela cadastrada para este empréstimo.
                       </div>
                     ) : (
                       <div className="h-full space-y-2.5 overflow-y-auto pr-1">
@@ -2151,19 +2154,31 @@ export function EmprestimosClient() {
         </ModalBase>
       ) : null}
 
-      {/* ===== MODAL: NOVO EMPRÃ‰STIMO / NOVA SIMULAÃ‡ÃƒO ===== */}
+      {/* ===== MODAL: NOVO EMPRÉSTIMO / NOVA SIMULAÇÃO ===== */}
       {showLoanModal && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-hidden bg-black/60 px-4 pb-4 pt-14 backdrop-blur-sm sm:pt-16" onClick={closeLoanModal}>
-          <div className="flex max-h-[calc(100vh-4.5rem)] w-full max-w-[840px] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl sm:max-h-[calc(100vh-5rem)]" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-black/60 px-4 py-4 backdrop-blur-sm sm:px-5 sm:py-5"
+          onClick={closeLoanModal}
+          style={{
+            paddingTop: "calc(1rem + var(--safe-area-top))",
+            paddingBottom: "calc(1rem + var(--safe-area-bottom))",
+            paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+            paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+          }}
+        >
+          <div
+            className="mx-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl sm:max-h-[calc(100dvh-2.5rem)]"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="shrink-0 flex items-start justify-between border-b border-slate-800 px-5 py-4">
               <div>
                 <h2 className="text-xl font-bold text-slate-100">
                   {loanModalMode === "loan"
-                    ? "Novo emprestimo"
+                    ? "Novo empréstimo"
                     : loanModalMode === "simulation"
-                      ? "Nova simulacao"
-                      : `Editar emprestimo #${selectedLoan?.id ?? ""}`}
+                      ? "Nova simulação"
+                      : `Editar empréstimo #${selectedLoan?.id ?? ""}`}
                 </h2>
               </div>
               <button onClick={closeLoanModal} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"><X className="h-5 w-5" /></button>
@@ -2176,12 +2191,12 @@ export function EmprestimosClient() {
               <fieldset disabled={isLockedLoanModal} className="m-0 min-w-0 border-0 p-0 flex-1 space-y-4 px-5 py-4">
                 {isLockedLoanModal ? (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-                    Este emprestimo ja possui parcela paga. Por regra, ele nao pode mais ser alterado.
+                    Este empréstimo já possui parcela paga. Por regra, ele não pode mais ser alterado.
                   </div>
                 ) : null}
-                {/* InformaÃ§Ãµes BÃ¡sicas */}
+                {/* Informações básicas */}
                 <div>
-                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Informacoes basicas</h3>
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Informações básicas</h3>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Cliente*</label>
@@ -2197,7 +2212,7 @@ export function EmprestimosClient() {
                   </div>
                 </div>
 
-                {/* CondiÃ§Ãµes */}
+                {/* Condições */}
                 <div>
                   <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Condicoes</h3>
                   <div className="grid gap-4 md:grid-cols-3">
@@ -2358,7 +2373,7 @@ export function EmprestimosClient() {
 
               {/* Right: Resumo */}
               <div className="w-full border-t border-slate-800 px-5 py-4 xl:w-[300px] xl:border-l xl:border-t-0">
-                <h3 className="text-base font-bold text-slate-100 mb-4">Resumo do emprestimo</h3>
+                <h3 className="text-base font-bold text-slate-100 mb-4">Resumo do empréstimo</h3>
                 <div className="space-y-3">
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.totalAmount)}</p></div>
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor da parcela</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.installmentAmount)}</p></div>
@@ -2371,11 +2386,11 @@ export function EmprestimosClient() {
                 </div>
 
                 <div className="mt-6">
-                  <h3 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-slate-500">Observacoes</h3>
+                  <h3 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-slate-500">Observações</h3>
                   <label className="mb-1 block text-xs font-semibold text-slate-400">Detalhes adicionais</label>
                   <textarea
                     className="min-h-[180px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none resize-none"
-                    placeholder="ObservaÃ§Ãµes sobre o emprestimo"
+                    placeholder="Observações sobre o empréstimo"
                     value={formObservations}
                     onChange={(e) => setFormObservations(e.target.value)}
                   />
@@ -2392,7 +2407,7 @@ export function EmprestimosClient() {
                 </button>
               ) : loanModalMode === "loan" ? (
                 <button onClick={handleSaveLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
-                  {saving ? "Salvando..." : "Salvar emprÃ©stimo"}
+                  {saving ? "Salvando..." : "Salvar empréstimo"}
                 </button>
               ) : isEditingLoanModal ? (
                 <button onClick={handleUpdateLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
@@ -2401,7 +2416,7 @@ export function EmprestimosClient() {
               ) : (
                 <>
                   <button onClick={() => handleSaveSimulation()} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-6 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50">
-                    {saving ? "Salvando..." : "Salvar simulacao"}
+                    {saving ? "Salvando..." : "Salvar simulação"}
                   </button>
                   <button onClick={handleSendWhatsApp} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
                     Enviar WhatsApp
@@ -2417,11 +2432,11 @@ export function EmprestimosClient() {
         <ModalBase
           open={Boolean(simulationConfirmAction)}
           onClose={() => setSimulationConfirmAction(null)}
-          title={simulationConfirmAction.type === "approve" ? "Aprovar simulacao" : "Cancelar simulacao"}
+          title={simulationConfirmAction.type === "approve" ? "Aprovar simulação" : "Cancelar simulação"}
           subtitle={
             simulationConfirmAction.type === "approve"
-              ? `Deseja transformar a simulacao #${String(simulationConfirmAction.simulation.id || "").slice(0, 8)} em emprestimo?`
-              : `Deseja cancelar a simulacao #${String(simulationConfirmAction.simulation.id || "").slice(0, 8)}?`
+              ? `Deseja transformar a simulação #${String(simulationConfirmAction.simulation.id || "").slice(0, 8)} em empréstimo?`
+              : `Deseja cancelar a simulação #${String(simulationConfirmAction.simulation.id || "").slice(0, 8)}?`
           }
           footer={(
             <>
@@ -2438,29 +2453,38 @@ export function EmprestimosClient() {
               >
                 {simulationActionLoadingId === String(simulationConfirmAction.simulation.id || "")
                   ? (simulationConfirmAction.type === "approve" ? "Aprovando..." : "Cancelando...")
-                  : (simulationConfirmAction.type === "approve" ? "Aprovar simulacao" : "Cancelar simulacao")}
+                  : (simulationConfirmAction.type === "approve" ? "Aprovar simulação" : "Cancelar simulação")}
               </ModalBtnPrimary>
             </>
           )}
         >
           <p className="text-sm text-slate-400">
             {simulationConfirmAction.type === "approve"
-              ? "Ao aprovar, o sistema cria o emprestimo real e vincula esta simulacao ao contrato."
-              : "A simulacao permanece no historico, mas deixa de ficar disponivel como proposta ativa."}
+              ? "Ao aprovar, o sistema cria o empréstimo real e vincula esta simulação ao contrato."
+              : "A simulação permanece no histórico, mas deixa de ficar disponível como proposta ativa."}
           </p>
         </ModalBase>
       ) : null}
 
-      {/* ===== MODAL: EXCLUIR EMPRÃ‰STIMO ===== */}
+      {/* ===== MODAL: EXCLUIR EMPRESTIMO ===== */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
-          <div className="w-full max-w-md mx-4 rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-slate-100">Confirmar exclusÃ£o</h2>
-            <p className="mt-1 text-sm text-slate-400">Deseja excluir o emprÃ©stimo #{deletingLoan?.id}?</p>
-            <p className="mt-3 text-sm text-slate-400">Esta aÃ§Ã£o nÃ£o pode ser desfeita. O emprÃ©stimo e suas parcelas serÃ£o removidos permanentemente.</p>
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4 py-4 backdrop-blur-sm sm:px-5 sm:py-5"
+          onClick={() => setShowDeleteModal(false)}
+          style={{
+            paddingTop: "calc(1rem + var(--safe-area-top))",
+            paddingBottom: "calc(1rem + var(--safe-area-bottom))",
+            paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+            paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-slate-100">Confirmar exclusão</h2>
+            <p className="mt-1 text-sm text-slate-400">Deseja excluir o empréstimo #{deletingLoan?.id}?</p>
+            <p className="mt-3 text-sm text-slate-400">Esta ação não pode ser desfeita. O empréstimo e suas parcelas serão removidos permanentemente.</p>
             <div className="mt-5 flex justify-end gap-3">
               <button onClick={() => setShowDeleteModal(false)} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-5 text-sm font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50">Cancelar</button>
-              <button onClick={handleDeleteLoan} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">{saving ? "Excluindo..." : "Excluir emprÃ©stimo"}</button>
+              <button onClick={handleDeleteLoan} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">{saving ? "Excluindo..." : "Excluir empréstimo"}</button>
             </div>
           </div>
         </div>

@@ -38,7 +38,7 @@ function normalizeCategoryText(value: string) {
 async function readJsonOrThrow(response: Response) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.message || "Nao foi possivel concluir a operacao.");
+    throw new Error(payload?.message || "Não foi possível concluir a operação.");
   }
   return payload;
 }
@@ -210,7 +210,7 @@ export function FinanceCategoryPicker({
       setSearch("");
       setDraftEmoji("");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Nao foi possivel criar a categoria.");
+      setErrorMessage(error instanceof Error ? error.message : "Não foi possível criar a categoria.");
     } finally {
       setSaving(false);
     }
@@ -383,7 +383,7 @@ export function FinanceCategoryManagerModal({
       setEditName("");
       setEditEmoji("");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Nao foi possivel atualizar a categoria.");
+      setErrorMessage(error instanceof Error ? error.message : "Não foi possível atualizar a categoria.");
     } finally {
       setBusyId("");
     }
@@ -400,7 +400,7 @@ export function FinanceCategoryManagerModal({
         setEditEmoji("");
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Nao foi possivel atualizar a categoria.");
+      setErrorMessage(error instanceof Error ? error.message : "Não foi possível atualizar a categoria.");
     } finally {
       setBusyId("");
     }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { useGlobalScrollLock } from "./useGlobalScrollLock";
 
 const modalButtonBaseClass =
   "inline-flex h-11 w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl border px-4 py-2 text-center text-sm leading-none transition-all active:translate-y-px active:scale-[0.98] disabled:opacity-50 sm:w-[160px]";
@@ -32,6 +33,7 @@ export function ModalBase({
   footerClassName = "",
 }: ModalBaseProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  useGlobalScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
@@ -44,17 +46,20 @@ export function ModalBase({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
-
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center px-4 py-4 sm:px-5 sm:py-5"
+      role="dialog"
+      aria-modal="true"
+      style={{
+        paddingTop: "calc(1rem + var(--safe-area-top))",
+        paddingBottom: "calc(1rem + var(--safe-area-bottom))",
+        paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+        paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+      }}
+    >
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-slate-900/35 backdrop-blur-[6px] animate-fade-in"
@@ -63,7 +68,7 @@ export function ModalBase({
 
       <div
         ref={panelRef}
-        className={`relative z-10 flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-slate-200 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.16)] animate-slide-up sm:max-h-[90vh] sm:rounded-2xl ${size}`}
+        className={`relative z-10 mx-auto flex w-full max-h-[calc(100dvh-2rem)] flex-col rounded-2xl border border-slate-200 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.16)] animate-slide-up sm:max-h-[calc(100dvh-2.5rem)] ${size}`}
       >
         <div className={`flex items-start justify-between border-b border-slate-100 px-5 py-3.5 sm:px-6 ${headerClassName}`}>
           <div className="min-w-0 pr-4">

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -27,6 +27,7 @@ import {
   Tooltip,
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import { useGlobalScrollLock } from '../../../components/useGlobalScrollLock';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
@@ -194,14 +195,14 @@ function buildDelta(current: number, previous: number) {
       return {
         value: '0,00%',
         tone: 'neutral' as const,
-        note: 'Sem variacao relevante.',
+        note: 'Sem variação relevante.',
       };
     }
 
     return {
       value: 'Sem base',
       tone: 'neutral' as const,
-      note: 'Ainda nao existe base anterior para comparar.',
+      note: 'Ainda não existe base anterior para comparar.',
     };
   }
 
@@ -210,7 +211,7 @@ function buildDelta(current: number, previous: number) {
     return {
       value: '0,00%',
       tone: 'neutral' as const,
-      note: 'Mesmo ritmo do mes anterior.',
+      note: 'Mesmo ritmo do mês anterior.',
     };
   }
 
@@ -222,7 +223,7 @@ function buildDelta(current: number, previous: number) {
   return {
     value: `${delta > 0 ? '+' : '-'}${deltaText}%`,
     tone: delta > 0 ? ('positive' as const) : ('negative' as const),
-    note: delta > 0 ? 'Acima do mes anterior.' : 'Abaixo do mes anterior.',
+    note: delta > 0 ? 'Acima do mês anterior.' : 'Abaixo do mês anterior.',
   };
 }
 
@@ -238,7 +239,7 @@ function getHealthDescriptor(score: number) {
   if (score >= 80) {
     return {
       label: 'Saudavel',
-      note: 'Boa recuperacao com pressao baixa de atraso.',
+      note: 'Boa recuperação com pressão baixa de atraso.',
       chip: 'border-emerald-200 bg-emerald-50 text-emerald-600',
       bar: 'bg-emerald-500',
       value: 'text-emerald-600',
@@ -267,7 +268,7 @@ function getHealthDescriptor(score: number) {
 
   return {
     label: 'Critico',
-    note: 'A carteira exige cobranca ativa e revisao imediata.',
+    note: 'A carteira exige cobrança ativa e revisão imediata.',
     chip: 'border-rose-200 bg-rose-50 text-rose-600',
     bar: 'bg-rose-500',
     value: 'text-rose-600',
@@ -277,7 +278,7 @@ function getHealthDescriptor(score: number) {
 function getHealthEmptyDescriptor() {
   return {
     label: 'Sem base',
-    note: 'Ainda nao ha dados suficientes para avaliar a saude da carteira.',
+    note: 'Ainda não há dados suficientes para avaliar a saúde da carteira.',
     chip: 'border-slate-200 bg-slate-100 text-slate-500',
     bar: 'bg-slate-300',
     value: 'text-slate-500',
@@ -326,16 +327,18 @@ function SupportMetricCard({
   value,
   note,
   valueClassName,
+  className,
 }: {
   label: string;
   value: string;
   note: string;
   valueClassName?: string;
+  className?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-      <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-      <p className={cn('mt-2 text-[1.35rem] font-bold tracking-tight text-slate-800', valueClassName)}>{value}</p>
+    <div className={cn('rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)] sm:px-5 sm:py-4', className)}>
+      <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-slate-400 sm:text-[0.68rem] sm:tracking-[0.16em]">{label}</p>
+      <p className={cn('mt-1.5 text-[1.2rem] font-bold tracking-tight text-slate-800 sm:mt-2 sm:text-[1.35rem]', valueClassName)}>{value}</p>
       <p className="mt-1.5 hidden text-sm text-slate-500 sm:block">{note}</p>
     </div>
   );
@@ -408,11 +411,11 @@ export default function CarteiraDashboardClient() {
   const handleWhatsApp = (item: QueueItem) => {
     const phone = normalizeWhatsAppPhone(item?.phone);
     if (!phone) {
-      alert('Cliente sem telefone valido para WhatsApp');
+      alert('Cliente sem telefone válido para WhatsApp');
       return;
     }
 
-    const text = `Ola, ${item.debtorName || ''}. Parcela em aberto: ${formatCurrency(item.amount)} (venc. ${formatDateShort(item.dueDate)}). Chave PIX: ${item.pixKey || 'nao informado'}`;
+    const text = `Olá, ${item.debtorName || ''}. Parcela em aberto: ${formatCurrency(item.amount)} (venc. ${formatDateShort(item.dueDate)}). Chave PIX: ${item.pixKey || 'não informado'}`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -427,7 +430,7 @@ export default function CarteiraDashboardClient() {
       const payload: DashboardPayload = await response.json();
       setData(payload);
     } catch (nextError: any) {
-      setError(nextError.message || 'Erro de conexao');
+      setError(nextError.message || 'Erro de conexão');
     } finally {
       setLoading(false);
     }
@@ -470,6 +473,8 @@ export default function CarteiraDashboardClient() {
     setUpcomingPage(1);
     setOverduePage(1);
   }, [data?.upcomingDue?.length, data?.overduePayments?.length]);
+
+  useGlobalScrollLock(Boolean(paymentItem));
 
   const scrollToSection = (sectionId: string) => {
     if (typeof document === 'undefined') return;
@@ -639,7 +644,7 @@ export default function CarteiraDashboardClient() {
           callbacks: {
             title: (items: any) => {
               if (!items?.length) return '';
-              return `${items[0].label} • ${items[0].dataIndex === lastIndex ? 'mes atual' : 'historico'}`;
+              return `${items[0].label} • ${items[0].dataIndex === lastIndex ? 'mês atual' : 'histórico'}`;
             },
             label: (context: any) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
           },
@@ -698,13 +703,13 @@ export default function CarteiraDashboardClient() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-[1600px] space-y-6 bg-transparent pb-24 font-sans lg:pb-8">
+    <div className="mx-auto min-h-screen w-full max-w-[1600px] space-y-6 overflow-x-clip bg-transparent pb-24 font-sans lg:pb-8">
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="hidden text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">Carteira de emprestimos</p>
+          <p className="hidden text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">Carteira de empréstimos</p>
           <h2 className="mt-1 text-[1.55rem] font-bold tracking-tight text-slate-800 sm:mt-2 sm:text-[2rem]">Painel da carteira</h2>
           <p className="mt-1.5 hidden max-w-2xl text-sm text-slate-500 md:block">
-            Tela operacional para acompanhar cobranca, vencimentos, retorno e pressao de risco da carteira.
+            Tela operacional para acompanhar cobrança, vencimentos, retorno e pressão de risco da carteira.
           </p>
         </div>
       </section>
@@ -719,7 +724,7 @@ export default function CarteiraDashboardClient() {
         <article className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#eef4ff_100%)] p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
           <div className="grid gap-5 xl:grid-cols-[1.35fr_.95fr] xl:items-start">
             <div className="max-w-none">
-              <p className="hidden text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">Visao imediata da carteira</p>
+              <p className="hidden text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">Visão imediata da carteira</p>
               <h3 className="mt-1 text-[1.05rem] font-bold text-slate-800 sm:mt-2 sm:text-[1.15rem]">A receber</h3>
               <p className="mt-2 hidden text-sm text-slate-500 sm:block">
                 Total aberto da carteira somando parcelas futuras e parcelas em atraso.
@@ -746,7 +751,7 @@ export default function CarteiraDashboardClient() {
                 <p className="mt-2 text-[1.8rem] font-bold tracking-tight text-rose-600">
                   {formatCurrency(kpis.openReceivableOverdue || 0)}
                 </p>
-                <p className="mt-1.5 hidden text-sm text-rose-500 sm:block">Exige cobranca e acompanhamento mais proximo.</p>
+                <p className="mt-1.5 hidden text-sm text-rose-500 sm:block">Exige cobrança e acompanhamento mais próximo.</p>
               </div>
             </div>
           </div>
@@ -756,15 +761,15 @@ export default function CarteiraDashboardClient() {
           <SmallMetricCard
             accent="bg-emerald-50 text-emerald-600"
             icon={<CheckCircle2 className="h-4 w-4" />}
-            label="Recebido no mes"
-            note={receivedKpi?.insight?.text || 'Volume que ja retornou para o caixa neste mes.'}
+            label="Recebido no mês"
+            note={receivedKpi?.insight?.text || 'Volume que já retornou para o caixa neste mês.'}
             value={formatCurrency(kpis.receivedThisMonth || 0)}
           />
           <SmallMetricCard
             accent="bg-violet-50 text-violet-600"
             icon={<TrendingUp className="h-4 w-4" />}
-            label="Lucro do mes"
-            note={profitKpi?.insight?.text || 'Resultado gerado pelas baixas do periodo atual.'}
+            label="Lucro do mês"
+            note={profitKpi?.insight?.text || 'Resultado gerado pelas baixas do período atual.'}
             value={formatCurrency(kpis.profitThisMonth || 0)}
           />
         </div>
@@ -796,9 +801,9 @@ export default function CarteiraDashboardClient() {
 
       <section className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]">
         <div className="mb-5 flex flex-col gap-1">
-          <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400">Acoes do dia</p>
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400">Ações do dia</p>
           <h3 className="text-[1.15rem] font-bold text-slate-800">O que pede atencao agora</h3>
-          <p className="hidden text-sm text-slate-500 sm:block">Prioridades operacionais para baixar, cobrar e planejar os proximos dias.</p>
+          <p className="hidden text-sm text-slate-500 sm:block">Prioridades operacionais para baixar, cobrar e planejar os próximos dias.</p>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-3">
@@ -814,12 +819,12 @@ export default function CarteiraDashboardClient() {
             value={formatCurrency(data?.dailySummary?.dueToday?.totalValue || 0)}
           />
           <ActionCard
-            cta="Ir para cobrancas"
+            cta="Ir para cobranças"
             count={String(data?.dailySummary?.overdue?.count || 0)}
             icon={<AlertTriangle className="h-5 w-5" />}
             iconClassName="bg-rose-50 text-rose-600"
             label="Em atraso"
-            note="Titulos que precisam de cobranca e baixa."
+            note="Títulos que precisam de cobrança e baixa."
             onClick={() => scrollToSection('queue-overdue')}
             toneClassName="text-rose-600"
             value={formatCurrency(data?.dailySummary?.overdue?.totalValue || 0)}
@@ -829,7 +834,7 @@ export default function CarteiraDashboardClient() {
             count={String(data?.dailySummary?.next7Days?.count || 0)}
             icon={<Calendar className="h-5 w-5" />}
             iconClassName="bg-amber-50 text-amber-700"
-            label="Proximos 7 dias"
+            label="Próximos 7 dias"
             note="Antecipe contatos e confirme entradas da semana."
             onClick={() => scrollToSection('queue-upcoming')}
             toneClassName="text-amber-700"
@@ -839,17 +844,17 @@ export default function CarteiraDashboardClient() {
       </section>
 
       {health ? (
-        <section className="grid gap-5 xl:grid-cols-[1.55fr_.95fr]">
-          <article className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]">
+        <section className="grid min-w-0 gap-5 xl:grid-cols-[1.55fr_.95fr]">
+          <article className="min-w-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_38px_rgba(15,23,42,0.07)] sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h3 className="text-[1.15rem] font-bold text-slate-800">Performance mensal da carteira</h3>
                 <p className="mt-1 hidden text-sm text-slate-500 sm:block">
-                  Recebido como serie principal, com apoio de aberto e atraso por mes.
+                  Recebido como série principal, com apoio de aberto e atraso por mês.
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
                 <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
                   <button
                     className={cn(
@@ -874,7 +879,7 @@ export default function CarteiraDashboardClient() {
                 </div>
 
                 <select
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 outline-none focus:border-[#4F7EF7]"
+                  className="ml-auto rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 outline-none focus:border-[#4F7EF7] sm:ml-0"
                   onChange={(event) => setPeriod(event.target.value as '3m' | '6m' | '12m')}
                   value={period}
                 >
@@ -885,31 +890,31 @@ export default function CarteiraDashboardClient() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:mt-5 sm:grid-cols-2">
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4">
-                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Recebido no mes</p>
-                <p className="mt-2 text-[2rem] font-bold tracking-tight text-slate-800">
+                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Recebido no mês</p>
+                <p className="mt-2 text-[1.75rem] font-bold tracking-tight text-slate-800 sm:text-[2rem]">
                   {formatCurrency(receivedKpi?.currentValue ?? kpis.receivedThisMonth ?? 0)}
                 </p>
-                <p className={cn('mt-2 text-sm font-semibold', getToneTextClass(receivedKpi?.insight?.tone))}>
-                  {receivedKpi?.insight?.text || 'Sem insight adicional para o periodo.'}
+                <p className={cn('mt-2 text-xs font-semibold sm:text-sm', getToneTextClass(receivedKpi?.insight?.tone))}>
+                  {receivedKpi?.insight?.text || 'Sem insight adicional para o período.'}
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4">
-                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Variacao vs mes anterior</p>
-                <p className={cn('mt-2 text-[2rem] font-bold tracking-tight', getToneTextClass(receivedDelta.tone))}>
+                <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Variação vs mês anterior</p>
+                <p className={cn('mt-2 text-[1.75rem] font-bold tracking-tight sm:text-[2rem]', getToneTextClass(receivedDelta.tone))}>
                   {receivedDelta.value}
                 </p>
-                <p className={cn('mt-2 text-sm font-semibold', getToneTextClass(receivedDelta.tone))}>{receivedDelta.note}</p>
-                <p className="mt-1.5 text-sm text-slate-500">
+                <p className={cn('mt-2 text-xs font-semibold sm:text-sm', getToneTextClass(receivedDelta.tone))}>{receivedDelta.note}</p>
+                <p className="mt-1.5 hidden text-sm text-slate-500 sm:block">
                   Atual: {formatCurrency(receivedKpi?.currentValue ?? kpis.receivedThisMonth ?? 0)} | Anterior:{' '}
                   {formatCurrency(receivedKpi?.previousValue ?? 0)}
                 </p>
               </div>
             </div>
 
-            <div className="mt-5 rounded-[24px] border border-slate-200/80 bg-slate-50/60 p-4">
+            <div className="mt-5 min-w-0 rounded-[24px] border border-slate-200/80 bg-slate-50/60 p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Escala em R$</p>
                 <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600">
@@ -917,26 +922,26 @@ export default function CarteiraDashboardClient() {
                 </span>
               </div>
 
-              <div className="relative h-[320px] w-full rounded-[20px] border border-slate-200 bg-white p-4">
+              <div className="relative h-[240px] w-full overflow-hidden rounded-[20px] border border-slate-200 bg-white p-2 sm:h-[320px] sm:p-4">
                 {!chart?.points?.length || !chart.points.some((point) => point.received > 0 || point.overdue > 0 || point.open > 0) ? (
                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-[20px] text-center text-slate-500">
                     <TrendingUp className="mb-3 h-10 w-10 opacity-20" />
-                    <p className="text-sm font-semibold">Sem dados no periodo.</p>
+                    <p className="text-sm font-semibold">Sem dados no período.</p>
                   </div>
                 ) : null}
                 {renderChart()}
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-                <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-blue-600">
+              <div className="scrollbar-none mt-4 flex min-w-0 flex-nowrap gap-2 overflow-x-auto px-1 text-xs font-semibold sm:flex-wrap sm:overflow-visible sm:px-0">
+                <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-blue-600">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" />
                   Recebido
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-emerald-600">
+                <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-emerald-600">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]" />
                   Em aberto
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 text-rose-600">
+                <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 text-rose-600">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#f43f5e]" />
                   Em atraso
                 </span>
@@ -944,13 +949,13 @@ export default function CarteiraDashboardClient() {
             </div>
           </article>
 
-          <aside className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]">
-            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-5">
+          <aside className="min-w-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_38px_rgba(15,23,42,0.07)] sm:p-6">
+            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Indice de saude</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">Índice de saúde</p>
                   {healthScore !== null ? (
-                    <p className={cn('mt-3 text-[2.7rem] font-bold leading-none tracking-tight', healthDescriptor.value)}>
+                    <p className={cn('mt-3 text-[2.3rem] font-bold leading-none tracking-tight sm:text-[2.7rem]', healthDescriptor.value)}>
                       {healthScore}
                       <span className="ml-1 text-lg font-semibold text-slate-400">/100</span>
                     </p>
@@ -973,14 +978,14 @@ export default function CarteiraDashboardClient() {
               ) : null}
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-              <SupportMetricCard label="Taxa de recuperacao" note="Recebido no mes sobre a carteira em aberto." value={formatPercent(health.recoveryRate)} valueClassName="text-emerald-600" />
+            <div className="mt-4 grid gap-2 sm:mt-5 sm:gap-3 sm:grid-cols-2">
+              <SupportMetricCard label="Taxa de recuperação" note="Recebido no mês sobre a carteira em aberto." value={formatPercent(health.recoveryRate)} valueClassName="text-emerald-600" />
               <SupportMetricCard label="Taxa de inadimplencia" note="Percentual da carteira atualmente atrasado." value={formatPercent(kpis.delinquencyRate || 0)} valueClassName="text-rose-600" />
-              <SupportMetricCard label="Clientes inadimplentes" note="Quantidade de titulos vencidos no radar." value={String(health.overdueCount)} />
+              <SupportMetricCard label="Clientes inadimplentes" note="Quantidade de títulos vencidos no radar." value={String(health.overdueCount)} />
               <SupportMetricCard label="Contratos em risco" note="Contratos com atraso e pressao operacional." value={String(health.riskContracts)} />
               <SupportMetricCard label="Exposicao em atraso" note="Volume financeiro pressionado pelo atraso." value={formatCurrency(health.totalOverdue)} valueClassName="text-rose-600" />
-              <SupportMetricCard label="Ticket medio" note="Media de capital por contrato ativo." value={formatCurrency(health.avgTicket)} />
-              <SupportMetricCard label="Parcela media" note="Media financeira por parcela aberta." value={formatCurrency(health.avgInstallment)} />
+              <SupportMetricCard className="hidden sm:block" label="Ticket medio" note="Media de capital por contrato ativo." value={formatCurrency(health.avgTicket)} />
+              <SupportMetricCard className="hidden sm:block" label="Parcela media" note="Media financeira por parcela aberta." value={formatCurrency(health.avgInstallment)} />
             </div>
           </aside>
         </section>
@@ -990,8 +995,8 @@ export default function CarteiraDashboardClient() {
         <article className="rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_38px_rgba(15,23,42,0.07)]" id="queue-upcoming">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-[1.15rem] font-bold text-slate-800">Proximos vencimentos</h3>
-              <p className="mt-1 hidden text-sm text-slate-500 sm:block">Fila operacional para baixa rapida e acompanhamento da semana.</p>
+              <h3 className="text-[1.15rem] font-bold text-slate-800">Próximos vencimentos</h3>
+              <p className="mt-1 hidden text-sm text-slate-500 sm:block">Fila operacional para baixa rápida e acompanhamento da semana.</p>
             </div>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">
               {upcomingItems.length} registro(s)
@@ -1030,7 +1035,7 @@ export default function CarteiraDashboardClient() {
 
           <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4 text-sm text-slate-500">
             <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={upcomingPage === 1} onClick={() => setUpcomingPage((current) => Math.max(1, current - 1))} type="button">Anterior</button>
-            <span>Pagina {upcomingPage} de {upcomingTotalPages}</span>
+            <span>Página {upcomingPage} de {upcomingTotalPages}</span>
             <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={upcomingPage >= upcomingTotalPages} onClick={() => setUpcomingPage((current) => Math.min(upcomingTotalPages, current + 1))} type="button">Proxima</button>
           </div>
         </article>
@@ -1039,7 +1044,7 @@ export default function CarteiraDashboardClient() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-[1.15rem] font-bold text-slate-800">Cobrancas em atraso</h3>
-              <p className="mt-1 hidden text-sm text-slate-500 sm:block">Fila de cobranca com baixa rapida e contato por WhatsApp.</p>
+              <p className="mt-1 hidden text-sm text-slate-500 sm:block">Fila de cobrança com baixa rápida e contato por WhatsApp.</p>
             </div>
             <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600">{overdueItems.length} registro(s)</span>
           </div>
@@ -1081,14 +1086,22 @@ export default function CarteiraDashboardClient() {
 
           <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4 text-sm text-slate-500">
             <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={overduePage === 1} onClick={() => setOverduePage((current) => Math.max(1, current - 1))} type="button">Anterior</button>
-            <span>Pagina {overduePage} de {overdueTotalPages}</span>
+            <span>Página {overduePage} de {overdueTotalPages}</span>
             <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" disabled={overduePage >= overdueTotalPages} onClick={() => setOverduePage((current) => Math.min(overdueTotalPages, current + 1))} type="button">Proxima</button>
           </div>
         </article>
       </section>
 
       {paymentItem ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-4 backdrop-blur-sm sm:px-5 sm:py-5"
+          style={{
+            paddingTop: 'calc(1rem + var(--safe-area-top))',
+            paddingBottom: 'calc(1rem + var(--safe-area-bottom))',
+            paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))',
+            paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))',
+          }}
+        >
           <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.18)]">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
@@ -1118,7 +1131,7 @@ export default function CarteiraDashboardClient() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-500">Metodo de baixa</label>
+                <label className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-500">Método de baixa</label>
                 <select className="appearance-none rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" name="method" required>
                   <option value="PIX">PIX automatico</option>
                   <option value="DINHEIRO">Dinheiro fisico</option>
@@ -1128,7 +1141,7 @@ export default function CarteiraDashboardClient() {
 
               <div className="flex gap-3 pt-1">
                 <button className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50" onClick={() => setPaymentItem(null)} type="button">Cancelar</button>
-                <button className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 active:scale-95" type="submit">Confirmar quitacao</button>
+                <button className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 active:scale-95" type="submit">Confirmar quitação</button>
               </div>
             </form>
           </div>

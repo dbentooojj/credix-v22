@@ -52,13 +52,13 @@ export default function ForgotPasswordPage() {
 
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
       const message =
-        payload?.message ?? "Se o e-mail estiver cadastrado, enviaremos instrucoes.";
+        payload?.message ?? "Se o e-mail estiver cadastrado, enviaremos instruções.";
 
       setStatus({ type: "success", message });
     } catch {
       setStatus({
         type: "error",
-        message: "Nao foi possivel solicitar a recuperacao agora. Tente novamente.",
+        message: "Não foi possível solicitar a recuperação agora. Tente novamente.",
       });
     } finally {
       setSubmitting(false);
@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
           <div className="mb-7">
             <h1 className="text-2xl font-bold text-slate-800">Recuperar senha</h1>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Digite seu e-mail para enviarmos o link de redefinicao, se houver uma conta
+              Digite seu e-mail para enviarmos o link de redefinição, se houver uma conta
               cadastrada.
             </p>
           </div>

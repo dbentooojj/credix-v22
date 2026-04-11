@@ -51,13 +51,13 @@ const navSections: NavSection[] = [
     items: [
       {
         href: "/app/visao-geral",
-        label: "Visao geral",
+        label: "Visão geral",
         icon: GridIcon,
       },
     ],
   },
   {
-    title: "Emprestimos",
+    title: "Empréstimos",
     items: [
       {
         href: "/dashboard.html",
@@ -71,7 +71,7 @@ const navSections: NavSection[] = [
       },
       {
         href: "/loans.html",
-        label: "Emprestimos",
+        label: "Empréstimos",
         icon: LoansIcon,
       },
       {
@@ -101,11 +101,11 @@ const navSections: NavSection[] = [
   ...(showReportsNav
     ? [
         {
-          title: "Analises",
+          title: "Análises",
           items: [
             {
               href: "/admin/finance-reports.html",
-              label: "Relatorios",
+              label: "Relatórios",
               icon: FileTextIcon,
             },
           ],
@@ -180,7 +180,7 @@ export function AppShell({ children }: AppShellProps) {
 
         const payload = await response.json().catch(() => null);
         if (!response.ok) {
-          throw new Error(payload?.message || "Falha ao carregar a sessao.");
+          throw new Error(payload?.message || "Falha ao carregar a sessão.");
         }
 
         return payload?.user ?? null;
@@ -313,7 +313,7 @@ export function AppShell({ children }: AppShellProps) {
                 href="/account.html?tab=security"
               >
                 <ShieldIcon className="h-4 w-4 text-slate-400" />
-                <span>Seguranca</span>
+                <span>Segurança</span>
               </Link>
               <Link
                 className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
@@ -357,7 +357,7 @@ export function AppShell({ children }: AppShellProps) {
           ].join(" ")}
         >
           <nav
-            aria-label="Navegacao principal"
+            aria-label="Navegação principal"
             className="flex h-full flex-col overflow-y-auto px-3 py-4 [scrollbar-width:thin]"
           >
             {navSections.map((section) => (
