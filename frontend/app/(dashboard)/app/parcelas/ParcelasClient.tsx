@@ -111,6 +111,24 @@ function toDateInputValue(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function normalizeStatusFilterParam(value: string | null) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw || raw === "all" || raw === "todos") return null;
+  if (raw === "pago" || raw === "paid") return "Pago";
+  if (raw === "pendente" || raw === "pending") return "Pendente";
+  if (raw === "atrasado" || raw === "overdue" || raw === "late") return "Atrasado";
+  return null;
+}
+
+function normalizePeriodFilterParam(value: string | null) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === "all" || raw === "today" || raw === "next7" || raw === "month_current" || raw === "last30") {
+    return raw;
+  }
+  return null;
+}
+
 export function ParcelasClient() {
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -159,6 +177,18 @@ export function ParcelasClient() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const queryStatus = normalizeStatusFilterParam(params.get("status"));
+    const queryPeriod = normalizePeriodFilterParam(params.get("period"));
+
+    if (queryStatus) setStatusFilter(queryStatus);
+    if (queryPeriod) setPeriodFilter(queryPeriod);
+    if (queryStatus || queryPeriod) setPage(1);
+  }, []);
 
   // --- Modal handlers ---
   function openPayModal(inst: any) {

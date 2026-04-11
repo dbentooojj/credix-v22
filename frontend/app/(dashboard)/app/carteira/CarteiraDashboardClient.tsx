@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   AlertTriangle,
@@ -389,6 +390,7 @@ function ActionCard({
 }
 
 export default function CarteiraDashboardClient() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m');
@@ -476,9 +478,12 @@ export default function CarteiraDashboardClient() {
 
   useGlobalScrollLock(Boolean(paymentItem));
 
-  const scrollToSection = (sectionId: string) => {
-    if (typeof document === 'undefined') return;
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const goToInstallments = (filters: { period?: string; status?: string }) => {
+    const params = new URLSearchParams();
+    if (filters.period) params.set('period', filters.period);
+    if (filters.status) params.set('status', filters.status);
+    const query = params.toString();
+    router.push(query ? `/app/parcelas?${query}` : '/app/parcelas');
   };
 
   const kpis = data?.portfolio?.kpis || data?.kpis || ({} as DashboardPayload['kpis']);
@@ -814,7 +819,7 @@ export default function CarteiraDashboardClient() {
             iconClassName="bg-blue-50 text-blue-600"
             label="Vence hoje"
             note="Parcelas prontas para baixa no dia."
-            onClick={() => scrollToSection('queue-upcoming')}
+            onClick={() => goToInstallments({ period: 'today', status: 'pendente' })}
             toneClassName="text-blue-600"
             value={formatCurrency(data?.dailySummary?.dueToday?.totalValue || 0)}
           />
@@ -825,7 +830,7 @@ export default function CarteiraDashboardClient() {
             iconClassName="bg-rose-50 text-rose-600"
             label="Em atraso"
             note="Títulos que precisam de cobrança e baixa."
-            onClick={() => scrollToSection('queue-overdue')}
+            onClick={() => goToInstallments({ period: 'month_current', status: 'atrasado' })}
             toneClassName="text-rose-600"
             value={formatCurrency(data?.dailySummary?.overdue?.totalValue || 0)}
           />
@@ -836,7 +841,7 @@ export default function CarteiraDashboardClient() {
             iconClassName="bg-amber-50 text-amber-700"
             label="Próximos 7 dias"
             note="Antecipe contatos e confirme entradas da semana."
-            onClick={() => scrollToSection('queue-upcoming')}
+            onClick={() => goToInstallments({ period: 'next7', status: 'pendente' })}
             toneClassName="text-amber-700"
             value={formatCurrency(data?.dailySummary?.next7Days?.totalValue || 0)}
           />
