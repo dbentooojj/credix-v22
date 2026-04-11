@@ -5,7 +5,9 @@ ARG LEGACY_BACKEND_URL=http://backend:4000
 ENV LEGACY_BACKEND_URL=$LEGACY_BACKEND_URL
 
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY frontend/package.json ./frontend/package.json
+COPY backend/package.json ./backend/package.json
+RUN npm ci --workspace frontend --no-audit --no-fund
 
 FROM node:20-alpine AS builder
 
@@ -14,9 +16,13 @@ ARG LEGACY_BACKEND_URL=http://backend:4000
 ENV LEGACY_BACKEND_URL=$LEGACY_BACKEND_URL
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /app/package.json ./package.json
+COPY --from=deps /app/package-lock.json ./package-lock.json
+COPY --from=deps /app/frontend/package.json ./frontend/package.json
+COPY --from=deps /app/backend/package.json ./backend/package.json
+COPY frontend ./frontend
 
-RUN npm run build
+RUN npm run build --workspace frontend
 
 FROM node:20-alpine AS runner
 
@@ -27,12 +33,14 @@ ARG LEGACY_BACKEND_URL=http://backend:4000
 ENV LEGACY_BACKEND_URL=$LEGACY_BACKEND_URL
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY frontend/package.json ./frontend/package.json
+COPY backend/package.json ./backend/package.json
+RUN npm ci --workspace frontend --omit=dev --no-audit --no-fund && npm cache clean --force
 
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.mjs ./next.config.mjs
+COPY --from=builder /app/frontend/.next ./frontend/.next
+COPY --from=builder /app/frontend/public ./frontend/public
+COPY --from=builder /app/frontend/next.config.mjs ./frontend/next.config.mjs
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+CMD ["npm", "run", "start", "--workspace", "frontend"]
