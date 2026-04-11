@@ -1,6 +1,11 @@
 {
+  "id": "/",
   "name": "Credix",
   "short_name": "Credix",
+  "description": "Gestao financeira e de emprestimos da Credix",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
