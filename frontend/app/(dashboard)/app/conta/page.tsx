@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import { Mail, User, ShieldCheck, HelpCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PageHeader } from "../../../components/PageHeader";
 
 export default function ContaPage() {
   return (
@@ -32,10 +33,10 @@ function ContaPageContent() {
 
   return (
     <div className="mx-auto w-full max-w-[1000px]">
-      <div className="mb-6 lg:mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">Conta</h1>
-        <p className="mt-1.5 hidden text-sm text-slate-500 sm:block">Gerencie perfil, seguranca e suporte.</p>
-      </div>
+      <PageHeader
+        subtitle="Gerencie perfil, segurança e suporte."
+        title="Conta"
+      />
 
       <div className="flex flex-col gap-6">
         <nav className="scrollbar-none flex flex-row items-center gap-2 overflow-x-auto pb-2" role="tablist">

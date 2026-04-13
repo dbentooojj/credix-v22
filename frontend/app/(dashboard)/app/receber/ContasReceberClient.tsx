@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
 import {
   FinanceCategoryManagerModal,
@@ -418,7 +419,7 @@ export function ContasReceberClient() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
-      <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="mb-6 hidden flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Contas a Receber</h1>
         </div>
@@ -427,6 +428,17 @@ export function ContasReceberClient() {
           Nova receita
         </button>
       </section>
+
+      <PageHeader
+        subtitle="Acompanhe e organize os recebimentos do financeiro."
+        title="Contas a Receber"
+        actions={(
+          <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white transition-all hover:bg-emerald-500 shadow-[0_4px_14px_rgba(5,150,105,0.35)] active:translate-y-px active:scale-[0.98]">
+            <Plus className="h-4 w-4" />
+            Nova receita
+          </button>
+        )}
+      />
 
       <section className="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_auto] xl:items-center">
         <div className="relative">

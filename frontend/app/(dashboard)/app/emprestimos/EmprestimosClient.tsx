@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
 import { useGlobalScrollLock } from "../../../components/useGlobalScrollLock";
 import { readJsonOrThrow } from "../../../../utils/apiClient";
@@ -1490,7 +1491,7 @@ export function EmprestimosClient() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
-      <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="mb-6 hidden flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Empréstimos</h1>
         </div>
@@ -1503,6 +1504,21 @@ export function EmprestimosClient() {
           </button>
         </div>
       </section>
+
+      <PageHeader
+        subtitle="Gestão de contratos e simulações para acompanhar toda a operação de empréstimos."
+        title="Empréstimos"
+        actions={(
+          <>
+            <button onClick={openSimulationModal} className="inline-flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-semibold text-slate-300 transition-all hover:bg-slate-700 active:scale-[0.98] sm:w-auto sm:px-5">
+              <FlaskConical className="h-4 w-4" /> Nova simulação
+            </button>
+            <button onClick={openLoanModal} className="inline-flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-3 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98] sm:w-auto sm:px-5">
+              <Plus className="h-4 w-4" /> Novo empréstimo
+            </button>
+          </>
+        )}
+      />
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">

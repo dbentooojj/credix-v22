@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
 
 import {
@@ -513,14 +514,15 @@ export function ClientesClient() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
-      <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Clientes</h1>
-        </div>
-        <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-5 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98]">
-          <Plus className="h-4 w-4" /> Novo cliente
-        </button>
-      </section>
+      <PageHeader
+        subtitle="Cadastre, acompanhe status e mantenha sua base de clientes organizada."
+        title="Clientes"
+        actions={(
+          <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-5 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98]">
+            <Plus className="h-4 w-4" /> Novo cliente
+          </button>
+        )}
+      />
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">

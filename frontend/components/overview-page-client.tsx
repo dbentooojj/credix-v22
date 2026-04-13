@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useCashAdjustmentModal } from "../app/components/CashAdjustmentModalProvider";
+import { PageHeader } from "../app/components/PageHeader";
 import {
   AlertCircleIcon,
   ArrowDownLeftIcon,
@@ -1237,7 +1238,7 @@ export function OverviewPageClient() {
   return (
     <div className={`w-full max-w-[1600px] mx-auto pb-24 lg:pb-8 ${initialLoading ? "opacity-90" : ""}`}>
       {/* ── PAGE HEADER ── */}
-      <section className="mb-6">
+      <section className="mb-6 hidden">
         <div>
           <div>
             <h1 className="text-2xl sm:text-[clamp(1.6rem,1.2vw+1rem,2.1rem)] font-bold leading-tight tracking-tight text-slate-800">
@@ -1249,6 +1250,11 @@ export function OverviewPageClient() {
           </div>
         </div>
       </section>
+
+      <PageHeader
+        subtitle="Resumo do caixa, recebimentos e compromissos financeiros."
+        title="Visão geral"
+      />
 
       {/* Error banner */}
       {error ? (

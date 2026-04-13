@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
 import {
   ClientStatus,
+  FinanceTransactionStatus,
+  FinanceTransactionType,
   InstallmentStatus,
   InterestType,
   LoanStatus,
@@ -10,6 +12,29 @@ import {
 } from "@prisma/client";
 
 const prisma = new PrismaClient();
+
+type EnsureFinanceCategoryCatalogFn = (db: PrismaClient, ownerUserId: number) => Promise<void>;
+
+let ensureFinanceCategoryCatalogForUserRuntime: EnsureFinanceCategoryCatalogFn | null = null;
+
+async function ensureFinanceCategoryCatalogForUserSafe(db: PrismaClient, ownerUserId: number) {
+  if (!ensureFinanceCategoryCatalogForUserRuntime) {
+    try {
+      const module = await import("../src/lib/finance-categories");
+      ensureFinanceCategoryCatalogForUserRuntime = module.ensureFinanceCategoryCatalogForUser as EnsureFinanceCategoryCatalogFn;
+    } catch (_srcError) {
+      try {
+        const module = await import("../dist/lib/finance-categories.js");
+        ensureFinanceCategoryCatalogForUserRuntime = module.ensureFinanceCategoryCatalogForUser as EnsureFinanceCategoryCatalogFn;
+      } catch (_distError) {
+        console.warn("Aviso: catalogo de categorias nao foi atualizado automaticamente no seed demo.");
+        return;
+      }
+    }
+  }
+
+  await ensureFinanceCategoryCatalogForUserRuntime(db, ownerUserId);
+}
 
 function getIsoTodayInTimeZone(timeZone: string): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -36,6 +61,22 @@ function addDaysUtc(date: Date, days: number): Date {
   const next = new Date(date.getTime());
   next.setUTCDate(next.getUTCDate() + days);
   return next;
+}
+
+function addMonthsDateOnlyUtc(date: Date, monthsToAdd: number): Date {
+  const sourceYear = date.getUTCFullYear();
+  const sourceMonth = date.getUTCMonth();
+  const sourceDay = date.getUTCDate();
+  const firstTargetMonth = new Date(Date.UTC(sourceYear, sourceMonth + monthsToAdd, 1));
+  const targetYear = firstTargetMonth.getUTCFullYear();
+  const targetMonth = firstTargetMonth.getUTCMonth();
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(sourceDay, lastDay);
+  return new Date(Date.UTC(targetYear, targetMonth, clampedDay));
+}
+
+function toDateOnlyIso(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
 function round2(value: number): number {
@@ -135,6 +176,309 @@ type LoanPlan = {
   installments: InstallmentPlan[];
 };
 
+type FinanceCreationMode = "single" | "installments" | "recurring_monthly";
+type FinanceInstallmentAmountMode = "total" | "per_installment";
+
+type FinanceSeedPlan = {
+  mode: FinanceCreationMode;
+  type: FinanceTransactionType;
+  category: string;
+  description: string;
+  amount: number;
+  status: FinanceTransactionStatus;
+  baseDateOffsetDays: number;
+  notes: string;
+  installmentCount?: number;
+  installmentAmountMode?: FinanceInstallmentAmountMode;
+  recurringMonths?: number;
+};
+
+type FinanceSeedTransactionInput = {
+  type: FinanceTransactionType;
+  amount: number;
+  category: string;
+  date: Date;
+  description: string;
+  notes: string;
+  status: FinanceTransactionStatus;
+};
+
+const FINANCE_DEMO_TAG = "[SEED_DEMO_FINANCE]";
+
+const FINANCE_SEED_PLANS: FinanceSeedPlan[] = [
+  {
+    mode: "single",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Moradia",
+    description: "Condominio escritorio central",
+    amount: 1850,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: -5,
+    notes: "conta mensal vencida",
+  },
+  {
+    mode: "single",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Energia",
+    description: "Conta de energia unidade centro",
+    amount: 980,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: 0,
+    notes: "conta que vence hoje",
+  },
+  {
+    mode: "single",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Marketing",
+    description: "Campanha digital de captacao",
+    amount: 1450,
+    status: FinanceTransactionStatus.SCHEDULED,
+    baseDateOffsetDays: 4,
+    notes: "saida prevista em alguns dias",
+  },
+  {
+    mode: "single",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Impostos",
+    description: "DAS e taxas operacionais",
+    amount: 620,
+    status: FinanceTransactionStatus.COMPLETED,
+    baseDateOffsetDays: -12,
+    notes: "despesa ja paga",
+  },
+  {
+    mode: "installments",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Educacao",
+    description: "Treinamento comercial da equipe",
+    amount: 9600,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: -90,
+    installmentCount: 8,
+    installmentAmountMode: "total",
+    notes: "despesa parcelada por valor total",
+  },
+  {
+    mode: "installments",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Saude",
+    description: "Seguro corporativo anual",
+    amount: 450,
+    status: FinanceTransactionStatus.SCHEDULED,
+    baseDateOffsetDays: 5,
+    installmentCount: 6,
+    installmentAmountMode: "per_installment",
+    notes: "despesa parcelada por valor da parcela",
+  },
+  {
+    mode: "recurring_monthly",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Moradia",
+    description: "Aluguel escritorio matriz",
+    amount: 3200,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: -90,
+    recurringMonths: 6,
+    notes: "despesa recorrente principal",
+  },
+  {
+    mode: "recurring_monthly",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Internet",
+    description: "Link dedicado de internet",
+    amount: 389,
+    status: FinanceTransactionStatus.COMPLETED,
+    baseDateOffsetDays: -150,
+    recurringMonths: 5,
+    notes: "historico recorrente ja pago",
+  },
+  {
+    mode: "recurring_monthly",
+    type: FinanceTransactionType.EXPENSE,
+    category: "Telefone",
+    description: "Telefonia equipe de cobranca",
+    amount: 740,
+    status: FinanceTransactionStatus.SCHEDULED,
+    baseDateOffsetDays: -25,
+    recurringMonths: 4,
+    notes: "despesa recorrente agendada",
+  },
+  {
+    mode: "single",
+    type: FinanceTransactionType.INCOME,
+    category: "Servicos",
+    description: "Consultoria avulsa fintech",
+    amount: 2600,
+    status: FinanceTransactionStatus.COMPLETED,
+    baseDateOffsetDays: -8,
+    notes: "receita ja recebida",
+  },
+  {
+    mode: "single",
+    type: FinanceTransactionType.INCOME,
+    category: "Comissao",
+    description: "Comissao parceria regional",
+    amount: 980,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: -3,
+    notes: "receita vencida",
+  },
+  {
+    mode: "single",
+    type: FinanceTransactionType.INCOME,
+    category: "Vendas",
+    description: "Venda de pacote de analise",
+    amount: 1450,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: 0,
+    notes: "receita prevista para hoje",
+  },
+  {
+    mode: "single",
+    type: FinanceTransactionType.INCOME,
+    category: "Reembolso",
+    description: "Reembolso de fornecedor cloud",
+    amount: 520,
+    status: FinanceTransactionStatus.SCHEDULED,
+    baseDateOffsetDays: 2,
+    notes: "receita agendada em curto prazo",
+  },
+  {
+    mode: "single",
+    type: FinanceTransactionType.INCOME,
+    category: "Freelance",
+    description: "Projeto BI sprint 3",
+    amount: 3100,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: 9,
+    notes: "receita futura no mes",
+  },
+  {
+    mode: "installments",
+    type: FinanceTransactionType.INCOME,
+    category: "Servicos",
+    description: "Contrato de implantacao ERP",
+    amount: 15000,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: -120,
+    installmentCount: 10,
+    installmentAmountMode: "total",
+    notes: "receita parcelada por valor total",
+  },
+  {
+    mode: "installments",
+    type: FinanceTransactionType.INCOME,
+    category: "Vendas",
+    description: "Venda de equipamento usado",
+    amount: 700,
+    status: FinanceTransactionStatus.SCHEDULED,
+    baseDateOffsetDays: 3,
+    installmentCount: 5,
+    installmentAmountMode: "per_installment",
+    notes: "receita parcelada por valor da parcela",
+  },
+  {
+    mode: "recurring_monthly",
+    type: FinanceTransactionType.INCOME,
+    category: "Servicos",
+    description: "Mensalidade suporte premium",
+    amount: 2400,
+    status: FinanceTransactionStatus.PENDING,
+    baseDateOffsetDays: -75,
+    recurringMonths: 6,
+    notes: "receita recorrente principal",
+  },
+  {
+    mode: "recurring_monthly",
+    type: FinanceTransactionType.INCOME,
+    category: "Juros",
+    description: "Rendimento aplicado em caixa",
+    amount: 520,
+    status: FinanceTransactionStatus.COMPLETED,
+    baseDateOffsetDays: -120,
+    recurringMonths: 5,
+    notes: "historico recorrente recebido",
+  },
+  {
+    mode: "recurring_monthly",
+    type: FinanceTransactionType.INCOME,
+    category: "Outros recebimentos",
+    description: "Royalties white label",
+    amount: 1100,
+    status: FinanceTransactionStatus.SCHEDULED,
+    baseDateOffsetDays: -10,
+    recurringMonths: 4,
+    notes: "receita recorrente agendada",
+  },
+];
+
+function buildFinanceInstallmentDescription(
+  baseDescription: string,
+  installmentIndex: number,
+  installmentCount: number,
+): string {
+  const suffix = ` (${installmentIndex}/${installmentCount})`;
+  if (baseDescription.length + suffix.length <= 300) {
+    return `${baseDescription}${suffix}`;
+  }
+  const maxBaseLength = Math.max(1, 300 - suffix.length);
+  return `${baseDescription.slice(0, maxBaseLength).trimEnd()}${suffix}`;
+}
+
+function buildFinanceSeedNotes(mode: FinanceCreationMode, notes: string): string {
+  return `${FINANCE_DEMO_TAG} ${mode} | ${notes}`.trim();
+}
+
+function expandFinanceSeedPlan(today: Date, plan: FinanceSeedPlan): FinanceSeedTransactionInput[] {
+  const baseDate = addDaysUtc(today, plan.baseDateOffsetDays);
+  const baseNotes = buildFinanceSeedNotes(plan.mode, plan.notes);
+
+  if (plan.mode === "single") {
+    return [
+      {
+        type: plan.type,
+        amount: round2(plan.amount),
+        category: plan.category,
+        date: baseDate,
+        description: plan.description,
+        notes: `${baseNotes} | item unico`,
+        status: plan.status,
+      },
+    ];
+  }
+
+  if (plan.mode === "installments") {
+    const installmentCount = Math.max(2, Math.trunc(plan.installmentCount ?? 2));
+    const installmentAmountMode = plan.installmentAmountMode ?? "total";
+    const installmentAmounts = installmentAmountMode === "per_installment"
+      ? Array.from({ length: installmentCount }, () => round2(plan.amount))
+      : splitAmount(plan.amount, installmentCount);
+
+    return Array.from({ length: installmentCount }, (_item, index) => ({
+      type: plan.type,
+      amount: installmentAmounts[index] ?? 0,
+      category: plan.category,
+      date: addMonthsDateOnlyUtc(baseDate, index),
+      description: buildFinanceInstallmentDescription(plan.description, index + 1, installmentCount),
+      notes: `${baseNotes} | parcela ${index + 1}/${installmentCount}`,
+      status: plan.status,
+    }));
+  }
+
+  const recurringMonths = Math.max(2, Math.trunc(plan.recurringMonths ?? 2));
+  const recurringAmount = round2(plan.amount);
+
+  return Array.from({ length: recurringMonths }, (_item, index) => ({
+    type: plan.type,
+    amount: recurringAmount,
+    category: plan.category,
+    date: addMonthsDateOnlyUtc(baseDate, index),
+    description: plan.description,
+    notes: `${baseNotes} | recorrencia ${index + 1}/${recurringMonths}`,
+    status: plan.status,
+  }));
+}
+
 function computeLoanStatus(today: Date, installments: InstallmentPlan[]): LoanStatus {
   const allPaid = installments.every((i) => Boolean(i.paid) || i.status === InstallmentStatus.PAGO);
   if (allPaid) return LoanStatus.QUITADO;
@@ -215,6 +559,13 @@ async function main() {
         },
       });
     }
+
+    await tx.financeTransaction.deleteMany({
+      where: {
+        ownerUserId: adminUser.id,
+        notes: { contains: FINANCE_DEMO_TAG },
+      },
+    });
 
     // Remove o dataset demo anterior (somente os CPFs gerados aqui).
     await tx.client.deleteMany({
@@ -528,9 +879,30 @@ async function main() {
         }
       }
     }
+
+    const financeSeedRows = FINANCE_SEED_PLANS
+      .flatMap((plan) => expandFinanceSeedPlan(today, plan))
+      .map((row) => ({
+        ownerUserId: adminUser.id,
+        type: row.type,
+        amount: row.amount,
+        category: row.category,
+        date: row.date,
+        description: row.description,
+        notes: row.notes,
+        status: row.status,
+      }));
+
+    if (financeSeedRows.length > 0) {
+      await tx.financeTransaction.createMany({
+        data: financeSeedRows,
+      });
+    }
   });
 
-  const [clientsCount, loansCount, installmentsCount, paymentsCount] = await Promise.all([
+  await ensureFinanceCategoryCatalogForUserSafe(prisma, adminUser.id);
+
+  const [clientsCount, loansCount, installmentsCount, paymentsCount, demoInstallments, demoFinanceTransactions] = await Promise.all([
     prisma.client.count({
       where: {
         ownerUserId: adminUser.id,
@@ -567,7 +939,98 @@ async function main() {
         },
       },
     }),
+    prisma.installment.findMany({
+      where: {
+        ownerUserId: adminUser.id,
+        client: {
+          ownerUserId: adminUser.id,
+          cpf: { in: demoCpfs },
+        },
+      },
+      select: {
+        status: true,
+        dueDate: true,
+      },
+    }),
+    prisma.financeTransaction.findMany({
+      where: {
+        ownerUserId: adminUser.id,
+        notes: { contains: FINANCE_DEMO_TAG },
+      },
+      select: {
+        type: true,
+        status: true,
+        date: true,
+      },
+    }),
   ]);
+
+  const todayDateIso = toDateOnlyIso(today);
+  const next7DateIso = toDateOnlyIso(addDaysUtc(today, 7));
+
+  const installmentsSummary = demoInstallments.reduce((acc, installment) => {
+    const dueDateIso = toDateOnlyIso(installment.dueDate);
+    const isOpen = installment.status !== InstallmentStatus.PAGO;
+
+    if (!isOpen) {
+      acc.paid += 1;
+      return acc;
+    }
+
+    if (dueDateIso < todayDateIso || installment.status === InstallmentStatus.ATRASADO) {
+      acc.overdue += 1;
+    } else if (dueDateIso === todayDateIso) {
+      acc.dueToday += 1;
+    } else if (dueDateIso <= next7DateIso) {
+      acc.next7 += 1;
+    } else {
+      acc.upcoming += 1;
+    }
+
+    return acc;
+  }, {
+    paid: 0,
+    overdue: 0,
+    dueToday: 0,
+    next7: 0,
+    upcoming: 0,
+  });
+
+  const financeSummary = demoFinanceTransactions.reduce((acc, transaction) => {
+    const dueDateIso = toDateOnlyIso(transaction.date);
+    const isOpen = transaction.status !== FinanceTransactionStatus.COMPLETED;
+
+    if (transaction.type === FinanceTransactionType.INCOME) {
+      acc.receivable += 1;
+    } else {
+      acc.payable += 1;
+    }
+
+    if (!isOpen) {
+      acc.completed += 1;
+      return acc;
+    }
+
+    acc.open += 1;
+
+    if (dueDateIso < todayDateIso) {
+      acc.overdue += 1;
+    } else if (dueDateIso === todayDateIso) {
+      acc.dueToday += 1;
+    } else if (dueDateIso <= next7DateIso) {
+      acc.next7 += 1;
+    }
+
+    return acc;
+  }, {
+    receivable: 0,
+    payable: 0,
+    completed: 0,
+    open: 0,
+    overdue: 0,
+    dueToday: 0,
+    next7: 0,
+  });
 
   console.log("Seed demo concluido.");
   console.log(`Admin: ${adminUser.email}`);
@@ -575,6 +1038,15 @@ async function main() {
   console.log(`Emprestimos demo: ${loansCount}`);
   console.log(`Parcelas demo: ${installmentsCount}`);
   console.log(`Pagamentos demo: ${paymentsCount}`);
+  console.log(
+    `Parcelas em aberto -> vencidas: ${installmentsSummary.overdue}, vencem hoje: ${installmentsSummary.dueToday}, proximos 7 dias: ${installmentsSummary.next7}, futuras: ${installmentsSummary.upcoming}, pagas: ${installmentsSummary.paid}`,
+  );
+  console.log(
+    `Financeiro demo: ${demoFinanceTransactions.length} lancamentos (receber: ${financeSummary.receivable}, pagar: ${financeSummary.payable})`,
+  );
+  console.log(
+    `Financeiro aberto -> em aberto: ${financeSummary.open}, vencidos: ${financeSummary.overdue}, vencem hoje: ${financeSummary.dueToday}, proximos 7 dias: ${financeSummary.next7}, concluidos: ${financeSummary.completed}`,
+  );
 }
 
 main()

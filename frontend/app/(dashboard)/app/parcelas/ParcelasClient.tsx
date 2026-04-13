@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
+import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
 import { readJsonOrThrow } from "../../../../utils/apiClient";
 import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
@@ -424,11 +425,16 @@ export function ParcelasClient() {
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
       {/* Header */}
-      <section className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <section className="mb-6 hidden flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Controle de Cobrança</h1>
         </div>
       </section>
+
+      <PageHeader
+        subtitle="Acompanhe cobranças, vencimentos e baixas das parcelas."
+        title="Controle de Cobrança"
+      />
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
