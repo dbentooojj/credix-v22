@@ -32,6 +32,20 @@ export function buildLoanDisbursementDescription(loanId: number): string {
   return `Desembolso do emprestimo #${loanId}`;
 }
 
+export function parseLoanDisbursementDescription(description: string): {
+  loanId: number;
+} | null {
+  const match = description.match(/^Desembolso do emprestimo #(\d+)$/i);
+  if (!match) return null;
+
+  const loanId = Number(match[1]);
+  if (!Number.isFinite(loanId)) {
+    return null;
+  }
+
+  return { loanId };
+}
+
 type InstallmentIncomeTransactionInput = {
   ownerUserId: number;
   installmentId: number;

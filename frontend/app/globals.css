@@ -883,3 +883,31 @@ button, a, [role="button"] {
 .dashboard-theme .shadow-2xl {
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08) !important;
 }
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body.reports-print-page header,
+  body.reports-print-page aside,
+  body.reports-print-page .reports-screen-only {
+    display: none !important;
+  }
+
+  body.reports-print-page main {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.reports-print-page .reports-print-shell {
+    padding: 0 !important;
+  }
+
+  body.reports-print-page .reports-print-card {
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

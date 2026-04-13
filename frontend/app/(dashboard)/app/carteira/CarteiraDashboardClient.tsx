@@ -28,6 +28,7 @@ import {
   Tooltip,
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import { PageHeader } from '../../../components/PageHeader';
 import { useGlobalScrollLock } from '../../../components/useGlobalScrollLock';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
@@ -709,7 +710,7 @@ export default function CarteiraDashboardClient() {
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-[1600px] space-y-6 overflow-x-clip bg-transparent pb-24 font-sans lg:pb-8">
-      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <section className="hidden flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="hidden text-[0.68rem] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">Carteira de empréstimos</p>
           <h2 className="mt-1 text-[1.55rem] font-bold tracking-tight text-slate-800 sm:mt-2 sm:text-[2rem]">Painel da carteira</h2>
@@ -718,6 +719,12 @@ export default function CarteiraDashboardClient() {
           </p>
         </div>
       </section>
+
+      <PageHeader
+        eyebrow="Carteira de empréstimos"
+        subtitle="Tela operacional para acompanhar cobrança, vencimentos, retorno e pressão de risco da carteira."
+        title="Painel da carteira"
+      />
 
       {error ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
@@ -734,7 +741,7 @@ export default function CarteiraDashboardClient() {
               <p className="mt-2 hidden text-sm text-slate-500 sm:block">
                 Total aberto da carteira somando parcelas futuras e parcelas em atraso.
               </p>
-              <p className="mt-4 text-[2.35rem] font-bold leading-none tracking-tight text-slate-900 sm:mt-6 sm:text-[2.9rem]">
+              <p className="mt-1 text-[1.75rem] font-bold tracking-tight text-slate-800">
                 {formatCurrency(kpis.totalOpenReceivable || 0)}
               </p>
               <p className="mt-2 text-xs text-slate-500 sm:mt-3 sm:text-sm">
@@ -745,7 +752,7 @@ export default function CarteiraDashboardClient() {
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
                 <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-400">A vencer</p>
-                <p className="mt-2 text-[1.8rem] font-bold tracking-tight text-slate-800">
+                <p className="mt-1 text-[1.75rem] font-bold tracking-tight text-slate-800">
                   {formatCurrency(kpis.openReceivableFuture || 0)}
                 </p>
                 <p className="mt-1.5 hidden text-sm text-slate-500 sm:block">Parcelas em dia aguardando vencimento.</p>
@@ -753,7 +760,7 @@ export default function CarteiraDashboardClient() {
 
               <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
                 <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-rose-400">Em atraso</p>
-                <p className="mt-2 text-[1.8rem] font-bold tracking-tight text-rose-600">
+                <p className="mt-1 text-[1.75rem] font-bold tracking-tight text-rose-600">
                   {formatCurrency(kpis.openReceivableOverdue || 0)}
                 </p>
                 <p className="mt-1.5 hidden text-sm text-rose-500 sm:block">Exige cobrança e acompanhamento mais próximo.</p>

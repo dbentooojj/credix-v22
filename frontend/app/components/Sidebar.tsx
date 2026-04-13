@@ -23,8 +23,6 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
-  const showReportsNav = process.env.NEXT_PUBLIC_SHOW_REPORTS_NAV === "true";
-
   const isLinkActive = (path: string) => pathname.startsWith(path);
 
   const linkClass = (path: string, color?: "emerald" | "rose") => {
@@ -116,8 +114,7 @@ export function Sidebar({
             </div>
           </section>
 
-          {showReportsNav && (
-            <section className="mb-6">
+          <section className="mb-6">
               <h3 className="mb-2.5 px-3 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-slate-400">
                 Análises
               </h3>
@@ -127,8 +124,7 @@ export function Sidebar({
                   <span className="truncate">Relatórios</span>
                 </Link>
               </div>
-            </section>
-          )}
+          </section>
         </div>
       </aside>
     </>

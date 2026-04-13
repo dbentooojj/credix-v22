@@ -15,6 +15,7 @@ import { loansRoutes } from "./routes/loans.routes";
 import { loanSimulationsRoutes } from "./routes/loan-simulations.routes";
 import { notificationsRoutes } from "./routes/notifications.routes";
 import { paymentsRoutes } from "./routes/payments.routes";
+import { reportsRoutes } from "./routes/reports.routes";
 import { tablesRoutes } from "./routes/tables.routes";
 
 const app = express();
@@ -44,6 +45,7 @@ app.use("/api/loan-simulations", loanSimulationsRoutes);
 app.use("/api/tables", tablesRoutes);
 app.use("/api/payments", paymentsRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/reports", reportsRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Rota nao encontrada" });
