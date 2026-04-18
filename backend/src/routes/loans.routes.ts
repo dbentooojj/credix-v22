@@ -219,7 +219,6 @@ router.patch("/:loanId", async (req, res) => {
 
     const paymentRecord = await tx.payment.findFirst({
       where: {
-        ownerUserId,
         loanId,
       },
       select: { id: true },
@@ -240,9 +239,10 @@ router.patch("/:loanId", async (req, res) => {
 
     const status = resolveLoanStatusFromDueDates(normalizedPlan.map((item) => item.dueDate));
 
+    // Defensive for legacy data: some historical rows can have mismatched ownerUserId.
+    // The loan ownership is already validated above, so deleting by loanId is safe here.
     await tx.installment.deleteMany({
       where: {
-        ownerUserId,
         loanId,
       },
     });
