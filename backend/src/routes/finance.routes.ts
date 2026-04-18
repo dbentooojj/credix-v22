@@ -39,6 +39,7 @@ const createTransactionSchema = transactionBaseFieldsSchema
   installmentCount: z.number().int().min(1).max(120).optional(),
   installmentAmountMode: transactionInstallmentAmountModeSchema.optional(),
   recurringMonths: z.number().int().min(1).max(120).optional(),
+  dueDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(120).optional(),
   })
   .refine((payload) => payload.category !== undefined || payload.categoryId !== undefined, {
     message: "Categoria obrigatoria.",
@@ -151,6 +152,18 @@ function addMonthsDateOnlyUtc(date: Date, monthsToAdd: number): Date {
   const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
   const clampedDay = Math.min(sourceDay, lastDay);
   return new Date(Date.UTC(targetYear, targetMonth, clampedDay));
+}
+
+function resolveInstallmentDueDates(baseDate: Date, installmentCount: number, customDueDates?: string[]): Date[] {
+  const safeCount = Math.max(1, Math.trunc(installmentCount));
+  const generated = Array.from({ length: safeCount }, (_, index) => addMonthsDateOnlyUtc(baseDate, index));
+  if (!Array.isArray(customDueDates) || customDueDates.length === 0) return generated;
+
+  return generated.map((fallbackDate, index) => {
+    const rawDate = customDueDates[index];
+    if (!rawDate) return fallbackDate;
+    return parseDateOnly(rawDate);
+  });
 }
 
 function buildInstallmentDescription(baseDescription: string, installmentIndex: number, installmentCount: number): string {
@@ -485,10 +498,14 @@ router.post("/transactions", async (req, res) => {
     if (installmentCount < 2) {
       return res.status(400).json({ message: "Parcelamento invalido. Informe pelo menos 2 parcelas." });
     }
+    if (Array.isArray(payload.dueDates) && payload.dueDates.length > 0 && payload.dueDates.length !== installmentCount) {
+      return res.status(400).json({ message: "Plano de parcelas incompleto. Revise os vencimentos informados." });
+    }
 
     const installmentAmounts = installmentAmountMode === "per_installment"
       ? Array.from({ length: installmentCount }, () => centsToMoney(toMoneyCents(payload.amount)))
       : splitAmountByInstallments(payload.amount, installmentCount);
+    const installmentDueDates = resolveInstallmentDueDates(baseDate, installmentCount, payload.dueDates);
 
     const createdIds = await prisma.$transaction(async (tx) => {
       const ids: number[] = [];
@@ -501,7 +518,7 @@ router.post("/transactions", async (req, res) => {
             amount: installmentAmounts[index] ?? 0,
             categoryId: resolvedCategory.id,
             category: resolvedCategory.name,
-            date: addMonthsDateOnlyUtc(baseDate, index),
+            date: installmentDueDates[index] ?? addMonthsDateOnlyUtc(baseDate, index),
             description: buildInstallmentDescription(payload.description, index + 1, installmentCount),
             notes: payload.notes?.trim() || null,
             status,

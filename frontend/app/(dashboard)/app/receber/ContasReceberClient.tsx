@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   Clock,
   CheckCircle2,
+  Calendar,
   CalendarDays,
   Circle,
 } from "lucide-react";
@@ -89,11 +90,52 @@ function toDateInputValue(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
+function isIsoDateString(value: unknown) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+}
+
+function addMonthsIsoDate(dateStr: string, months: number) {
+  const match = String(dateStr || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dateStr;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1 + months;
+  const day = Number(match[3]);
+  const targetYear = Math.floor((year * 12 + month) / 12);
+  const targetMonth = ((year * 12 + month) % 12 + 12) % 12;
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  return `${targetYear}-${String(targetMonth + 1).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+}
+
+function splitAmountByInstallments(totalAmount: number, installmentCount: number): number[] {
+  const safeCount = Math.max(1, Math.trunc(installmentCount));
+  const totalCents = Math.round(totalAmount * 100);
+  const baseCents = Math.floor(totalCents / safeCount);
+  const remainder = totalCents - (baseCents * safeCount);
+
+  return Array.from({ length: safeCount }, (_, index) => {
+    const cents = baseCents + (index < remainder ? 1 : 0);
+    return Number((cents / 100).toFixed(2));
+  });
+}
+
+function parseInstallmentCount(value: unknown) {
+  const parsed = Math.trunc(Number(value));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(2, Math.min(60, parsed));
+}
+
 type DisplayStatus = {
   key: string;
   group: string;
   label: string;
   color: string;
+};
+
+type FormInstallmentPreviewRow = {
+  installmentNumber: number;
+  amount: number;
+  dueDate: string;
 };
 
 function getDisplayStatus(item: Transaction): DisplayStatus {
@@ -174,12 +216,52 @@ export function ContasReceberClient() {
   const [formInstallmentCount, setFormInstallmentCount] = useState("4");
   const [formInstallmentAmountMode, setFormInstallmentAmountMode] = useState("total");
   const [formRecurringMonths, setFormRecurringMonths] = useState("12");
+  const [formCustomInstallmentDueDates, setFormCustomInstallmentDueDates] = useState<string[]>([]);
   const {
     categories,
     createCategory,
     updateCategory,
     toggleArchive,
   } = useFinanceCategoryCatalog("income");
+  const isInstallmentCreationMode = !editingItem && formCreationMode === "installments";
+  const resolvedInstallmentCount = isInstallmentCreationMode ? parseInstallmentCount(formInstallmentCount) : 0;
+
+  const installmentPlanRows = useMemo<FormInstallmentPreviewRow[]>(() => {
+    if (!isInstallmentCreationMode || resolvedInstallmentCount < 2) return [];
+
+    const safeFirstDueDate = isIsoDateString(formDate) ? formDate : toDateInputValue(new Date());
+    const dueDates = Array.from({ length: resolvedInstallmentCount }, (_, index) => {
+      const customDate = formCustomInstallmentDueDates[index];
+      return isIsoDateString(customDate) ? customDate : addMonthsIsoDate(safeFirstDueDate, index);
+    });
+
+    const parsedAmount = parseCurrencyInput(formAmount);
+    const safeAmount = Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : 0;
+    const installmentAmounts = formInstallmentAmountMode === "per_installment"
+      ? Array.from({ length: resolvedInstallmentCount }, () => safeAmount)
+      : splitAmountByInstallments(safeAmount, resolvedInstallmentCount);
+
+    return dueDates.map((dueDate, index) => ({
+      installmentNumber: index + 1,
+      amount: installmentAmounts[index] ?? 0,
+      dueDate,
+    }));
+  }, [
+    formAmount,
+    formCustomInstallmentDueDates,
+    formDate,
+    formInstallmentAmountMode,
+    isInstallmentCreationMode,
+    resolvedInstallmentCount,
+  ]);
+
+  const installmentPlanTotal = useMemo(() => {
+    return installmentPlanRows.reduce((sum, row) => sum + row.amount, 0);
+  }, [installmentPlanRows]);
+
+  const hasCustomInstallmentDueDates = useMemo(() => {
+    return formCustomInstallmentDueDates.some((value) => isIsoDateString(value));
+  }, [formCustomInstallmentDueDates]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -195,6 +277,24 @@ export function ContasReceberClient() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  function clearCustomInstallmentDueDates() {
+    setFormCustomInstallmentDueDates([]);
+  }
+
+  function applyInstallmentDueDate(index: number, value: string) {
+    if (!isIsoDateString(value)) return;
+
+    setFormCustomInstallmentDueDates((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+
+    if (index === 0) {
+      setFormDate(value);
+    }
+  }
+
   function openCreateModal() {
     setEditingItem(null);
     setFormDescription("");
@@ -207,6 +307,7 @@ export function ContasReceberClient() {
     setFormInstallmentCount("4");
     setFormInstallmentAmountMode("total");
     setFormRecurringMonths("12");
+    setFormCustomInstallmentDueDates([]);
     setShowFormModal(true);
   }
 
@@ -224,6 +325,7 @@ export function ContasReceberClient() {
     setFormNotes(item.notes || "");
     setFormStatus(item.status || "pending");
     setFormCreationMode("single");
+    setFormCustomInstallmentDueDates([]);
     setShowFormModal(true);
   }
 
@@ -245,9 +347,23 @@ export function ContasReceberClient() {
   async function handleSave() {
     const parsedAmount = parseCurrencyInput(formAmount);
     if (!formDescription.trim() || !formCategoryId || !formAmount || !formDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      toast.error("Preencha descrição, categoria, valor e vencimento válidos.", "Dados incompletos");
+      toast.error("Preencha descrição e categoria, informe um valor maior que zero e uma data de vencimento válida.", "Dados incompletos");
       return;
     }
+    if (!editingItem && formCreationMode === "installments") {
+      if (resolvedInstallmentCount < 2) {
+        toast.error("Informe pelo menos 2 parcelas para o lancamento parcelado.", "Parcelamento invalido");
+        return;
+      }
+      if (
+        installmentPlanRows.length !== resolvedInstallmentCount
+        || installmentPlanRows.some((row) => !isIsoDateString(row.dueDate))
+      ) {
+        toast.error("Revise o plano de parcelas antes de salvar.", "Parcelas incompletas");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       if (editingItem) {
@@ -277,8 +393,9 @@ export function ContasReceberClient() {
           creationMode: formCreationMode,
         };
         if (formCreationMode === "installments") {
-          body.installmentCount = Number(formInstallmentCount);
+          body.installmentCount = resolvedInstallmentCount;
           body.installmentAmountMode = formInstallmentAmountMode;
+          body.dueDates = installmentPlanRows.map((row) => row.dueDate);
         }
         if (formCreationMode === "recurring_monthly") {
           body.recurringMonths = Number(formRecurringMonths);
@@ -638,7 +755,7 @@ export function ContasReceberClient() {
           <ModalField label="Valor (R$)"><input className={modalInputClass} inputMode="decimal" maxLength={24} type="text" placeholder="0,00" value={formAmount} onChange={(e) => setFormAmount(formatCurrencyInput(e.target.value))} /></ModalField>
           {!isEditing && (
             <ModalField label="Tipo de lancamento" full>
-              <select className={modalInputClass} value={formCreationMode} onChange={(e) => setFormCreationMode(e.target.value)}>
+              <select className={modalInputClass} value={formCreationMode} onChange={(e) => { setFormCreationMode(e.target.value); clearCustomInstallmentDueDates(); }}>
                 <option value="single">Unico</option><option value="installments">Parcelado</option><option value="recurring_monthly">Recorrente mensal</option>
               </select>
               <p className="mt-1 text-xs text-slate-500">Use parcelado para dividir em parcelas ou recorrente para lancamentos mensais.</p>
@@ -646,19 +763,74 @@ export function ContasReceberClient() {
           )}
           {!isEditing && formCreationMode === "installments" && (
             <>
-              <ModalField label="Quantidade de parcelas"><input className={modalInputClass} type="number" min="2" max="60" value={formInstallmentCount} onChange={(e) => setFormInstallmentCount(e.target.value)} /></ModalField>
+              <ModalField label="Quantidade de parcelas"><input className={modalInputClass} type="number" min="2" max="60" value={formInstallmentCount} onChange={(e) => { setFormInstallmentCount(e.target.value); clearCustomInstallmentDueDates(); }} /></ModalField>
               <ModalField label="Valor informado"><select className={modalInputClass} value={formInstallmentAmountMode} onChange={(e) => setFormInstallmentAmountMode(e.target.value)}><option value="total">Valor total</option><option value="per_installment">Valor por parcela</option></select></ModalField>
             </>
           )}
           {!isEditing && formCreationMode === "recurring_monthly" && (
             <ModalField label="Quantidade de meses"><input className={modalInputClass} type="number" min="2" max="120" value={formRecurringMonths} onChange={(e) => setFormRecurringMonths(e.target.value)} /></ModalField>
           )}
-          <ModalField label="Data de vencimento"><input className={modalInputClass} type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} /></ModalField>
+          <ModalField label="Data de vencimento"><input className={modalInputClass} type="date" value={formDate} onChange={(e) => { setFormDate(e.target.value); if (!isEditing && formCreationMode === "installments") { clearCustomInstallmentDueDates(); } }} /></ModalField>
           <ModalField label="Situacao">
             <select className={modalInputClass} value={formStatus} onChange={(e) => setFormStatus(e.target.value)}>
               <option value="pending">Pendente</option><option value="scheduled">Agendada</option><option value="completed">Recebida</option>
             </select>
           </ModalField>
+          {!isEditing && formCreationMode === "installments" ? (
+            <ModalField label="Parcelas geradas" full>
+              <div className="rounded-xl border border-slate-700/35 bg-slate-900/40 p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-200">
+                    {resolvedInstallmentCount > 0 ? `${resolvedInstallmentCount} parcelas planejadas` : "Informe a quantidade de parcelas"}
+                  </p>
+                  <button
+                    className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-600 bg-slate-800 px-2.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50"
+                    disabled={!hasCustomInstallmentDueDates}
+                    onClick={clearCustomInstallmentDueDates}
+                    type="button"
+                  >
+                    Restaurar agenda padrao
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                  {installmentPlanRows.length === 0 ? (
+                    <p className="rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-4 text-sm text-slate-400">
+                      Defina valor, quantidade e vencimento inicial para gerar as parcelas.
+                    </p>
+                  ) : (
+                    installmentPlanRows.map((item) => (
+                      <div key={item.installmentNumber} className="rounded-lg border border-slate-700/70 bg-slate-900/70 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-100">Parcela #{item.installmentNumber}</p>
+                          <p className="text-sm font-bold text-emerald-400">{formatCurrency(item.amount)}</p>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <p className="text-xs text-slate-400">
+                            Vencimento: {item.dueDate ? formatDate(parseDateOnly(item.dueDate)) : "--/--/----"}
+                          </p>
+                          <label
+                            className="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-emerald-500 hover:text-emerald-300"
+                            title={`Editar vencimento da parcela #${item.installmentNumber}`}
+                          >
+                            <Calendar className="h-3.5 w-3.5" />
+                            <input
+                              className="absolute inset-0 cursor-pointer opacity-0"
+                              onChange={(event) => applyInstallmentDueDate(item.installmentNumber - 1, event.target.value)}
+                              type="date"
+                              value={item.dueDate}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Total previsto: {formatCurrency(installmentPlanTotal)}
+                </p>
+              </div>
+            </ModalField>
+          ) : null}
           <ModalField label="Observacao (opcional)" full>
             <textarea
               className={`${modalInputClass} min-h-[96px] resize-none`}
