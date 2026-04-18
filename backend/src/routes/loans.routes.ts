@@ -154,6 +154,23 @@ function buildValidatedPlan(
   return normalizedPlan;
 }
 
+function isInstallmentIdUniqueViolation(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2002") return false;
+  const target = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];
+  return target.includes("id");
+}
+
+async function syncInstallmentIdSequence(db: { $executeRawUnsafe: (query: string, ...values: unknown[]) => Promise<unknown> }) {
+  await db.$executeRawUnsafe(`
+    SELECT setval(
+      pg_get_serial_sequence('"Installment"', 'id'),
+      COALESCE((SELECT MAX(id) FROM "Installment"), 0) + 1,
+      false
+    )
+  `);
+}
+
 router.patch("/:loanId", async (req, res) => {
   const ownerUserId = readUserId(req);
   if (!Number.isFinite(ownerUserId)) {
@@ -180,7 +197,7 @@ router.patch("/:loanId", async (req, res) => {
   const interestRate = round2(interestMode === "fixo" ? 0 : payload.interestRate);
   const fixedFeeAmount = round2(interestMode === "fixo" ? payload.fixedFeeAmount : 0);
 
-  const updatedLoan = await prisma.$transaction(async (tx) => {
+  const updateLoanInTransaction = () => prisma.$transaction(async (tx) => {
     const loan = await tx.loan.findFirst({
       where: {
         id: loanId,
@@ -305,6 +322,15 @@ router.patch("/:loanId", async (req, res) => {
 
     return updated;
   });
+
+  let updatedLoan: Awaited<ReturnType<typeof updateLoanInTransaction>>;
+  try {
+    updatedLoan = await updateLoanInTransaction();
+  } catch (error) {
+    if (!isInstallmentIdUniqueViolation(error)) throw error;
+    await syncInstallmentIdSequence(prisma);
+    updatedLoan = await updateLoanInTransaction();
+  }
 
   return res.json({
     message: "Emprestimo atualizado",
