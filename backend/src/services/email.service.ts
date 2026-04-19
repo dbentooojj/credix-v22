@@ -42,6 +42,11 @@ type SendEmailInput = {
   text: string;
   html?: string;
   from?: string;
+  attachments?: Array<{
+    filename: string;
+    content: string | Buffer;
+    contentType?: string;
+  }>;
 };
 
 export async function sendEmail(input: SendEmailInput): Promise<void> {
@@ -54,5 +59,6 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
     subject: input.subject,
     text: input.text,
     html: input.html,
+    attachments: input.attachments,
   });
 }

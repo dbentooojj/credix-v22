@@ -1,4 +1,4 @@
-import { InstallmentStatus } from "@prisma/client";
+import { FinanceTransactionStatus, FinanceTransactionType, InstallmentStatus } from "@prisma/client";
 import { env } from "../config/env";
 import { addDays, getIsoTodayInTimeZone, normalizeTimeZone } from "../lib/date-time";
 import { toSafeNumber } from "../lib/numbers";
@@ -27,6 +27,17 @@ type DueInstallmentGroup = {
   totalAmount: number;
 };
 
+type DueFinanceTransaction = {
+  id: number;
+  ownerUserId: number;
+  type: FinanceTransactionType;
+  status: FinanceTransactionStatus;
+  description: string;
+  category: string;
+  dueDateIso: string;
+  amount: number;
+};
+
 type SendDueTodayEmailOptions = {
   force?: boolean;
   targetDateIso?: string;
@@ -45,6 +56,12 @@ export type SendDueTodayEmailResult = {
   dueCount: number;
   clientCount: number;
   totalAmount: number;
+  receivableCount: number;
+  receivableAmount: number;
+  payableCount: number;
+  payableAmount: number;
+  totalEntries: number;
+  totalToReceiveAmount: number;
   daysAhead: number;
 };
 
@@ -253,7 +270,63 @@ function groupByClient(items: DueInstallment[]): DueInstallmentGroup[] {
   return [...map.values()];
 }
 
-function groupByOwner(items: DueInstallment[]): Map<number, DueInstallment[]> {
+type DueEmailSummary = {
+  installmentItems: DueInstallment[];
+  installmentGroups: DueInstallmentGroup[];
+  dueCount: number;
+  clientCount: number;
+  totalAmount: number;
+  receivableItems: DueFinanceTransaction[];
+  receivableCount: number;
+  receivableAmount: number;
+  payableItems: DueFinanceTransaction[];
+  payableCount: number;
+  payableAmount: number;
+  totalEntries: number;
+  totalToReceiveAmount: number;
+};
+
+async function fetchDueFinanceTransactions(targetDateIso: string, ownerUserId?: number): Promise<DueFinanceTransaction[]> {
+  const dueDate = new Date(`${targetDateIso}T00:00:00Z`);
+
+  const rows = await prisma.financeTransaction.findMany({
+    where: {
+      date: dueDate,
+      status: {
+        in: [FinanceTransactionStatus.PENDING, FinanceTransactionStatus.SCHEDULED],
+      },
+      ...(Number.isFinite(ownerUserId) ? { ownerUserId } : {}),
+    },
+    orderBy: [
+      { type: "asc" },
+      { description: "asc" },
+      { id: "asc" },
+    ],
+    select: {
+      id: true,
+      ownerUserId: true,
+      type: true,
+      status: true,
+      description: true,
+      category: true,
+      date: true,
+      amount: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    ownerUserId: row.ownerUserId,
+    type: row.type,
+    status: row.status,
+    description: row.description,
+    category: row.category,
+    dueDateIso: row.date.toISOString().slice(0, 10),
+    amount: toSafeNumber(row.amount),
+  }));
+}
+
+function groupInstallmentsByOwner(items: DueInstallment[]): Map<number, DueInstallment[]> {
   const map = new Map<number, DueInstallment[]>();
   for (const item of items) {
     const current = map.get(item.ownerUserId);
@@ -266,141 +339,266 @@ function groupByOwner(items: DueInstallment[]): Map<number, DueInstallment[]> {
   return map;
 }
 
-function buildSubject(targetDateIso: string, dueCount: number, totalAmount: number): string {
+function groupFinanceByOwner(items: DueFinanceTransaction[]): Map<number, DueFinanceTransaction[]> {
+  const map = new Map<number, DueFinanceTransaction[]>();
+  for (const item of items) {
+    const current = map.get(item.ownerUserId);
+    if (!current) {
+      map.set(item.ownerUserId, [item]);
+      continue;
+    }
+    current.push(item);
+  }
+  return map;
+}
+
+function getOwnerIds(
+  installmentsByOwner: Map<number, DueInstallment[]>,
+  financeByOwner: Map<number, DueFinanceTransaction[]>,
+): number[] {
+  const ids = new Set<number>();
+  installmentsByOwner.forEach((_, ownerId) => ids.add(ownerId));
+  financeByOwner.forEach((_, ownerId) => ids.add(ownerId));
+  return [...ids];
+}
+
+function summarizeDueData(
+  installments: DueInstallment[],
+  financeItems: DueFinanceTransaction[],
+): DueEmailSummary {
+  const installmentGroups = groupByClient(installments);
+  const dueCount = installments.length;
+  const clientCount = installmentGroups.length;
+  const totalAmount = installments.reduce((sum, item) => sum + item.amount, 0);
+
+  const receivableItems = financeItems.filter((item) => item.type === FinanceTransactionType.INCOME);
+  const payableItems = financeItems.filter((item) => item.type === FinanceTransactionType.EXPENSE);
+  const receivableCount = receivableItems.length;
+  const payableCount = payableItems.length;
+  const receivableAmount = receivableItems.reduce((sum, item) => sum + item.amount, 0);
+  const payableAmount = payableItems.reduce((sum, item) => sum + item.amount, 0);
+
+  return {
+    installmentItems: installments,
+    installmentGroups,
+    dueCount,
+    clientCount,
+    totalAmount,
+    receivableItems,
+    receivableCount,
+    receivableAmount,
+    payableItems,
+    payableCount,
+    payableAmount,
+    totalEntries: dueCount + receivableCount + payableCount,
+    totalToReceiveAmount: totalAmount + receivableAmount,
+  };
+}
+
+function formatFinanceStatusLabel(status: FinanceTransactionStatus): string {
+  if (status === FinanceTransactionStatus.SCHEDULED) return "Agendado";
+  if (status === FinanceTransactionStatus.PENDING) return "Pendente";
+  return "Pago";
+}
+
+function buildSubject(targetDateIso: string, summary: DueEmailSummary): string {
   const dateLabel = formatDateIso(targetDateIso);
-  return `[Credix] Vencimentos (${dateLabel}): ${dueCount} parcela(s) - ${formatCurrency(totalAmount)}`;
+  return `[Credix] Vencimentos (${dateLabel}): ${summary.totalEntries} item(ns) | Receber ${formatCurrency(summary.totalToReceiveAmount)} | Pagar ${formatCurrency(summary.payableAmount)}`;
+}
+
+function buildFinanceTextSection(title: string, items: DueFinanceTransaction[], emptyMessage: string): string {
+  if (items.length === 0) {
+    return `${title}\n${emptyMessage}`;
+  }
+
+  const rows = items.map((item) => {
+    return `${item.description} | ${item.category} | ${formatDateIso(item.dueDateIso)} | ${formatFinanceStatusLabel(item.status)} | ${formatCurrency(item.amount)}`;
+  });
+
+  return [
+    title,
+    "Descricao | Categoria | Vencimento | Status | Valor",
+    ...rows,
+  ].join("\n");
 }
 
 function buildTextBody(
-  groups: DueInstallmentGroup[],
+  summary: DueEmailSummary,
   targetDateIso: string,
-  totalAmount: number,
   daysAhead: number,
 ): string {
   const dateLabel = formatDateIso(targetDateIso);
-  const dueCount = groups.reduce((sum, group) => sum + group.dueCount, 0);
   const reference = getDueReference(daysAhead);
 
-  if (dueCount === 0) {
+  const loansSection = (() => {
+    if (summary.dueCount === 0) {
+      return "Parcelas de emprestimo\nNenhuma parcela de emprestimo vence nesta data.";
+    }
+
+    const rows = summary.installmentItems.map((item) => {
+      const phoneLabel = getPhoneDisplay(item.clientPhone);
+      return `#${item.installmentNumber} | ${item.clientName} | ${formatDateIso(item.dueDateIso)} | ${formatCurrency(item.amount)} | ${phoneLabel}`;
+    });
+
     return [
-      `Parcelas para ${reference.title} (${dateLabel})`,
-      `Total de parcelas: 0 | Valor total: ${formatCurrency(0)}`,
-      "",
-      `Nenhuma parcela vence ${reference.sentence}.`,
-      "",
-      "Mensagem automatica do Credix.",
+      "Parcelas de emprestimo",
+      "Parcela | Nome | Vencimento | Valor | Telefone (WhatsApp)",
+      ...rows,
     ].join("\n");
-  }
+  })();
 
-  const clientSections = groups
-    .map((group) => {
-      const phoneDisplay = getPhoneDisplay(group.clientPhone);
-      const whatsappPhone = normalizeWhatsAppPhone(group.clientPhone);
-      const clientPhoneLabel = whatsappPhone
-        ? `${phoneDisplay} (https://wa.me/${whatsappPhone})`
-        : phoneDisplay;
+  const receivableSection = buildFinanceTextSection(
+    "Contas a receber",
+    summary.receivableItems,
+    "Nenhuma conta a receber vence nesta data.",
+  );
 
-      const rows = group.installments.map((item) => {
-        const rowPhoneDisplay = getPhoneDisplay(item.clientPhone);
-        const rowWhatsappPhone = normalizeWhatsAppPhone(item.clientPhone);
-        const rowPhoneLabel = rowWhatsappPhone
-          ? `${rowPhoneDisplay} (https://wa.me/${rowWhatsappPhone})`
-          : rowPhoneDisplay;
-
-        return `#${item.installmentNumber} | #${item.loanId} | ${formatDateIso(item.dueDateIso)} | ${formatCurrency(item.amount)} | ${rowPhoneLabel}`;
-      });
-
-      return [
-        `Cliente: ${group.clientName} | Telefone: ${clientPhoneLabel}`,
-        `Subtotal do cliente: ${group.dueCount} parcela(s) | ${formatCurrency(group.totalAmount)}`,
-        "Parcela | Emprestimo | Vencimento | Valor | Telefone (WhatsApp)",
-        ...rows,
-      ].join("\n");
-    })
-    .join("\n\n");
+  const payableSection = buildFinanceTextSection(
+    "Contas a pagar",
+    summary.payableItems,
+    "Nenhuma conta a pagar vence nesta data.",
+  );
 
   return [
-    `Parcelas para ${reference.title} (${dateLabel})`,
-    `Total de parcelas: ${dueCount} | Valor total: ${formatCurrency(totalAmount)}`,
+    `Agenda financeira (${dateLabel})`,
+    `Parcelas de emprestimo: ${summary.dueCount} | ${formatCurrency(summary.totalAmount)}`,
+    `Contas a receber: ${summary.receivableCount} | ${formatCurrency(summary.receivableAmount)}`,
+    `Contas a pagar: ${summary.payableCount} | ${formatCurrency(summary.payableAmount)}`,
+    `Total a receber: ${formatCurrency(summary.totalToReceiveAmount)} | Total a pagar: ${formatCurrency(summary.payableAmount)}`,
     "",
-    clientSections,
+    loansSection,
+    "",
+    receivableSection,
+    "",
+    payableSection,
     "",
     "Mensagem automatica do Credix.",
   ].join("\n");
 }
 
+function buildFinanceHtmlSection(title: string, items: DueFinanceTransaction[], emptyMessage: string): string {
+  if (items.length === 0) {
+    return `
+      <section style="margin-top:20px;">
+        <h2 style="margin:0 0 8px;font-size:17px;color:#111827;">${escapeHtml(title)}</h2>
+        <p style="margin:0;font-size:14px;color:#4b5563;">${escapeHtml(emptyMessage)}</p>
+      </section>
+    `;
+  }
+
+  const rows = items.map((item) => `
+      <tr>
+        <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(item.description)}</td>
+        <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(item.category)}</td>
+        <td style="padding:10px;border:1px solid #e5e7eb;text-align:center;">${formatDateIso(item.dueDateIso)}</td>
+        <td style="padding:10px;border:1px solid #e5e7eb;text-align:center;">${escapeHtml(formatFinanceStatusLabel(item.status))}</td>
+        <td style="padding:10px;border:1px solid #e5e7eb;text-align:right;">${formatCurrency(item.amount)}</td>
+      </tr>
+    `).join("");
+
+  return `
+    <section style="margin-top:20px;">
+      <h2 style="margin:0 0 8px;font-size:17px;color:#111827;">${escapeHtml(title)}</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <thead>
+          <tr>
+            <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;background:#f8fafc;">Descricao</th>
+            <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;background:#f8fafc;">Categoria</th>
+            <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;background:#f8fafc;">Vencimento</th>
+            <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;background:#f8fafc;">Status</th>
+            <th style="padding:10px;border:1px solid #e5e7eb;text-align:right;background:#f8fafc;">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </section>
+  `;
+}
+
 function buildHtmlBody(
-  groups: DueInstallmentGroup[],
+  summary: DueEmailSummary,
   targetDateIso: string,
-  totalAmount: number,
   daysAhead: number,
 ): string {
   const dateLabel = formatDateIso(targetDateIso);
-  const dueCount = groups.reduce((sum, group) => sum + group.dueCount, 0);
   const reference = getDueReference(daysAhead);
 
-  const sections = groups
-    .map((group) => {
-      const clientPhoneDisplay = escapeHtml(getPhoneDisplay(group.clientPhone));
-      const clientWhatsappPhone = normalizeWhatsAppPhone(group.clientPhone);
-      const clientPhoneCell = clientWhatsappPhone
-        ? `<a href="https://wa.me/${clientWhatsappPhone}" target="_blank" rel="noopener noreferrer">${clientPhoneDisplay}</a>`
-        : clientPhoneDisplay;
-
-      const rows = group.installments
-        .map((item) => {
-          const rowPhoneDisplay = escapeHtml(getPhoneDisplay(item.clientPhone));
-          const rowWhatsappPhone = normalizeWhatsAppPhone(item.clientPhone);
-          const rowPhoneCell = rowWhatsappPhone
-            ? `<a href="https://wa.me/${rowWhatsappPhone}" target="_blank" rel="noopener noreferrer">${rowPhoneDisplay}</a>`
-            : rowPhoneDisplay;
-
-          return `
-            <tr>
-              <td style="padding:10px;border:1px solid #e5e7eb;text-align:center;">#${item.installmentNumber}</td>
-              <td style="padding:10px;border:1px solid #e5e7eb;text-align:center;">#${item.loanId}</td>
-              <td style="padding:10px;border:1px solid #e5e7eb;text-align:center;">${formatDateIso(item.dueDateIso)}</td>
-              <td style="padding:10px;border:1px solid #e5e7eb;text-align:right;">${formatCurrency(item.amount)}</td>
-              <td style="padding:10px;border:1px solid #e5e7eb;">${rowPhoneCell}</td>
-            </tr>
-          `;
-        })
-        .join("");
+  const loanRows = summary.installmentItems
+    .map((item) => {
+      const rowPhoneDisplay = escapeHtml(getPhoneDisplay(item.clientPhone));
+      const rowWhatsappPhone = normalizeWhatsAppPhone(item.clientPhone);
+      const rowPhoneCell = rowWhatsappPhone
+        ? `<a href="https://wa.me/${rowWhatsappPhone}" target="_blank" rel="noopener noreferrer">${rowPhoneDisplay}</a>`
+        : rowPhoneDisplay;
 
       return `
-        <section style="margin-top:20px;">
-          <h2 style="margin:0 0 8px;font-size:17px;color:#111827;">
-            ${escapeHtml(group.clientName)} - ${clientPhoneCell}
-          </h2>
-          <p style="margin:0 0 10px;font-size:14px;color:#374151;">
-            Subtotal do cliente: <strong>${group.dueCount}</strong> parcela(s) | <strong>${formatCurrency(group.totalAmount)}</strong>
-          </p>
-          <table style="width:100%;border-collapse:collapse;font-size:14px;">
-            <thead>
-              <tr>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;background:#f8fafc;">Parcela</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;background:#f8fafc;">Emprestimo</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;background:#f8fafc;">Vencimento</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:right;background:#f8fafc;">Valor</th>
-                <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;background:#f8fafc;">Telefone (WhatsApp)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
-        </section>
+        <tr>
+          <td style="padding:10px;border:1px solid #e5e7eb;text-align:center;">#${item.installmentNumber}</td>
+          <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(item.clientName)}</td>
+          <td style="padding:10px;border:1px solid #e5e7eb;text-align:center;">${formatDateIso(item.dueDateIso)}</td>
+          <td style="padding:10px;border:1px solid #e5e7eb;text-align:right;">${formatCurrency(item.amount)}</td>
+          <td style="padding:10px;border:1px solid #e5e7eb;">${rowPhoneCell}</td>
+        </tr>
       `;
     })
     .join("");
 
+  const loansSection = `
+    <section style="margin-top:20px;">
+      <h2 style="margin:0 0 8px;font-size:17px;color:#111827;">Parcelas de emprestimo</h2>
+      ${summary.dueCount === 0
+    ? `<p style="margin:0;font-size:14px;color:#4b5563;">Nenhuma parcela de emprestimo vence nesta data.</p>`
+    : `
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <thead>
+            <tr>
+              <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;background:#f8fafc;">Parcela</th>
+              <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;background:#f8fafc;">Nome</th>
+              <th style="padding:10px;border:1px solid #e5e7eb;text-align:center;background:#f8fafc;">Vencimento</th>
+              <th style="padding:10px;border:1px solid #e5e7eb;text-align:right;background:#f8fafc;">Valor</th>
+              <th style="padding:10px;border:1px solid #e5e7eb;text-align:left;background:#f8fafc;">Telefone (WhatsApp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${loanRows}
+          </tbody>
+        </table>
+      `}
+    </section>
+  `;
+
+  const receivableSection = buildFinanceHtmlSection(
+    "Contas a receber",
+    summary.receivableItems,
+    "Nenhuma conta a receber vence nesta data.",
+  );
+
+  const payableSection = buildFinanceHtmlSection(
+    "Contas a pagar",
+    summary.payableItems,
+    "Nenhuma conta a pagar vence nesta data.",
+  );
+
   return `
     <div style="font-family:Arial,sans-serif;color:#111827;line-height:1.45;">
-      <h1 style="margin:0 0 10px;font-size:22px;">Parcelas para ${reference.title} (${dateLabel})</h1>
-      <p style="margin:0 0 14px;font-size:14px;">
-        Total de parcelas: <strong>${dueCount}</strong> | Valor total: <strong>${formatCurrency(totalAmount)}</strong>
+      <h1 style="margin:0 0 10px;font-size:22px;">Agenda financeira (${dateLabel})</h1>
+      <p style="margin:0 0 6px;font-size:14px;">
+        Parcelas de emprestimo: <strong>${summary.dueCount}</strong> | <strong>${formatCurrency(summary.totalAmount)}</strong>
       </p>
-      ${dueCount === 0 ? `<p style="margin:0;font-size:14px;">Nenhuma parcela vence ${reference.sentence}.</p>` : sections}
+      <p style="margin:0 0 6px;font-size:14px;">
+        Contas a receber: <strong>${summary.receivableCount}</strong> | <strong>${formatCurrency(summary.receivableAmount)}</strong>
+      </p>
+      <p style="margin:0 0 6px;font-size:14px;">
+        Contas a pagar: <strong>${summary.payableCount}</strong> | <strong>${formatCurrency(summary.payableAmount)}</strong>
+      </p>
+      <p style="margin:0 0 14px;font-size:14px;">
+        Total a receber: <strong>${formatCurrency(summary.totalToReceiveAmount)}</strong> | Total a pagar: <strong>${formatCurrency(summary.payableAmount)}</strong>
+      </p>
+      ${loansSection}
+      ${receivableSection}
+      ${payableSection}
       <p style="margin:16px 0 0;font-size:12px;color:#6b7280;">Mensagem automatica do Credix.</p>
     </div>
   `;
@@ -422,6 +620,12 @@ export async function sendDueTodayInstallmentsEmail(
       dueCount: 0,
       clientCount: 0,
       totalAmount: 0,
+      receivableCount: 0,
+      receivableAmount: 0,
+      payableCount: 0,
+      payableAmount: 0,
+      totalEntries: 0,
+      totalToReceiveAmount: 0,
       daysAhead: configuredDaysAhead,
     };
   }
@@ -446,6 +650,12 @@ export async function sendDueTodayInstallmentsEmail(
       dueCount: 0,
       clientCount: 0,
       totalAmount: 0,
+      receivableCount: 0,
+      receivableAmount: 0,
+      payableCount: 0,
+      payableAmount: 0,
+      totalEntries: 0,
+      totalToReceiveAmount: 0,
       daysAhead: configuredDaysAhead,
     };
   }
@@ -460,21 +670,25 @@ export async function sendDueTodayInstallmentsEmail(
     : undefined;
 
   const dueItems = await fetchDueInstallments(targetDateIso, scopeOwnerUserId);
-  const dueGroups = groupByClient(dueItems);
-  const dueCount = dueItems.length;
-  const clientCount = dueGroups.length;
-  const totalAmount = dueItems.reduce((sum, item) => sum + item.amount, 0);
+  const dueFinanceItems = await fetchDueFinanceTransactions(targetDateIso, scopeOwnerUserId);
+  const summary = summarizeDueData(dueItems, dueFinanceItems);
 
-  if (dueCount === 0) {
+  if (summary.totalEntries === 0) {
     return {
       ok: true,
       skipped: true,
-      message: `Nenhuma parcela encontrada para ${formatDateIso(targetDateIso)}. E-mail nao enviado`,
+      message: `Nenhum vencimento encontrado para ${formatDateIso(targetDateIso)}. E-mail nao enviado`,
       targetDateIso,
       recipients: [],
-      dueCount,
-      clientCount,
-      totalAmount,
+      dueCount: summary.dueCount,
+      clientCount: summary.clientCount,
+      totalAmount: summary.totalAmount,
+      receivableCount: summary.receivableCount,
+      receivableAmount: summary.receivableAmount,
+      payableCount: summary.payableCount,
+      payableAmount: summary.payableAmount,
+      totalEntries: summary.totalEntries,
+      totalToReceiveAmount: summary.totalToReceiveAmount,
       daysAhead: effectiveDaysAhead,
     };
   }
@@ -487,22 +701,35 @@ export async function sendDueTodayInstallmentsEmail(
       message: smtpError,
       targetDateIso,
       recipients: [],
-      dueCount,
-      clientCount,
-      totalAmount,
+      dueCount: summary.dueCount,
+      clientCount: summary.clientCount,
+      totalAmount: summary.totalAmount,
+      receivableCount: summary.receivableCount,
+      receivableAmount: summary.receivableAmount,
+      payableCount: summary.payableCount,
+      payableAmount: summary.payableAmount,
+      totalEntries: summary.totalEntries,
+      totalToReceiveAmount: summary.totalToReceiveAmount,
       daysAhead: effectiveDaysAhead,
     };
   }
 
-  const itemsByOwner = groupByOwner(dueItems);
-  const ownerIds = [...itemsByOwner.keys()];
+  const installmentItemsByOwner = groupInstallmentsByOwner(dueItems);
+  const financeItemsByOwner = groupFinanceByOwner(dueFinanceItems);
+  const ownerIds = getOwnerIds(installmentItemsByOwner, financeItemsByOwner);
   const ownerEmailsById = await getOwnerEmailsById(ownerIds);
   const recipientsSet = new Set<string>();
   let sentEmails = 0;
   const skippedOwners: string[] = [];
   const failedOwners: string[] = [];
 
-  for (const [ownerId, ownerItems] of itemsByOwner.entries()) {
+  for (const ownerId of ownerIds) {
+    const ownerInstallments = installmentItemsByOwner.get(ownerId) ?? [];
+    const ownerFinanceItems = financeItemsByOwner.get(ownerId) ?? [];
+    const ownerSummary = summarizeDueData(ownerInstallments, ownerFinanceItems);
+
+    if (ownerSummary.totalEntries === 0) continue;
+
     const recipientResolution = resolveRecipientsForOwner(ownerId, ownerEmailsById, options.recipients);
     const recipients = recipientResolution.recipients;
 
@@ -514,16 +741,12 @@ export async function sendDueTodayInstallmentsEmail(
       continue;
     }
 
-    const ownerGroups = groupByClient(ownerItems);
-    const ownerDueCount = ownerItems.length;
-    const ownerTotalAmount = ownerItems.reduce((sum, item) => sum + item.amount, 0);
-
     try {
       await sendEmail({
         to: recipients,
-        subject: buildSubject(targetDateIso, ownerDueCount, ownerTotalAmount),
-        text: buildTextBody(ownerGroups, targetDateIso, ownerTotalAmount, effectiveDaysAhead),
-        html: buildHtmlBody(ownerGroups, targetDateIso, ownerTotalAmount, effectiveDaysAhead),
+        subject: buildSubject(targetDateIso, ownerSummary),
+        text: buildTextBody(ownerSummary, targetDateIso, effectiveDaysAhead),
+        html: buildHtmlBody(ownerSummary, targetDateIso, effectiveDaysAhead),
       });
       sentEmails += 1;
       recipients.forEach((recipient) => recipientsSet.add(recipient));
@@ -547,12 +770,18 @@ export async function sendDueTodayInstallmentsEmail(
     return {
       ok: false,
       skipped: true,
-      message: reasonParts.join(" | ") || "Nenhum e-mail enviado para os usuarios com parcelas pendentes",
+      message: reasonParts.join(" | ") || "Nenhum e-mail enviado para os usuarios com vencimentos na data",
       targetDateIso,
       recipients,
-      dueCount,
-      clientCount,
-      totalAmount,
+      dueCount: summary.dueCount,
+      clientCount: summary.clientCount,
+      totalAmount: summary.totalAmount,
+      receivableCount: summary.receivableCount,
+      receivableAmount: summary.receivableAmount,
+      payableCount: summary.payableCount,
+      payableAmount: summary.payableAmount,
+      totalEntries: summary.totalEntries,
+      totalToReceiveAmount: summary.totalToReceiveAmount,
       daysAhead: effectiveDaysAhead,
     };
   }
@@ -568,9 +797,15 @@ export async function sendDueTodayInstallmentsEmail(
       message: details.join(" | "),
       targetDateIso,
       recipients,
-      dueCount,
-      clientCount,
-      totalAmount,
+      dueCount: summary.dueCount,
+      clientCount: summary.clientCount,
+      totalAmount: summary.totalAmount,
+      receivableCount: summary.receivableCount,
+      receivableAmount: summary.receivableAmount,
+      payableCount: summary.payableCount,
+      payableAmount: summary.payableAmount,
+      totalEntries: summary.totalEntries,
+      totalToReceiveAmount: summary.totalToReceiveAmount,
       daysAhead: effectiveDaysAhead,
     };
   }
@@ -578,12 +813,18 @@ export async function sendDueTodayInstallmentsEmail(
   return {
     ok: true,
     skipped: false,
-    message: `E-mail enviado para ${sentEmails} usuario(s) com ${dueCount} parcela(s) em ${clientCount} cliente(s)`,
+    message: `E-mail enviado para ${sentEmails} usuario(s) com ${summary.dueCount} parcela(s), ${summary.receivableCount} conta(s) a receber e ${summary.payableCount} conta(s) a pagar`,
     targetDateIso,
     recipients,
-    dueCount,
-    clientCount,
-    totalAmount,
+    dueCount: summary.dueCount,
+    clientCount: summary.clientCount,
+    totalAmount: summary.totalAmount,
+    receivableCount: summary.receivableCount,
+    receivableAmount: summary.receivableAmount,
+    payableCount: summary.payableCount,
+    payableAmount: summary.payableAmount,
+    totalEntries: summary.totalEntries,
+    totalToReceiveAmount: summary.totalToReceiveAmount,
     daysAhead: effectiveDaysAhead,
   };
 }

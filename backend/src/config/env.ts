@@ -129,6 +129,33 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => parseBooleanFlag(value)),
+  EMAIL_WEEKLY_BACKUP_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => parseBooleanFlag(value)),
+  EMAIL_WEEKLY_BACKUP_TO: z
+    .string()
+    .optional()
+    .transform((value) => normalizeOptional(value)),
+  EMAIL_WEEKLY_BACKUP_TZ: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const normalized = value?.trim();
+      return normalized || "America/Sao_Paulo";
+    }),
+  EMAIL_WEEKLY_BACKUP_TIME: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const normalized = value?.trim();
+      return normalized || "00:00";
+    })
+    .pipe(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "EMAIL_WEEKLY_BACKUP_TIME invalido")),
+  EMAIL_WEEKLY_BACKUP_RUN_ON_START: z
+    .string()
+    .optional()
+    .transform((value) => parseBooleanFlag(value)),
 });
 
 const parsed = envSchema.safeParse(process.env);

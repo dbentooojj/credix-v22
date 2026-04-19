@@ -6,6 +6,7 @@ import morgan from "morgan";
 import path from "path";
 import { env } from "./config/env";
 import { startDueTodayEmailJob } from "./jobs/due-today-email.job";
+import { startWeeklyBackupEmailJob } from "./jobs/weekly-backup-email.job";
 import { errorHandler } from "./middleware/error-handler";
 import { optionalAuth } from "./middleware/auth";
 import { authRoutes } from "./routes/auth.routes";
@@ -54,6 +55,7 @@ app.use((_req, res) => {
 app.use(errorHandler);
 
 startDueTodayEmailJob();
+startWeeklyBackupEmailJob();
 
 app.listen(env.PORT, () => {
   console.log(`Servidor iniciado na porta ${env.PORT}`);

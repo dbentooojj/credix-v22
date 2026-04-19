@@ -5,6 +5,7 @@ import { AppError } from "../middleware/error-handler";
 import { validateBody } from "../middleware/validate";
 import { whatsappBatchSchema, type WhatsAppBatchInput } from "../schemas/whatsapp.schemas";
 import { sendDueTodayInstallmentsEmail } from "../services/email-reminder.service";
+import { sendWeeklyBackupEmail } from "../services/weekly-backup-email.service";
 import { normalizePhoneForWhatsApp, sendWhatsAppTextMessage } from "../services/whatsapp.service";
 
 const router = Router();
@@ -116,5 +117,34 @@ router.post("/email/due-today", handleDueEmail);
 
 // Mantido por compatibilidade com integracoes anteriores.
 router.post("/email/due-tomorrow", handleDueEmail);
+
+async function handleWeeklyBackupEmail(req: Request, res: Response) {
+  const ownerUserId = Number(req.user?.sub);
+  if (!Number.isFinite(ownerUserId) || ownerUserId <= 0) {
+    throw new AppError("Sessao invalida para envio de backup", 401);
+  }
+
+  const targetDateRaw = typeof req.body?.targetDate === "string" ? req.body.targetDate.trim() : undefined;
+  if (targetDateRaw && !/^\d{4}-\d{2}-\d{2}$/.test(targetDateRaw)) {
+    throw new AppError("targetDate invalido. Use YYYY-MM-DD", 400);
+  }
+
+  const result = await sendWeeklyBackupEmail({
+    force: true,
+    referenceDateIso: targetDateRaw,
+    ownerUserId,
+  });
+
+  if (!result.ok) {
+    throw new AppError(result.message, 503);
+  }
+
+  return res.json({
+    message: result.message,
+    result,
+  });
+}
+
+router.post("/email/weekly-backup", handleWeeklyBackupEmail);
 
 export { router as notificationsRoutes };

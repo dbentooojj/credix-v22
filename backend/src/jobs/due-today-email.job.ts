@@ -53,7 +53,11 @@ export function startDueTodayEmailJob(): void {
       console.log(`[due-today-email-job] (${label}) Data alvo: ${result.targetDateIso}`);
       console.log(`[due-today-email-job] (${label}) Total de parcelas: ${result.dueCount}`);
       console.log(`[due-today-email-job] (${label}) Total de clientes: ${result.clientCount}`);
-      console.log(`[due-today-email-job] (${label}) Total geral: ${formatCurrency(result.totalAmount)}`);
+      console.log(`[due-today-email-job] (${label}) Contas a receber: ${result.receivableCount}`);
+      console.log(`[due-today-email-job] (${label}) Contas a pagar: ${result.payableCount}`);
+      console.log(`[due-today-email-job] (${label}) Total de itens: ${result.totalEntries}`);
+      console.log(`[due-today-email-job] (${label}) Total a receber: ${formatCurrency(result.totalToReceiveAmount)}`);
+      console.log(`[due-today-email-job] (${label}) Total a pagar: ${formatCurrency(result.payableAmount)}`);
 
       if (result.skipped) {
         console.log(`[due-today-email-job] (${label}) Envio pulado: ${result.message}`);

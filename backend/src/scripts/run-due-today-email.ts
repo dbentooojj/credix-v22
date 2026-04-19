@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { env } from "../config/env";
 import { normalizeTimeZone } from "../lib/date-time";
 import { prisma } from "../lib/prisma";
@@ -15,7 +16,7 @@ async function main() {
   const log = result.ok ? console.log : console.error;
   log(`[due-today-email-manual] ${result.message}`);
   console.log(
-    `[due-today-email-manual] data=${result.targetDateIso || "-"} parcelas=${result.dueCount} total=${result.totalAmount.toFixed(2)} destinatarios=${result.recipients.length}`,
+    `[due-today-email-manual] data=${result.targetDateIso || "-"} parcelas=${result.dueCount} receber=${result.receivableCount} pagar=${result.payableCount} itens=${result.totalEntries} totalReceber=${result.totalToReceiveAmount.toFixed(2)} totalPagar=${result.payableAmount.toFixed(2)} destinatarios=${result.recipients.length}`,
   );
 
   if (!result.ok) {

@@ -19,6 +19,7 @@ Aplicacao full-stack com autenticacao, PostgreSQL e deploy via Docker para VPS U
 - Dashboard e relatorios com totais principais
 - Envio de notificacoes WhatsApp via Cloud API (Meta)
 - Resumo diario por e-mail com parcelas que vencem no dia seguinte
+- Backup semanal por e-mail com PDF resumido + CSV de emprestimos, parcelas e contas
 
 ## Estrutura principal
 - `backend/src/server.ts`: inicializacao do backend Express
@@ -90,7 +91,7 @@ PAYMENT_LINK=<link_pagamento_opcional>
 Sem esses campos, o envio server-side de notificacoes retorna erro de configuracao.
 `PIX_KEY` e `PAYMENT_LINK` sao usados na mensagem padrao de cobranca do dashboard.
 
-## Configurar notificacao por e-mail (vencimentos de amanha)
+## Configurar notificacoes por e-mail
 Defina no `.env`:
 
 ```bash
@@ -105,12 +106,23 @@ EMAIL_NOTIFY_ENABLED=true
 EMAIL_NOTIFY_TO=seu-email@dominio.com,financeiro@dominio.com
 EMAIL_NOTIFY_TZ=America/Sao_Paulo
 EMAIL_NOTIFY_TIME=08:00
+EMAIL_NOTIFY_DAYS_AHEAD=1
 EMAIL_NOTIFY_RUN_ON_START=false
+
+EMAIL_WEEKLY_BACKUP_ENABLED=true
+EMAIL_WEEKLY_BACKUP_TO=
+EMAIL_WEEKLY_BACKUP_TZ=America/Sao_Paulo
+EMAIL_WEEKLY_BACKUP_TIME=00:00
+EMAIL_WEEKLY_BACKUP_RUN_ON_START=false
 ```
 
-Com isso, o app envia 1 e-mail por dia no horario configurado com a lista de parcelas em aberto que vencem no dia seguinte.
+Com isso, o app envia:
+- 1 e-mail por dia no horario configurado com a lista de parcelas em aberto.
+- 1 e-mail semanal no domingo, no horario configurado, com PDF resumido e CSVs de backup.
 
-Para testar manualmente sem esperar o horario:
+Se `EMAIL_WEEKLY_BACKUP_TO` estiver vazio, o backup semanal vai para o e-mail do proprio usuario dono dos dados.
+
+Para testar manualmente o lembrete diario sem esperar o horario:
 
 ```bash
 curl -X POST http://localhost:4000/api/notifications/email/due-tomorrow \
@@ -125,6 +137,21 @@ curl -X POST http://localhost:4000/api/notifications/email/due-tomorrow \
   -H "Content-Type: application/json" \
   -H "Cookie: credix_token=<SEU_COOKIE_DE_LOGIN>" \
   -d '{"targetDate":"2026-02-15"}'
+```
+
+Para testar manualmente o backup semanal (gera e envia PDF + CSVs anexados):
+
+```bash
+curl -X POST http://localhost:4000/api/notifications/email/weekly-backup \
+  -H "Content-Type: application/json" \
+  -H "Cookie: credix_token=<SEU_COOKIE_DE_LOGIN>"
+```
+
+Opcional via script local do backend:
+
+```bash
+cd backend
+npm run notify:weekly-backup:once
 ```
 
 ## Deploy no VPS Ubuntu (Serverspace)
@@ -225,6 +252,7 @@ cat backup.sql | docker compose exec -T db psql -U $POSTGRES_USER -d $POSTGRES_D
 - Pagamentos: `/api/payments`
 - Notificacoes WhatsApp: `/api/notifications/whatsapp/batch`
 - Notificacao e-mail (teste manual): `/api/notifications/email/due-tomorrow`
+- Backup semanal e-mail (teste manual): `/api/notifications/email/weekly-backup`
 - Healthcheck: `/health`
 
 ## API Dashboard
