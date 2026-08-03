@@ -169,6 +169,14 @@ fi
 create_environment_file
 create_candidate_compose
 create_candidate_caddyfile
+
+sed -i 's/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=curta/' "$app_path/.env"
+if run_script preflight "$app_path" > "$test_root/preflight-error.log" 2>&1; then
+  fail "Pré-validação deveria falhar com ADMIN_PASSWORD curta."
+fi
+grep -Fqx "ERRO: ADMIN_PASSWORD inválida: use uma senha forte com pelo menos 12 caracteres." "$test_root/preflight-error.log" || fail "Mensagem de ADMIN_PASSWORD não descreve o requisito."
+
+create_environment_file
 run_script preflight "$app_path" >/dev/null
 run_script deploy "$app_path" 0123456789abcdef0123456789abcdef01234567 dbentooojj >/dev/null
 

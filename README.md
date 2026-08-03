@@ -178,6 +178,28 @@ Crie o environment `production` no GitHub e cadastre estes secrets:
 
 Opcionalmente, crie a variável `PRODUCTION_URL` no environment para exibir o link da aplicação no resumo do deploy.
 
+### Gerar o PROD_ENV_FILE com segurança
+
+Não crie segredos manualmente. Gere um arquivo seguro localmente:
+
+```bash
+bash ops/generate-production-env.sh production.env
+```
+
+O script cria `production.env` com permissão `600` e gera automaticamente `POSTGRES_PASSWORD`, `JWT_SECRET` e `ADMIN_PASSWORD`. Antes de copiar seu conteúdo para o secret `PROD_ENV_FILE` do environment `production`, revise somente estas linhas:
+
+- `APP_BASE_URL`: deve ser exatamente `https://www.credix.app.br`.
+- `CADDY_EMAIL`: obrigatório; e-mail válido que recebe avisos dos certificados HTTPS.
+- `ADMIN_EMAIL`: e-mail usado para entrar no sistema.
+
+Requisitos mínimos validados pelo preflight:
+
+- `ADMIN_PASSWORD`: pelo menos 12 caracteres.
+- `JWT_SECRET`: pelo menos 32 caracteres aleatórios.
+- `POSTGRES_PASSWORD`: senha forte com pelo menos 16 caracteres.
+- `APP_BASE_URL`: `https://www.credix.app.br`.
+- `CADDY_EMAIL`: obrigatório e com formato de e-mail válido.
+
 Não é necessário criar arquivos ou clonar o repositório na VPS. A esteira instala o Docker Engine e o plugin `docker compose` quando necessário, cria `/opt/credix`, `backups` e `releases`, grava `/opt/credix/.env` de forma atômica a partir de `PROD_ENV_FILE` e envia o Compose e o Caddyfile candidatos.
 
 O primeiro administrador é criado automaticamente apenas se o banco não possuir nenhum dado da aplicação. Caso o seed precise ser executado manualmente, use:

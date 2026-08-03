@@ -44,9 +44,11 @@ jobs:
         run: |
           bash -n ops/bootstrap-vps.sh
           bash -n ops/deploy-production.sh
+          bash -n ops/generate-production-env.sh
           IMAGE_NAMESPACE=dbentooojj IMAGE_TAG=validation docker compose --env-file ops/production.env.example -f docker-compose.production.yml config --quiet
           docker run --rm -e CADDY_EMAIL=admin@credix.app.br -v "$PWD/ops/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           bash ops/tests/deploy-production.test.sh
+          bash ops/tests/generate-production-env.test.sh
 
       - name: Testar backend
         run: npm test --workspace backend

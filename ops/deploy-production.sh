@@ -24,10 +24,11 @@ env_value() {
 
 require_env_value() {
   local key="$1"
+  local expected="$2"
   local value
   value="$(env_value "$key")"
 
-  [[ -n "$value" ]] || fail "A variável $key precisa estar preenchida em $deploy_path/.env."
+  [[ -n "$value" ]] || fail "$key inválida: $expected. Valor atual está vazio em $deploy_path/.env."
 }
 
 validate_environment_file() {
@@ -35,22 +36,33 @@ validate_environment_file() {
 
   [[ -f .env && -r .env ]] || fail "O arquivo $deploy_path/.env precisa existir e ser legível antes do deploy."
 
-  for key in POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB JWT_SECRET JWT_EXPIRES_IN COOKIE_NAME COOKIE_SECURE APP_BASE_URL CADDY_EMAIL ADMIN_EMAIL ADMIN_PASSWORD; do
-    require_env_value "$key"
+  for key in POSTGRES_USER POSTGRES_DB JWT_EXPIRES_IN COOKIE_NAME COOKIE_SECURE; do
+    require_env_value "$key" "deve estar preenchida"
   done
 
-  local jwt_secret admin_password app_base_url caddy_email cookie_secure
+  require_env_value POSTGRES_PASSWORD "use uma senha forte com pelo menos 16 caracteres"
+  require_env_value JWT_SECRET "use um segredo aleatório com pelo menos 32 caracteres"
+  require_env_value APP_BASE_URL "deve ser exatamente https://www.credix.app.br"
+  require_env_value CADDY_EMAIL "informe um e-mail válido para os certificados HTTPS"
+  require_env_value ADMIN_EMAIL "informe o e-mail do administrador"
+  require_env_value ADMIN_PASSWORD "use uma senha forte com pelo menos 12 caracteres"
+
+  local postgres_password jwt_secret admin_password app_base_url caddy_email admin_email cookie_secure
+  postgres_password="$(env_value POSTGRES_PASSWORD)"
   jwt_secret="$(env_value JWT_SECRET)"
   admin_password="$(env_value ADMIN_PASSWORD)"
   app_base_url="$(env_value APP_BASE_URL)"
   caddy_email="$(env_value CADDY_EMAIL)"
+  admin_email="$(env_value ADMIN_EMAIL)"
   cookie_secure="$(env_value COOKIE_SECURE)"
 
-  [[ ${#jwt_secret} -ge 32 ]] || fail "JWT_SECRET precisa ter ao menos 32 caracteres."
-  [[ ${#admin_password} -ge 12 ]] || fail "ADMIN_PASSWORD precisa ter ao menos 12 caracteres."
-  [[ "$app_base_url" == "https://www.credix.app.br" ]] || fail "APP_BASE_URL precisa ser https://www.credix.app.br em produção."
-  [[ "$caddy_email" == *"@"* ]] || fail "CADDY_EMAIL precisa conter um e-mail válido para os certificados HTTPS."
-  [[ "${cookie_secure,,}" == "true" ]] || fail "COOKIE_SECURE precisa ser true em produção."
+  [[ ${#postgres_password} -ge 16 ]] || fail "POSTGRES_PASSWORD inválida: use uma senha forte com pelo menos 16 caracteres."
+  [[ ${#jwt_secret} -ge 32 ]] || fail "JWT_SECRET inválido: use um segredo aleatório com pelo menos 32 caracteres."
+  [[ ${#admin_password} -ge 12 ]] || fail "ADMIN_PASSWORD inválida: use uma senha forte com pelo menos 12 caracteres."
+  [[ "$app_base_url" == "https://www.credix.app.br" ]] || fail "APP_BASE_URL inválida: deve ser exatamente https://www.credix.app.br."
+  [[ "$caddy_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail "CADDY_EMAIL inválida: informe um e-mail válido para os certificados HTTPS."
+  [[ "$admin_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail "ADMIN_EMAIL inválida: informe um e-mail válido do administrador."
+  [[ "${cookie_secure,,}" == "true" ]] || fail "COOKIE_SECURE inválida: deve ser true em produção."
 }
 
 wait_for_healthy() {
