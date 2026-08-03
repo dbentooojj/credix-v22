@@ -140,19 +140,22 @@ jobs:
         env:
           PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
           PROD_KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}
+          PROD_HOST: ${{ secrets.PROD_HOST }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$PROD_SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$PROD_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s' "$PROD_SSH_KEY" > ~/.ssh/id_prod
+          chmod 600 ~/.ssh/id_prod
+          [[ -n "${PROD_KNOWN_HOSTS//[[:space:]]/}" ]] || { echo "PROD_KNOWN_HOSTS está vazio."; exit 1; }
+          printf '%s' "$PROD_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+          ssh-keygen -F "$PROD_HOST" -f ~/.ssh/known_hosts >/dev/null || { echo "PROD_KNOWN_HOSTS não contém uma chave para $PROD_HOST."; exit 1; }
 
       - name: Preparar VPS e Docker Compose plugin
         env:
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
-        run: ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- '$PROD_PATH'" < ops/bootstrap-vps.sh
+        run: ssh -i ~/.ssh/id_prod -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- '$PROD_PATH'" < ops/bootstrap-vps.sh
 
       - name: Atualizar arquivo de ambiente de forma atômica
         env:
@@ -161,14 +164,14 @@ jobs:
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
         run: |
-          printf '%s' "$PROD_ENV_FILE" | ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "umask 077; cat > '$PROD_PATH/.env.next'; chmod 600 '$PROD_PATH/.env.next'; mv -f '$PROD_PATH/.env.next' '$PROD_PATH/.env'"
+          printf '%s' "$PROD_ENV_FILE" | ssh -i ~/.ssh/id_prod -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "umask 077; cat > '$PROD_PATH/.env.next'; chmod 600 '$PROD_PATH/.env.next'; mv -f '$PROD_PATH/.env.next' '$PROD_PATH/.env'"
 
       - name: Validar /opt/credix/.env e Docker Compose
         env:
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
-        run: ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- preflight '$PROD_PATH'" < ops/deploy-production.sh
+        run: ssh -i ~/.ssh/id_prod -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- preflight '$PROD_PATH'" < ops/deploy-production.sh
 
       - name: Autenticar Docker Hub na VPS
         env:
@@ -177,7 +180,7 @@ jobs:
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
-        run: printf '%s' "$DOCKERHUB_TOKEN" | ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "docker login -u '$DOCKERHUB_USERNAME' --password-stdin"
+        run: printf '%s' "$DOCKERHUB_TOKEN" | ssh -i ~/.ssh/id_prod -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "docker login -u '$DOCKERHUB_USERNAME' --password-stdin"
 
       - name: Enviar Compose candidato
         env:
@@ -185,8 +188,8 @@ jobs:
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
         run: |
-          scp -P "$PROD_PORT" docker-compose.production.yml "$PROD_USER@$PROD_HOST:$PROD_PATH/docker-compose.yml.next"
-          scp -P "$PROD_PORT" ops/Caddyfile "$PROD_USER@$PROD_HOST:$PROD_PATH/Caddyfile.next"
+          scp -i ~/.ssh/id_prod -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes -P "$PROD_PORT" docker-compose.production.yml "$PROD_USER@$PROD_HOST:$PROD_PATH/docker-compose.yml.next"
+          scp -i ~/.ssh/id_prod -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes -P "$PROD_PORT" ops/Caddyfile "$PROD_USER@$PROD_HOST:$PROD_PATH/Caddyfile.next"
 
       - name: Publicar versão, seed e verificar saúde
         env:
@@ -194,4 +197,4 @@ jobs:
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
-        run: ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- deploy '$PROD_PATH' '${{ github.sha }}' '$DOCKERHUB_USERNAME'" < ops/deploy-production.sh
+        run: ssh -i ~/.ssh/id_prod -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- deploy '$PROD_PATH' '${{ github.sha }}' '$DOCKERHUB_USERNAME'" < ops/deploy-production.sh
