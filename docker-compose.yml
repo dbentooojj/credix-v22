@@ -21,7 +21,7 @@ services:
         max-file: "3"
 
   backend:
-    image: ${IMAGE_NAMESPACE:-dbentooooojj}/credix-backend:${IMAGE_TAG:-latest}
+    image: ${IMAGE_NAMESPACE:-dbentooojj}/credix-backend:${IMAGE_TAG:-latest}
     container_name: credix_backend
     restart: unless-stopped
     depends_on:
@@ -71,7 +71,7 @@ services:
         max-file: "3"
 
   frontend:
-    image: ${IMAGE_NAMESPACE:-dbentooooojj}/credix-frontend:${IMAGE_TAG:-latest}
+    image: ${IMAGE_NAMESPACE:-dbentooojj}/credix-frontend:${IMAGE_TAG:-latest}
     container_name: credix_frontend
     restart: unless-stopped
     depends_on:

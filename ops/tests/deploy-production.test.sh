@@ -48,9 +48,9 @@ services:
   db:
     image: postgres:16-alpine
   backend:
-    image: dbentooooojj/credix-backend:test
+    image: dbentooojj/credix-backend:test
   frontend:
-    image: dbentooooojj/credix-frontend:test
+    image: dbentooojj/credix-frontend:test
 EOF
 }
 
@@ -170,7 +170,7 @@ create_environment_file
 create_candidate_compose
 create_candidate_caddyfile
 run_script preflight "$app_path" >/dev/null
-run_script deploy "$app_path" 0123456789abcdef0123456789abcdef01234567 dbentooooojj >/dev/null
+run_script deploy "$app_path" 0123456789abcdef0123456789abcdef01234567 dbentooojj >/dev/null
 
 [[ -f "$app_path/docker-compose.yml" ]] || fail "Compose candidato não foi promovido."
 [[ -f "$app_path/.deploy.env" ]] || fail ".deploy.env não foi criado."
@@ -181,12 +181,12 @@ grep -Fqx "seed" "$test_root/docker.log" || fail "Primeiro deploy deveria execut
 
 printf 'services:\n  backend:\n    image: antiga\n' > "$app_path/docker-compose.yml"
 printf 'credix.example.com {\n  respond "anterior"\n}\n' > "$app_path/Caddyfile"
-printf 'IMAGE_NAMESPACE=dbentooooojj\nIMAGE_TAG=versao-antiga\n' > "$app_path/.deploy.env"
+printf 'IMAGE_NAMESPACE=dbentooojj\nIMAGE_TAG=versao-antiga\n' > "$app_path/.deploy.env"
 create_candidate_compose
 create_candidate_caddyfile
 rm -f "$test_root/state/up-attempt"
 
-if PATH="$mock_bin:$PATH" MOCK_LOG="$test_root/docker.log" MOCK_STATE="$test_root/state" MOCK_FAIL_FIRST_UP=1 "$test_root/deploy-production.sh" deploy "$app_path" 0123456789abcdef0123456789abcdef01234567 dbentooooojj >/dev/null 2>&1; then
+if PATH="$mock_bin:$PATH" MOCK_LOG="$test_root/docker.log" MOCK_STATE="$test_root/state" MOCK_FAIL_FIRST_UP=1 "$test_root/deploy-production.sh" deploy "$app_path" 0123456789abcdef0123456789abcdef01234567 dbentooojj >/dev/null 2>&1; then
   fail "Deploy com falha de inicialização deveria retornar código diferente de zero."
 fi
 

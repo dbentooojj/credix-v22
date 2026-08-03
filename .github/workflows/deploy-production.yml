@@ -16,8 +16,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BACKEND_IMAGE: dbentooooojj/credix-backend
-  FRONTEND_IMAGE: dbentooooojj/credix-frontend
   PROD_PATH: /opt/credix
   NEXT_TELEMETRY_DISABLED: "1"
 
@@ -89,8 +87,8 @@ jobs:
           file: backend/Dockerfile
           push: true
           tags: |
-            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/credix-backend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/credix-backend:latest
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -101,8 +99,8 @@ jobs:
           file: frontend/Dockerfile
           push: true
           tags: |
-            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/credix-frontend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/credix-frontend:latest
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
