@@ -515,7 +515,6 @@ export function ClientesClient() {
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
       <PageHeader
-        subtitle="Cadastre, acompanhe status e mantenha sua base de clientes organizada."
         title="Clientes"
         actions={(
           <button onClick={openCreateModal} className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-5 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98]">
@@ -531,34 +530,24 @@ export function ClientesClient() {
           <UsersIcon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Total de clientes</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : totalDebtors}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
-            {loading ? "Carregando..." : `${totalDebtors} registros`}
-          </p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500" />
           <CheckCircle2Icon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Clientes ativos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : activeDebtors}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
-            {loading ? "Carregando..." : `${((activeDebtors / (totalDebtors || 1)) * 100).toFixed(1)}% da base`}
-          </p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-slate-500" />
           <ClockIcon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Clientes inativos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : inactiveDebtors}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">{loading ? "Carregando..." : "Sem pendencias"}</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-red-500" />
           <AlertTriangleIcon className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Com atraso</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-red-400">{loading ? "..." : overdueDebtors}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
-            {loading ? "Carregando..." : "Boletos vencidos"}
-          </p>
         </div>
       </div>
 

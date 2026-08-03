@@ -14,6 +14,7 @@ import {
   modalInputClass,
 } from "./ModalBase";
 import { formatCurrencyInput, parseCurrencyInput } from "../../utils/currencyInput";
+import { useToast } from "./ToastProvider";
 
 const cashAdjustmentInputClass = `${modalInputClass} min-h-[40px] py-2`;
 
@@ -27,19 +28,11 @@ type CashAdjustmentModalContextValue = {
 
 const CashAdjustmentModalContext = createContext<CashAdjustmentModalContextValue | null>(null);
 
-function toDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 export function CashAdjustmentModalProvider({ children }: { children: ReactNode }) {
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [cashType, setCashType] = useState<"income" | "expense">("income");
   const [cashAmount, setCashAmount] = useState("");
-  const [cashDate, setCashDate] = useState(() => toDateInputValue(new Date()));
-  const [cashDescription, setCashDescription] = useState("");
   const [cashSaving, setCashSaving] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
   const [onSuccess, setOnSuccess] = useState<(() => void) | null>(null);
@@ -47,8 +40,6 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
   function resetForm() {
     setCashType("income");
     setCashAmount("");
-    setCashDate(toDateInputValue(new Date()));
-    setCashDescription("");
     setCashError(null);
   }
 
@@ -70,11 +61,6 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
       return;
     }
 
-    if (!cashDate) {
-      setCashError("Informe uma data valida para o ajuste.");
-      return;
-    }
-
     setCashSaving(true);
     setCashError(null);
 
@@ -86,8 +72,6 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
         body: JSON.stringify({
           type: cashType,
           amount: parsedAmount,
-          date: cashDate,
-          description: cashDescription.trim() || undefined,
         }),
       });
 
@@ -105,6 +89,12 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
       }
 
       setOpen(false);
+      toast.success(
+        cashType === "income"
+          ? "Dinheiro adicionado ao caixa."
+          : "Retirada registrada no caixa.",
+        "Caixa atualizado",
+      );
       onSuccess?.();
     } catch (error) {
       setCashError(
@@ -133,7 +123,7 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
               disabled={cashSaving}
               onClick={handleCashAdjustmentSave}
             >
-              {cashSaving ? "Salvando..." : "Salvar ajuste"}
+              {cashSaving ? "Salvando..." : "Salvar"}
             </ModalBtnPrimary>
           </>
         }
@@ -141,55 +131,40 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
         headerClassName="py-3"
         onClose={closeCashAdjustmentModal}
         open={open}
-        size="max-w-[760px]"
-        title="Ajustar caixa"
+        size="max-w-md"
+        subtitle="Registre uma entrada ou retirada. O novo saldo será atualizado em toda a aplicação."
+        title="Alterar caixa"
       >
-        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-          <ModalField label="Tipo">
+        <div className="grid grid-cols-1 gap-4">
+          <ModalField label="Valor">
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-sm font-semibold text-slate-400">
+                R$
+              </span>
+              <input
+                autoFocus
+                className={`${cashAdjustmentInputClass} pl-11 text-base font-semibold`}
+                disabled={cashSaving}
+                inputMode="decimal"
+                maxLength={24}
+                onChange={(event) => setCashAmount(formatCurrencyInput(event.target.value))}
+                placeholder="0,00"
+                type="text"
+                value={cashAmount}
+              />
+            </div>
+          </ModalField>
+
+          <ModalField label="Tipo da alteração">
             <select
               className={cashAdjustmentInputClass}
               disabled={cashSaving}
               onChange={(event) => setCashType(event.target.value as "income" | "expense")}
               value={cashType}
             >
-              <option value="income">Entrada</option>
-              <option value="expense">Retirada</option>
+              <option value="income">Adicionar dinheiro</option>
+              <option value="expense">Retirar dinheiro</option>
             </select>
-          </ModalField>
-
-          <ModalField label="Valor (R$)">
-            <input
-              className={cashAdjustmentInputClass}
-              disabled={cashSaving}
-              inputMode="decimal"
-              maxLength={24}
-              onChange={(event) => setCashAmount(formatCurrencyInput(event.target.value))}
-              placeholder="0,00"
-              type="text"
-              value={cashAmount}
-            />
-          </ModalField>
-
-          <ModalField label="Data">
-            <input
-              className={cashAdjustmentInputClass}
-              disabled={cashSaving}
-              onChange={(event) => setCashDate(event.target.value)}
-              type="date"
-              value={cashDate}
-            />
-          </ModalField>
-
-          <ModalField label="Observacao">
-            <input
-              className={cashAdjustmentInputClass}
-              disabled={cashSaving}
-              maxLength={300}
-              onChange={(event) => setCashDescription(event.target.value)}
-              placeholder="Motivo do ajuste (opcional)"
-              type="text"
-              value={cashDescription}
-            />
           </ModalField>
         </div>
 

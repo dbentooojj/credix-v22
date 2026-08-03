@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function AppEntryPage() {
-  redirect("/app/visao-geral");
+  redirect("/app/carteira");
 }

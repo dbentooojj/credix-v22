@@ -33,10 +33,7 @@ function ContaPageContent() {
 
   return (
     <div className="mx-auto w-full max-w-[1000px]">
-      <PageHeader
-        subtitle="Gerencie perfil, segurança e suporte."
-        title="Conta"
-      />
+      <PageHeader title="Conta" />
 
       <div className="flex flex-col gap-6">
         <nav className="scrollbar-none flex flex-row items-center gap-2 overflow-x-auto pb-2" role="tablist">
@@ -115,7 +112,6 @@ function ContaPageContent() {
                       <p className="mt-0.5 text-sm font-medium text-slate-500">usecredix@gmail.com</p>
                     </div>
                   </div>
-                  <p className="mt-4 text-xs text-slate-500">Clique para enviar mensagem</p>
                 </a>
 
                 <a
@@ -135,7 +131,6 @@ function ContaPageContent() {
                       <p className="mt-0.5 text-sm font-medium text-slate-500">+55 47 99960-0742</p>
                     </div>
                   </div>
-                  <p className="mt-4 text-xs text-slate-500">Clique para abrir conversa</p>
                 </a>
               </div>
             </div>

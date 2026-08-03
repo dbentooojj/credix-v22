@@ -12,11 +12,6 @@ function resolveLegacyBackendUrl() {
 const legacyBackendUrl = resolveLegacyBackendUrl();
 const legacyPageRoutes = [
   // A rota /login agora e renderizada pelo Next.
-  // A rota /forgot-password agora e renderizada pelo Next.
-  "/reset-password",
-  "/reset-password.html",
-  "/visao-geral",
-  "/visao-geral.html",
   "/dashboard",
   "/dashboard.html",
   "/dashboard-advanced.html",
@@ -43,6 +38,30 @@ const legacyStaticRoutes = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  async redirects() {
+    return [
+      {
+        source: "/app/visao-geral",
+        destination: "/app/carteira",
+        permanent: false,
+      },
+      {
+        source: "/visao-geral",
+        destination: "/app/carteira",
+        permanent: false,
+      },
+      {
+        source: "/visao-geral.html",
+        destination: "/app/carteira",
+        permanent: false,
+      },
+      {
+        source: "/admin/visao-geral.html",
+        destination: "/app/carteira",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return {
       afterFiles: [

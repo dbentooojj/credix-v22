@@ -78,9 +78,9 @@ export function Header({ isOpen, onMenuClick }: { isOpen?: boolean; onMenuClick:
 
           <h1 className="ml-1 sm:ml-2">
             <Link
-              aria-label="Credix - Ir para visão geral"
+              aria-label="Credix - Ir para carteira"
               className="flex items-center focus:outline-none"
-              href="/app/visao-geral"
+              href="/app/carteira"
             >
               <BrandWordmark size="header" />
             </Link>

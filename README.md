@@ -156,6 +156,36 @@ npm run notify:weekly-backup:once
 
 ## Deploy no VPS Ubuntu (Serverspace)
 
+### Esteira de produção pelo GitHub Actions
+
+O repositório possui duas esteiras:
+
+- `Validar aplicação`: executa testes e builds em todo pull request e push na `main`.
+- `Publicar em produção`: execução manual que valida a aplicação, publica imagens versionadas no Docker Hub, cria um backup do PostgreSQL na VPS e atualiza os containers.
+
+Crie o environment `production` no GitHub e cadastre estes secrets:
+
+- `DOCKERHUB_USERNAME`: usuário do Docker Hub.
+- `DOCKERHUB_TOKEN`: token de acesso do Docker Hub.
+- `PROD_HOST`: IP ou domínio da VPS.
+- `PROD_USER`: usuário SSH da VPS.
+- `PROD_PORT`: porta SSH, normalmente `22`.
+- `PROD_PATH`: diretório da aplicação, por exemplo `/opt/credix`.
+- `PROD_SSH_KEY`: chave SSH privada exclusiva para o deploy.
+- `PROD_KNOWN_HOSTS`: chave pública do host retornada por `ssh-keyscan -H SEU_HOST`.
+
+Opcionalmente, crie a variável `PRODUCTION_URL` no environment para exibir o link da aplicação no resumo do deploy.
+
+Antes do primeiro deploy, crie `PROD_PATH/.env` na VPS com os dados reais. Em produção, use:
+
+```env
+NODE_ENV=production
+BIND_ADDRESS=127.0.0.1
+COOKIE_SECURE=true
+```
+
+Para publicar, abra **Actions → Publicar em produção → Run workflow**, selecione a branch `main` e digite `PRODUCAO`. Os backups anteriores a cada deploy ficam em `PROD_PATH/backups` por 30 dias.
+
 ### 1) Pre-requisitos no VPS
 ```bash
 sudo apt update
@@ -194,9 +224,10 @@ Quando o dominio estiver atras do `nginx` da VPS com SSL, ajuste:
 - `APP_BASE_URL=https://seu-dominio.com`
 - `COOKIE_SECURE=true`
 
-Suba os containers:
+Baixe as imagens e suba os containers:
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 Ver logs:

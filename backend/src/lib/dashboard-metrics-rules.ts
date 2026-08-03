@@ -40,6 +40,11 @@ export type DashboardMetricsWithAdjustments = DashboardMetricsBase & {
   cashBalance: number;
 };
 
+export type PortfolioRates = {
+  roiRate: number;
+  delinquencyRate: number;
+};
+
 const DASHBOARD_TRANSACTION_IMPACT_MAP: Record<DashboardTransactionType, DashboardTransactionImpact> = {
   revenue: {
     isAdjustment: false,
@@ -81,6 +86,25 @@ export function computeOutstandingAmount(installmentAmount: number, paidAmount: 
   if (!Number.isFinite(installmentAmount) || installmentAmount <= 0) return 0;
   if (!Number.isFinite(paidAmount) || paidAmount <= 0) return installmentAmount;
   return Math.max(installmentAmount - paidAmount, 0);
+}
+
+export function computePortfolioRates(input: {
+  realizedProfit: number;
+  totalOriginated: number;
+  overdueOutstanding: number;
+  totalOutstanding: number;
+}): PortfolioRates {
+  const realizedProfit = Number.isFinite(input.realizedProfit) ? input.realizedProfit : 0;
+  const totalOriginated = Number.isFinite(input.totalOriginated) ? input.totalOriginated : 0;
+  const overdueOutstanding = Number.isFinite(input.overdueOutstanding) ? input.overdueOutstanding : 0;
+  const totalOutstanding = Number.isFinite(input.totalOutstanding) ? input.totalOutstanding : 0;
+
+  return {
+    roiRate: totalOriginated > 0 ? (realizedProfit / totalOriginated) * 100 : 0,
+    delinquencyRate: totalOutstanding > 0
+      ? (Math.max(overdueOutstanding, 0) / totalOutstanding) * 100
+      : 0,
+  };
 }
 
 export function createDashboardLedgerAccumulator(): DashboardLedgerAccumulator {

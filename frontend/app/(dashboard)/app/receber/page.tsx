@@ -1,9 +1,5 @@
-import { ContasReceberClient } from "./ContasReceberClient";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-  title: "Contas a Receber | Credix",
-};
-
-export default function ContasReceberPage() {
-  return <ContasReceberClient />;
+export default function RemovedFinancePage() {
+  redirect("/app/carteira");
 }

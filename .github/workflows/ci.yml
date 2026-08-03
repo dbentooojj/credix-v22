@@ -1,0 +1,47 @@
+name: Validar aplicação
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Testes e builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v7
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Gerar Prisma Client
+        run: npm run prisma:generate --workspace backend
+
+      - name: Testar backend
+        run: npm test --workspace backend
+
+      - name: Compilar backend
+        run: npm run build --workspace backend
+
+      - name: Compilar frontend
+        run: npm run build --workspace frontend

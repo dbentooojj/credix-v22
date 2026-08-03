@@ -48,15 +48,6 @@ const showReportsNav = process.env.NEXT_PUBLIC_SHOW_REPORTS_NAV === "true";
 
 const navSections: NavSection[] = [
   {
-    items: [
-      {
-        href: "/app/visao-geral",
-        label: "Visão geral",
-        icon: GridIcon,
-      },
-    ],
-  },
-  {
     title: "Empréstimos",
     items: [
       {
@@ -115,9 +106,6 @@ const navSections: NavSection[] = [
 ];
 
 function itemIsActive(pathname: string, href: string) {
-  if (href === "/app/visao-geral") {
-    return pathname === href || pathname === "/app";
-  }
   return pathname === href;
 }
 
@@ -275,7 +263,7 @@ export function AppShell({ children }: AppShellProps) {
               <MenuIcon className="h-5 w-5" />
             </button>
 
-            <Link aria-label="Credix" className="ml-1" href="/app/visao-geral">
+            <Link aria-label="Credix" className="ml-1" href="/app/carteira">
               <BrandWordmark compact />
             </Link>
           </div>

@@ -1,6 +1,7 @@
 import {
   FinanceTransactionStatus,
   FinanceTransactionType,
+  LoanStatus,
   PaymentMethod,
   Prisma,
 } from "@prisma/client";
@@ -16,6 +17,7 @@ import {
 } from "../lib/date-time";
 import {
   applyDashboardLedgerTransaction,
+  computePortfolioRates,
   computeOutstandingAmount,
   createDashboardLedgerAccumulator,
   getDashboardTransactionImpact,
@@ -70,6 +72,7 @@ type InstallmentWithRefs = {
   };
   loan: {
     id: number;
+    status: LoanStatus;
     installmentsCount: number;
     principalAmount: Prisma.Decimal;
     totalAmount: Prisma.Decimal;
@@ -423,6 +426,7 @@ router.get("/", async (req, res) => {
         principalAmount: true,
         totalAmount: true,
         startDate: true,
+        status: true,
       },
     }),
     prisma.installment.findMany({
@@ -447,6 +451,7 @@ router.get("/", async (req, res) => {
         loan: {
           select: {
             id: true,
+            status: true,
             installmentsCount: true,
             principalAmount: true,
             totalAmount: true,
@@ -573,10 +578,16 @@ router.get("/", async (req, res) => {
     const monthKey = dateToMonthKey(transaction.date);
     const amountSigned = toSafeNumber(transaction.amount)
       * (transaction.type === FinanceTransactionType.INCOME ? 1 : -1);
+
+    // O empréstimo é a fonte de verdade do desembolso. Lançamentos financeiros
+    // antigos podem estar ausentes ou duplicados, então o caixa é calculado a
+    // partir dos contratos e esses espelhos contábeis são ignorados aqui.
+    if (transaction.category === LOAN_DISBURSEMENT_CATEGORY) {
+      return;
+    }
+
     const dashboardType: DashboardTransactionType = transaction.category === CASH_ADJUSTMENT_CATEGORY
       ? "adjustment"
-      : transaction.category === LOAN_DISBURSEMENT_CATEGORY
-        ? "loan"
       : transaction.type === FinanceTransactionType.INCOME
         ? "revenue"
         : "expense";
@@ -592,6 +603,24 @@ router.get("/", async (req, res) => {
     applyLedgerEntry({
       type: dashboardType,
       amountSigned,
+      monthKey,
+    });
+  });
+
+  const disbursedLoans = loans.filter((loan) => loan.status !== LoanStatus.PENDENTE);
+  const totalOriginated = disbursedLoans.reduce(
+    (sum, loan) => sum + toSafeNumber(loan.principalAmount),
+    0,
+  );
+
+  disbursedLoans.forEach((loan) => {
+    const monthKey = dateToMonthKey(loan.startDate);
+    const principal = toSafeNumber(loan.principalAmount);
+
+    loanedByMonthAll.set(monthKey, (loanedByMonthAll.get(monthKey) ?? 0) + principal);
+    applyLedgerEntry({
+      type: "loan",
+      amountSigned: -principal,
       monthKey,
     });
   });
@@ -711,14 +740,8 @@ router.get("/", async (req, res) => {
   const cashAdjustmentNet = ledgerAccumulator.cashAdjustmentNet;
   const ledgerCashBalance = ledgerAccumulator.cashBalance;
 
-  loans.forEach((loan) => {
-    const monthKey = dateToMonthKey(loan.startDate);
-    const principal = toSafeNumber(loan.principalAmount);
-    loanedByMonthAll.set(monthKey, (loanedByMonthAll.get(monthKey) ?? 0) + principal);
-  });
-
-  const totalLoaned = loans.reduce((sum, loan) => sum + toSafeNumber(loan.principalAmount), 0);
-
+  let totalLoaned = 0;
+  let contractedInterestOutstanding = 0;
   let totalOverdue = 0;
   let totalToReceiveOutstanding = 0;
   let openReceivableFuture = 0;
@@ -728,10 +751,14 @@ router.get("/", async (req, res) => {
 
   let dueTodayCount = 0;
   let dueTodayValue = 0;
-  let overdueCurrentMonthCount = 0;
-  let overdueCurrentMonthValue = 0;
+  let overdueInstallmentsCount = 0;
+  let overdueThisMonthCount = 0;
+  let overdueThisMonthValue = 0;
   let next7Count = 0;
   let next7Value = 0;
+  const activeLoanIds = new Set<number>();
+  const activeClientIds = new Set<number>();
+  const overdueClientIds = new Set<number>();
   const overdueByMonth = new Map<string, number>();
   const openByMonth = new Map<string, number>();
 
@@ -755,6 +782,10 @@ router.get("/", async (req, res) => {
   const overdueByDebtor = new Map<number, { debtorName: string; total: number; count: number }>();
 
   installments.forEach((installment) => {
+    if (installment.loan.status === LoanStatus.PENDENTE) {
+      return;
+    }
+
     const dueDateIso = dateToIso(installment.dueDate);
     const amount = toSafeNumber(installment.amount);
     const paidAmount = paymentByInstallment.get(installment.id) ?? 0;
@@ -766,6 +797,13 @@ router.get("/", async (req, res) => {
 
     if (outstanding > 0) {
       totalToReceiveOutstanding += outstanding;
+      activeLoanIds.add(installment.loanId);
+      activeClientIds.add(installment.clientId);
+
+      const dueSplit = resolveInstallmentDueSplit(installment);
+      const paidSplit = resolveInstallmentPaymentSplit(installment, Math.min(paidAmount, amount));
+      totalLoaned += Math.max(dueSplit.principalAmount - paidSplit.principalAmount, 0);
+      contractedInterestOutstanding += Math.max(dueSplit.interestAmount - paidSplit.interestAmount, 0);
     }
 
     if (outstanding > 0 && includeInMonthlyReceivable) {
@@ -793,7 +831,7 @@ router.get("/", async (req, res) => {
         debtorName: installment.client.name,
         phone: installment.client.phone,
         paymentMethod: installment.paymentMethod ?? installment.loan.paymentMethod ?? PaymentMethod.PIX,
-        amount,
+        amount: outstanding,
         dueDate: dueDateIso,
         dueRelative: getRelativeDueLabel(dueDateIso, todayIso),
         status: current.status,
@@ -805,9 +843,12 @@ router.get("/", async (req, res) => {
     if (current.status === "ATRASADA") {
       totalOverdue += outstanding;
       openReceivableOverdue += outstanding;
+      overdueInstallmentsCount += 1;
+      overdueClientIds.add(installment.clientId);
+
       if (monthKey === currentMonthKey) {
-        overdueCurrentMonthCount += 1;
-        overdueCurrentMonthValue += outstanding;
+        overdueThisMonthCount += 1;
+        overdueThisMonthValue += outstanding;
       }
 
       const previous = overdueByDebtor.get(installment.clientId) ?? {
@@ -835,17 +876,31 @@ router.get("/", async (req, res) => {
     }
   });
 
-  const totalOpenReceivable = openReceivableFuture + openReceivableOverdue;
   const totalToReceive = totalToReceiveOutstanding;
-  const delinquencyRate = totalToReceive > 0 ? (totalOverdue / totalToReceive) * 100 : 0;
-  const roiRate = totalLoaned > 0 ? (profitTotal / totalLoaned) * 100 : 0;
-  const portfolioRoiRate = totalLoaned > 0 ? (portfolioProfitTotal / totalLoaned) * 100 : 0;
+  const totalOpenReceivable = totalToReceive;
+  const { delinquencyRate, roiRate } = computePortfolioRates({
+    realizedProfit: profitTotal,
+    totalOriginated,
+    overdueOutstanding: totalOverdue,
+    totalOutstanding: totalToReceive,
+  });
+  const { roiRate: portfolioRoiRate } = computePortfolioRates({
+    realizedProfit: portfolioProfitTotal,
+    totalOriginated,
+    overdueOutstanding: totalOverdue,
+    totalOutstanding: totalToReceive,
+  });
   const cashBalance = ledgerCashBalance;
+  const capitalInvested = cashAdjustmentNet;
+  const activeLoansCount = activeLoanIds.size;
+  const activeClientsCount = activeClientIds.size;
+  const overdueClientsCount = overdueClientIds.size;
 
   const chartPoints = monthKeys.map((monthKey) => ({
     month: monthKey,
     label: monthLabel(monthKey),
     value: receivedByMonth.get(monthKey) ?? 0,
+    loaned: loanedByMonthAll.get(monthKey) ?? 0,
     received: receivedByMonth.get(monthKey) ?? 0,
     overdue: overdueByMonth.get(monthKey) ?? 0,
     open: openByMonth.get(monthKey) ?? 0,
@@ -855,6 +910,7 @@ router.get("/", async (req, res) => {
     month: monthKey,
     label: monthLabel(monthKey),
     value: portfolioReceivedByMonth.get(monthKey) ?? 0,
+    loaned: loanedByMonthAll.get(monthKey) ?? 0,
     received: portfolioReceivedByMonth.get(monthKey) ?? 0,
     overdue: overdueByMonth.get(monthKey) ?? 0,
     open: openByMonth.get(monthKey) ?? 0,
@@ -888,13 +944,22 @@ router.get("/", async (req, res) => {
 
   const computeSnapshotAt = (
     asOfIso: string,
-  ): { toReceive: number; overdue: number; openFuture: number; openReceivable: number } => {
+  ): {
+    toReceive: number;
+    overdue: number;
+    openFuture: number;
+    openReceivable: number;
+    totalLoaned: number;
+  } => {
     let toReceiveAtReference = 0;
     let overdueAtReference = 0;
     let openFutureAtReference = 0;
     let openReceivableAtReference = 0;
+    let totalLoanedAtReference = 0;
 
     installments.forEach((installment) => {
+      if (installment.loan.status === LoanStatus.PENDENTE) return;
+
       const loanStartIso = dateToIso(installment.loan.startDate);
       if (loanStartIso > asOfIso) return;
 
@@ -908,12 +973,22 @@ router.get("/", async (req, res) => {
       if (outstandingAtReference <= 0) return;
 
       toReceiveAtReference += outstandingAtReference;
+      openReceivableAtReference += outstandingAtReference;
+
+      const dueSplit = resolveInstallmentDueSplit(installment);
+      const paidSplit = resolveInstallmentPaymentSplit(
+        installment,
+        Math.min(paidAmountAtReference, installmentAmount),
+      );
+      totalLoanedAtReference += Math.max(
+        dueSplit.principalAmount - paidSplit.principalAmount,
+        0,
+      );
+
       if (dueDateIso < asOfIso) {
         overdueAtReference += outstandingAtReference;
-        openReceivableAtReference += outstandingAtReference;
       } else if (dueDateIso > asOfIso) {
         openFutureAtReference += outstandingAtReference;
-        openReceivableAtReference += outstandingAtReference;
       }
     });
 
@@ -922,6 +997,7 @@ router.get("/", async (req, res) => {
       overdue: overdueAtReference,
       openFuture: openFutureAtReference,
       openReceivable: openReceivableAtReference,
+      totalLoaned: totalLoanedAtReference,
     };
   };
 
@@ -930,6 +1006,7 @@ router.get("/", async (req, res) => {
     overdue: number;
     openFuture: number;
     openReceivable: number;
+    totalLoaned: number;
   }>();
   sparklineMonthKeys.forEach((monthKey) => {
     if (monthKey === currentMonthKey) {
@@ -938,6 +1015,7 @@ router.get("/", async (req, res) => {
         overdue: totalOverdue,
         openFuture: openReceivableFuture,
         openReceivable: totalOpenReceivable,
+        totalLoaned,
       });
       return;
     }
@@ -959,19 +1037,22 @@ router.get("/", async (req, res) => {
   const totalOpenReceivableSeries = sparklineMonthKeys.map((monthKey) => (
     sparklineSnapshotByMonth.get(monthKey)?.openReceivable ?? 0
   ));
+  const totalLoanedSeries = sparklineMonthKeys.map((monthKey) => (
+    sparklineSnapshotByMonth.get(monthKey)?.totalLoaned ?? 0
+  ));
   const cashBalanceSeries = buildCumulativeSeriesFromFlows(cashBalance, balanceMonthlyFlows);
   const totalReceivedSeries = buildCumulativeSeriesFromFlows(totalReceived, receivedMonthlySeries);
   const portfolioTotalReceivedSeries = buildCumulativeSeriesFromFlows(portfolioTotalReceived, portfolioReceivedMonthlySeries);
-  const totalLoanedSeries = buildCumulativeSeriesFromFlows(totalLoaned, loanedMonthlyFlows);
+  const totalOriginatedSeries = buildCumulativeSeriesFromFlows(totalOriginated, loanedMonthlyFlows);
   const profitTotalSeries = buildCumulativeSeriesFromFlows(profitTotal, profitMonthlyFlows);
   const portfolioProfitTotalSeries = buildCumulativeSeriesFromFlows(portfolioProfitTotal, portfolioProfitMonthlyFlows);
-  const roiRateSeries = totalLoanedSeries.map((loanedValue, index) => {
+  const roiRateSeries = totalOriginatedSeries.map((originatedValue, index) => {
     const profitValue = profitTotalSeries[index] ?? 0;
-    return loanedValue > 0 ? (profitValue / loanedValue) * 100 : 0;
+    return originatedValue > 0 ? (profitValue / originatedValue) * 100 : 0;
   });
-  const portfolioRoiRateSeries = totalLoanedSeries.map((loanedValue, index) => {
+  const portfolioRoiRateSeries = totalOriginatedSeries.map((originatedValue, index) => {
     const profitValue = portfolioProfitTotalSeries[index] ?? 0;
-    return loanedValue > 0 ? (profitValue / loanedValue) * 100 : 0;
+    return originatedValue > 0 ? (profitValue / originatedValue) * 100 : 0;
   });
   const epsilon = 0.00001;
 
@@ -1126,7 +1207,7 @@ router.get("/", async (req, res) => {
     },
     totalLoaned: {
       currentValue: totalLoaned,
-      previousValue: previousCumulativeValue(totalLoanedSeries),
+      previousValue: previousSnapshot.totalLoaned,
       series: toSparklinePoints(sparklineMonthKeys, totalLoanedSeries),
     },
     profitThisMonth: {
@@ -1178,7 +1259,7 @@ router.get("/", async (req, res) => {
     },
     totalLoaned: {
       currentValue: totalLoaned,
-      previousValue: previousCumulativeValue(totalLoanedSeries),
+      previousValue: previousSnapshot.totalLoaned,
       series: toSparklinePoints(sparklineMonthKeys, totalLoanedSeries),
     },
     profitThisMonth: {
@@ -1421,9 +1502,16 @@ router.get("/", async (req, res) => {
     kpis: {
       cashBalance,
       cashAdjustmentNet,
+      capitalInvested,
       totalLoaned,
+      totalOriginated,
       totalToReceive,
       totalOpenReceivable,
+      contractedInterestOutstanding,
+      activeLoansCount,
+      activeClientsCount,
+      overdueInstallmentsCount,
+      overdueClientsCount,
       accountsReceivableTotal,
       accountsPayableTotal,
       projectedBalance,
@@ -1445,9 +1533,17 @@ router.get("/", async (req, res) => {
     portfolio: {
       kpis: {
         totalLoaned,
+        totalOriginated,
+        totalToReceive,
         totalOpenReceivable,
         openReceivableFuture,
         openReceivableOverdue,
+        contractedInterestOutstanding,
+        capitalInvested,
+        activeLoansCount,
+        activeClientsCount,
+        overdueInstallmentsCount,
+        overdueClientsCount,
         totalOverdue,
         totalReceived: portfolioTotalReceived,
         receivedThisMonth: portfolioReceivedThisMonth,
@@ -1510,8 +1606,13 @@ router.get("/", async (req, res) => {
         href: "/admin/installments.html?status=pending&due=today",
       },
       overdue: {
-        count: overdueCurrentMonthCount,
-        totalValue: overdueCurrentMonthValue,
+        count: overdueInstallmentsCount,
+        totalValue: totalOverdue,
+        href: "/admin/installments.html?status=overdue",
+      },
+      overdueThisMonth: {
+        count: overdueThisMonthCount,
+        totalValue: overdueThisMonthValue,
         href: "/admin/installments.html?status=overdue&due=month",
       },
       next7Days: {

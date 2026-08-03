@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   applyDashboardAdjustments,
   applyDashboardLedgerTransaction,
+  computePortfolioRates,
   computeOutstandingAmount,
   createDashboardLedgerAccumulator,
   getDashboardTransactionImpact,
@@ -160,4 +161,28 @@ test("desembolso de emprestimo reduz caixa sem afetar lucro", () => {
   assert.equal(ledger.cashBalance, -1000);
   assert.equal(ledger.profitTotal, 0);
   assert.equal(ledger.receivedThisMonth, 0);
+});
+
+test("ROI usa lucro realizado sobre capital originado", () => {
+  const rates = computePortfolioRates({
+    realizedProfit: 1_250,
+    totalOriginated: 10_000,
+    overdueOutstanding: 900,
+    totalOutstanding: 9_000,
+  });
+
+  assert.equal(rates.roiRate, 12.5);
+  assert.equal(rates.delinquencyRate, 10);
+});
+
+test("taxas financeiras ficam zeradas quando nao existe base", () => {
+  const rates = computePortfolioRates({
+    realizedProfit: 500,
+    totalOriginated: 0,
+    overdueOutstanding: 300,
+    totalOutstanding: 0,
+  });
+
+  assert.equal(rates.roiRate, 0);
+  assert.equal(rates.delinquencyRate, 0);
 });

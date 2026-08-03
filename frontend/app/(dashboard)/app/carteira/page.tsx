@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import CarteiraDashboardClient from './CarteiraDashboardClient';
 
 export const metadata: Metadata = {
-  title: 'Painel da Carteira - Credix',
-  description: 'Gerenciamento de carteira e fluxo financeiro',
+  title: 'Carteira - Credix',
+  description: 'Liquidez, retorno e risco da carteira de empréstimos',
 };
 
 export default function CarteiraPage() {

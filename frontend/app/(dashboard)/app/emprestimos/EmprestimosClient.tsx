@@ -69,6 +69,9 @@ type Installment = {
   id: string | number;
   loan_id?: string | number;
   loanId?: string | number;
+  debtor_id?: string | number;
+  client_id?: string | number;
+  clientId?: string | number;
   installment_number?: number | string;
   installmentNumber?: number | string;
   due_date?: string;
@@ -178,6 +181,18 @@ function formatDocument(value: any) {
 function toFiniteNumber(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function splitAmountIntoParts(total: unknown, parts: number) {
+  const safeParts = Math.max(1, Math.trunc(parts));
+  const totalCents = Math.round(toFiniteNumber(total) * 100);
+  const baseCents = Math.floor(totalCents / safeParts);
+  const remainderCents = totalCents - (baseCents * safeParts);
+
+  return Array.from({ length: safeParts }, (_item, index) => {
+    const cents = baseCents + (index === safeParts - 1 ? remainderCents : 0);
+    return cents / 100;
+  });
 }
 
 function getStatusBadge(status: string) {
@@ -390,6 +405,7 @@ export function EmprestimosClient() {
   const [selectedLoanId, setSelectedLoanId] = useState<string | number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingLoan, setDeletingLoan] = useState<EnrichedLoan | null>(null);
+  const [showLoanCreateConfirm, setShowLoanCreateConfirm] = useState(false);
   const [simulationActionLoadingId, setSimulationActionLoadingId] = useState<string | null>(null);
   const [simulationConfirmAction, setSimulationConfirmAction] = useState<{
     type: "approve" | "cancel";
@@ -410,6 +426,7 @@ export function EmprestimosClient() {
   const [formFirstDue, setFormFirstDue] = useState("");
   const [formObservations, setFormObservations] = useState("");
   const [formCustomDueDates, setFormCustomDueDates] = useState<string[]>([]);
+  const [formScheduleView, setFormScheduleView] = useState<"new" | "consolidated">("new");
   const [settledFormMaxInstallment, setSettledFormMaxInstallment] = useState("");
 
   useEffect(() => {
@@ -584,6 +601,64 @@ export function EmprestimosClient() {
     isInstallmentInputSettling,
   ]);
 
+  const selectedClientPendingInstallments = useMemo(() => {
+    if (!formClientId) return [];
+
+    return installments.filter((item) => {
+      const clientId = item.debtor_id ?? item.client_id ?? item.clientId;
+      return sameId(clientId, formClientId) && !isInstallmentPaid(item);
+    });
+  }, [formClientId, installments]);
+
+  const consolidatedSchedule = useMemo(() => {
+    const scheduleByDate = new Map<string, {
+      dueDate: string;
+      existingAmount: number;
+      newAmount: number;
+      totalAmount: number;
+    }>();
+
+    const addAmount = (dueDateValue: unknown, amountValue: unknown, source: "existing" | "new") => {
+      const dueDate = String(dueDateValue ?? "").slice(0, 10);
+      if (!isIsoDateString(dueDate)) return;
+
+      const amount = toFiniteNumber(amountValue);
+      if (amount <= 0) return;
+
+      const current = scheduleByDate.get(dueDate) ?? {
+        dueDate,
+        existingAmount: 0,
+        newAmount: 0,
+        totalAmount: 0,
+      };
+
+      if (source === "existing") current.existingAmount += amount;
+      else current.newAmount += amount;
+
+      current.existingAmount = Math.round((current.existingAmount + Number.EPSILON) * 100) / 100;
+      current.newAmount = Math.round((current.newAmount + Number.EPSILON) * 100) / 100;
+      current.totalAmount = Math.round((current.existingAmount + current.newAmount + Number.EPSILON) * 100) / 100;
+      scheduleByDate.set(dueDate, current);
+    };
+
+    selectedClientPendingInstallments.forEach((item) => {
+      addAmount(item.due_date ?? item.dueDate, item.amount, "existing");
+    });
+
+    const newScheduleAmounts = splitAmountIntoParts(loanSummary.totalAmount, loanSummary.plan.length);
+    loanSummary.plan.forEach((item, index) => {
+      addAmount(item.dueDate, newScheduleAmounts[index] ?? item.amount, "new");
+    });
+
+    return [...scheduleByDate.values()].sort((left, right) => left.dueDate.localeCompare(right.dueDate));
+  }, [loanSummary.plan, selectedClientPendingInstallments]);
+
+  const hasExistingPendingSchedule = selectedClientPendingInstallments.length > 0;
+  const supportsConsolidatedSchedule = loanModalMode === "simulation" || loanModalMode === "loan";
+  const showConsolidatedSchedule = supportsConsolidatedSchedule
+    && formScheduleView === "consolidated"
+    && hasExistingPendingSchedule;
+
   function buildLoanSimulationPayload() {
     const safeStartDate = formStartDate || toDateInput(new Date());
     const safeFirstDueDate = formFirstDue || addMonths(safeStartDate, 1);
@@ -670,6 +745,7 @@ export function EmprestimosClient() {
     setFormStartDate(today); setFormFirstDue(addMonths(today, 1));
     setFormObservations("");
     setFormCustomDueDates([]);
+    setFormScheduleView("new");
     setSettledFormMaxInstallment("");
   }
 
@@ -768,6 +844,7 @@ export function EmprestimosClient() {
   }
 
   function closeLoanModal() {
+    setShowLoanCreateConfirm(false);
     setShowLoanModal(false);
     setSelectedLoanId(null);
   }
@@ -852,18 +929,29 @@ export function EmprestimosClient() {
         { method: "POST" },
       );
 
-      await readJsonOrThrow(
+      const actionPayload = await readJsonOrThrow<{
+        data?: {
+          whatsappNotificationRequired?: boolean;
+          whatsappUrl?: string;
+        };
+      }>(
         response,
         type === "approve"
           ? "Não foi possível aprovar a simulação."
           : "Não foi possível cancelar a simulação.",
       );
 
+      if (type === "approve" && actionPayload?.data?.whatsappUrl) {
+        window.open(actionPayload.data.whatsappUrl, "_blank");
+      }
+
       setSimulationConfirmAction(null);
       await fetchData();
       toast.success(
         type === "approve"
-          ? "Simulação aprovada e convertida em empréstimo."
+          ? actionPayload?.data?.whatsappNotificationRequired
+            ? "Simulação aprovada e agenda atualizada pronta no WhatsApp."
+            : "Simulação aprovada e convertida em empréstimo."
           : "Simulação cancelada com sucesso.",
       );
     } catch (err: any) {
@@ -881,15 +969,37 @@ export function EmprestimosClient() {
 
   async function handleSaveLoan() {
     if (!canSubmitLoan) return;
+    const whatsappWindow = window.open("about:blank", "_blank");
     setSaving(true);
     try {
       const simulation = await createSimulation();
-      const approveResponse = await fetch(`/api/loan-simulations/${simulation.id}/approve`, { method: "POST" });
-      await readJsonOrThrow(approveResponse, "Não foi possível criar o empréstimo.");
+      const approveResponse = await fetch(`/api/loan-simulations/${simulation.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifyWhatsApp: true }),
+      });
+      const approvePayload = await readJsonOrThrow<{ data?: { whatsappUrl?: string } }>(
+        approveResponse,
+        "Não foi possível criar o empréstimo.",
+      );
+
+      if (approvePayload?.data?.whatsappUrl) {
+        if (whatsappWindow) whatsappWindow.location.href = approvePayload.data.whatsappUrl;
+        else window.open(approvePayload.data.whatsappUrl, "_blank");
+      } else {
+        whatsappWindow?.close();
+      }
+
+      setShowLoanCreateConfirm(false);
       closeLoanModal();
       await fetchData();
-      toast.success("Empréstimo criado com sucesso.");
+      toast.success(
+        hasExistingPendingSchedule
+          ? "Empréstimo criado e agenda atualizada pronta no WhatsApp."
+          : "Empréstimo criado e agenda pronta no WhatsApp.",
+      );
     } catch (err: any) {
+      whatsappWindow?.close();
       const message = err instanceof Error ? err.message : "Não foi possível criar o empréstimo.";
       setError(message);
       toast.error(message, "Falha ao criar empréstimo");
@@ -1006,6 +1116,8 @@ export function EmprestimosClient() {
   const clientOptions = useMemo(() => {
     return debtors.map(d => ({ id: String(d.id), name: d.name || `Cliente #${d.id}` })).sort((a, b) => a.name.localeCompare(b.name));
   }, [debtors]);
+  const selectedFormClientName = clientOptions.find((client) => sameId(client.id, formClientId))?.name
+    ?? "este cliente";
 
   const enrichedLoans = useMemo<EnrichedLoan[]>(() => {
     return loans.map((loan) => {
@@ -1164,6 +1276,16 @@ export function EmprestimosClient() {
 
     return result;
   }, [simulations, simulationSearch, simulationStatusFilter]);
+
+  const approvalWillOpenWhatsApp = useMemo(() => {
+    if (!simulationConfirmAction || simulationConfirmAction.type !== "approve") return false;
+
+    const clientId = simulationConfirmAction.simulation.clientId;
+    return installments.some((installment) => {
+      const installmentClientId = installment.debtor_id ?? installment.client_id ?? installment.clientId;
+      return sameId(installmentClientId, clientId) && !isInstallmentPaid(installment);
+    });
+  }, [installments, simulationConfirmAction]);
 
   const filteredAndSortedLoans = useMemo(() => {
     let result = [...enrichedLoans];
@@ -1491,22 +1613,7 @@ export function EmprestimosClient() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
-      <section className="mb-6 hidden flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Empréstimos</h1>
-        </div>
-        <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:justify-end">
-          <button onClick={openSimulationModal} className="inline-flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-semibold text-slate-300 transition-all hover:bg-slate-700 active:scale-[0.98] sm:px-5">
-            <FlaskConical className="h-4 w-4" /> Nova simulação
-          </button>
-          <button onClick={openLoanModal} className="inline-flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-xl bg-[#4F7EF7] px-3 text-sm font-bold text-white transition-all hover:bg-[#3b6ef0] shadow-[0_4px_14px_rgba(79,126,247,0.4)] active:translate-y-px active:scale-[0.98] sm:px-5">
-            <Plus className="h-4 w-4" /> Novo empréstimo
-          </button>
-        </div>
-      </section>
-
       <PageHeader
-        subtitle="Gestão de contratos e simulações para acompanhar toda a operação de empréstimos."
         title="Empréstimos"
         actions={(
           <>
@@ -1527,28 +1634,24 @@ export function EmprestimosClient() {
           <Hash className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Empréstimos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : totalCount}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Na base de dados</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500" />
           <Banknote className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Principal total</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : formatCurrency(totalPrincipal)}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Capital emprestado</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-violet-500" />
           <BarChart3 className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Total contratado</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-slate-100">{loading ? "..." : formatCurrency(totalContracted)}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Custo Efetivo + Juros</p>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-600/50">
           <div className="absolute inset-x-0 top-0 h-0.5 bg-sky-500" />
           <CheckCircle2 className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4 h-5 w-5 text-slate-600" />
           <p className="text-[0.68rem] sm:text-[13px] font-semibold uppercase tracking-wider text-slate-400">Ativos</p>
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-sky-400">{loading ? "..." : activeCount}</p>
-          <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">Contratos vigentes</p>
         </div>
       </div>
 
@@ -2201,10 +2304,10 @@ export function EmprestimosClient() {
             </div>
 
             {/* Body: 2 columns */}
-            <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="flex flex-col xl:flex-row">
+            <div className="min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
+            <div className="flex flex-col xl:h-full xl:min-h-0 xl:flex-row">
               {/* Left: Form */}
-              <fieldset disabled={isLockedLoanModal} className="m-0 min-w-0 border-0 p-0 flex-1 space-y-4 px-5 py-4">
+              <fieldset disabled={isLockedLoanModal} className="m-0 min-w-0 border-0 p-0 flex-1 space-y-4 px-5 py-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:gap-4 xl:space-y-0 xl:overflow-hidden">
                 {isLockedLoanModal ? (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
                     Este empréstimo já possui parcela paga. Por regra, ele não pode mais ser alterado.
@@ -2216,7 +2319,25 @@ export function EmprestimosClient() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Cliente*</label>
-                      <select className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" required value={formClientId} onChange={(e) => setFormClientId(e.target.value)}>
+                      <select
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                        required
+                        value={formClientId}
+                        onChange={(event) => {
+                          const nextClientId = event.target.value;
+                          const hasPendingSchedule = installments.some((item) => {
+                            const clientId = item.debtor_id ?? item.client_id ?? item.clientId;
+                            return sameId(clientId, nextClientId) && !isInstallmentPaid(item);
+                          });
+
+                          setFormClientId(nextClientId);
+                          setFormScheduleView(
+                            supportsConsolidatedSchedule && hasPendingSchedule
+                              ? "consolidated"
+                              : "new",
+                          );
+                        }}
+                      >
                         <option value="">Selecione o cliente</option>
                         {clientOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
@@ -2303,16 +2424,18 @@ export function EmprestimosClient() {
                     </button>
                     <span className="text-xs text-slate-400">Calcular por valor da parcela</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
+                  <p
+                    className="mt-1 h-4 truncate whitespace-nowrap text-[11px] leading-4 text-slate-500"
+                    title={formCalcByInstallment
+                      ? "A quantidade de parcelas é atualizada depois que você termina de digitar o valor da parcela."
+                      : "Ative para calcular automaticamente a quantidade de parcelas pelo valor informado."}
+                  >
                     {formCalcByInstallment
-                      ? `Se ativado, o sistema define automaticamente a quantidade de parcelas. Quantidade atual: ${isInstallmentInputSettling ? "calculando..." : loanSummary.installmentsCount > 0 ? loanSummary.installmentsCount : "-"}`
-                      : "Se ativado, o sistema define automaticamente a quantidade de parcelas."}
+                      ? isInstallmentInputSettling
+                        ? "Calculando quantidade de parcelas..."
+                        : `Quantidade calculada: ${loanSummary.installmentsCount > 0 ? loanSummary.installmentsCount : "-"} parcela(s).`
+                      : "Quantidade de parcelas informada manualmente."}
                   </p>
-                  {formCalcByInstallment && (
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      O calculo so e atualizado apos voce terminar de digitar o valor da parcela.
-                    </p>
-                  )}
                   {loanSummary.autoInstallmentError && (
                     <p className="mt-1 text-[11px] text-red-400">{loanSummary.autoInstallmentError}</p>
                   )}
@@ -2334,53 +2457,94 @@ export function EmprestimosClient() {
                 </div>
 
                 {/* Previa das parcelas */}
-                <div>
+                <div className="xl:h-[19rem] xl:flex-none">
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Previa das parcelas</h3>
-                    {!isLockedLoanModal && formCustomDueDates.some((date) => isIsoDateString(date)) ? (
-                      <button
-                        className="text-[11px] font-semibold text-blue-400 transition-colors hover:text-blue-300"
-                        onClick={clearCustomDueDates}
-                        type="button"
-                      >
-                        Restaurar agenda padrao
-                      </button>
-                    ) : null}
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                      {showConsolidatedSchedule ? "Agenda atualizada" : "Previa das parcelas"}
+                    </h3>
+                    <div className="flex items-center gap-3">
+                      {!showConsolidatedSchedule && !isLockedLoanModal && formCustomDueDates.some((date) => isIsoDateString(date)) ? (
+                        <button
+                          className="text-[11px] font-semibold text-slate-500 transition-colors hover:text-slate-300"
+                          onClick={clearCustomDueDates}
+                          type="button"
+                        >
+                          Restaurar datas
+                        </button>
+                      ) : null}
+                      {supportsConsolidatedSchedule && hasExistingPendingSchedule ? (
+                        <button
+                          className="text-[11px] font-semibold text-blue-400 transition-colors hover:text-blue-300"
+                          onClick={() => setFormScheduleView(showConsolidatedSchedule ? "new" : "consolidated")}
+                          type="button"
+                        >
+                          {showConsolidatedSchedule ? "Ver novo valor" : "Ver agenda final"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="space-y-2 max-h-[21rem] min-h-[12rem] overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-                    {loanSummary.plan.length === 0 ? (
+                  <div className="h-64 space-y-2 overflow-y-scroll rounded-xl border border-slate-800 bg-slate-900/40 p-2.5 [scrollbar-gutter:stable] [scrollbar-width:thin]">
+                    {showConsolidatedSchedule ? (
+                      consolidatedSchedule.length === 0 ? (
+                        <p className="text-xs text-slate-500">Preencha os campos para visualizar a agenda atualizada.</p>
+                      ) : (
+                        consolidatedSchedule.map((item) => (
+                          <div key={item.dueDate} className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2.5">
+                            <div className="flex items-baseline justify-between gap-3">
+                              <p className="text-sm font-semibold text-slate-200">Dia {formatDatePtBr(item.dueDate)}</p>
+                              <p className="text-base font-bold text-slate-100">{formatCurrency(item.totalAmount)}</p>
+                            </div>
+                            <p className="mt-1.5 text-xs text-slate-500">
+                              {item.existingAmount > 0 && item.newAmount > 0
+                                ? `${formatCurrency(item.existingAmount)} atuais + ${formatCurrency(item.newAmount)} novos`
+                                : item.existingAmount > 0
+                                  ? `${formatCurrency(item.existingAmount)} da agenda atual`
+                                  : loanModalMode === "simulation"
+                                    ? `${formatCurrency(item.newAmount)} da nova simulação`
+                                    : `${formatCurrency(item.newAmount)} do novo empréstimo`}
+                            </p>
+                          </div>
+                        ))
+                      )
+                    ) : loanSummary.plan.length === 0 ? (
                       <p className="text-xs text-slate-500">Preencha os campos para visualizar as parcelas.</p>
                     ) : (
                       loanSummary.plan.map((item) => (
-                        <div key={item.installmentNumber} className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
-                          <div className="flex items-center justify-between gap-3">
+                        <div key={item.installmentNumber} className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2.5">
+                          <div className="flex items-baseline justify-between gap-3">
                             <p className="text-sm font-semibold text-slate-200">Parcela #{item.installmentNumber}</p>
                             <p className="text-base font-bold text-slate-100">{formatCurrency(item.amount)}</p>
                           </div>
-                          <div className="mt-1 flex items-center gap-2">
-                            <p className="text-xs text-slate-400">
-                              Vencimento: {item.dueDate ? new Intl.DateTimeFormat("pt-BR").format(new Date(item.dueDate + "T12:00:00")) : "--/--/----"}
-                            </p>
-                            <label
-                              className="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-blue-500 hover:text-blue-300"
-                              title={`Editar vencimento da parcela #${item.installmentNumber}`}
-                            >
-                              <Calendar className="h-3.5 w-3.5" />
-                              <input
-                                className="absolute inset-0 cursor-pointer opacity-0"
-                                onChange={(event) => applyInstallmentDueDate(item.installmentNumber - 1, event.target.value)}
-                                type="date"
-                                value={item.dueDate || ""}
-                              />
-                            </label>
+                          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs text-slate-400">
+                                Vencimento: {item.dueDate ? new Intl.DateTimeFormat("pt-BR").format(new Date(item.dueDate + "T12:00:00")) : "--/--/----"}
+                              </p>
+                              <label
+                                className="relative inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-blue-500 hover:text-blue-300"
+                                title={`Editar vencimento da parcela #${item.installmentNumber}`}
+                              >
+                                <Calendar className="h-3.5 w-3.5" />
+                                <input
+                                  className="absolute inset-0 cursor-pointer opacity-0"
+                                  onChange={(event) => applyInstallmentDueDate(item.installmentNumber - 1, event.target.value)}
+                                  type="date"
+                                  value={item.dueDate || ""}
+                                />
+                              </label>
+                            </div>
+                            <p className="text-xs text-slate-500">Juros: {formatCurrency(item.interestAmount)}</p>
                           </div>
-                          <p className="mt-1 text-xs text-slate-500">Juros: {formatCurrency(item.interestAmount)}</p>
                         </div>
                       ))
                     )}
                   </div>
                   {dueDatesValidationMessage ? (
                     <p className="mt-2 text-xs font-medium text-red-400">{dueDatesValidationMessage}</p>
+                  ) : showConsolidatedSchedule ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Parcelas pendentes somadas {loanModalMode === "simulation" ? "à nova simulação" : "ao novo empréstimo"} por data.
+                    </p>
                   ) : (
                     <p className="mt-2 text-xs text-slate-500">Voce pode ajustar o vencimento de cada parcela diretamente na previa.</p>
                   )}
@@ -2388,7 +2552,7 @@ export function EmprestimosClient() {
               </fieldset>
 
               {/* Right: Resumo */}
-              <div className="w-full border-t border-slate-800 px-5 py-4 xl:w-[300px] xl:border-l xl:border-t-0">
+              <div className="w-full border-t border-slate-800 px-5 py-4 xl:flex xl:h-full xl:w-[300px] xl:flex-col xl:overflow-hidden xl:border-l xl:border-t-0">
                 <h3 className="text-base font-bold text-slate-100 mb-4">Resumo do empréstimo</h3>
                 <div className="space-y-3">
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.totalAmount)}</p></div>
@@ -2401,11 +2565,11 @@ export function EmprestimosClient() {
                   <p className="text-xs text-slate-500">{loanSummary.modeLabel}</p>
                 </div>
 
-                <div className="mt-6">
+                <div className="mt-6 xl:mt-auto xl:h-[19rem] xl:flex-none">
                   <h3 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-slate-500">Observações</h3>
-                  <label className="mb-1 block text-xs font-semibold text-slate-400">Detalhes adicionais</label>
                   <textarea
-                    className="min-h-[180px] w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none resize-none"
+                    aria-label="Observações"
+                    className="h-64 min-h-0 w-full resize-none rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                     placeholder="Observações sobre o empréstimo"
                     value={formObservations}
                     onChange={(e) => setFormObservations(e.target.value)}
@@ -2422,7 +2586,7 @@ export function EmprestimosClient() {
                   Fechar
                 </button>
               ) : loanModalMode === "loan" ? (
-                <button onClick={handleSaveLoan} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
+                <button onClick={() => setShowLoanCreateConfirm(true)} disabled={saving || !canSubmitLoan} className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50">
                   {saving ? "Salvando..." : "Salvar empréstimo"}
                 </button>
               ) : isEditingLoanModal ? (
@@ -2443,6 +2607,31 @@ export function EmprestimosClient() {
           </div>
         </div>
       )}
+
+      {showLoanCreateConfirm ? (
+        <ModalBase
+          open={showLoanCreateConfirm}
+          onClose={() => setShowLoanCreateConfirm(false)}
+          title="Criar empréstimo"
+          subtitle={`${selectedFormClientName} • ${formatCurrency(loanSummary.totalAmount)}`}
+          footer={(
+            <>
+              <ModalBtnGhost onClick={() => setShowLoanCreateConfirm(false)} disabled={saving}>
+                Voltar
+              </ModalBtnGhost>
+              <ModalBtnPrimary onClick={handleSaveLoan} disabled={saving}>
+                {saving ? "Criando..." : "Criar empréstimo"}
+              </ModalBtnPrimary>
+            </>
+          )}
+        >
+          <p className="text-sm text-slate-500">
+            {hasExistingPendingSchedule
+              ? "Novo empréstimo: a agenda atualizada será aberta no WhatsApp."
+              : "Primeiro empréstimo: a agenda será aberta no WhatsApp."}
+          </p>
+        </ModalBase>
+      ) : null}
 
       {simulationConfirmAction ? (
         <ModalBase
@@ -2476,7 +2665,9 @@ export function EmprestimosClient() {
         >
           <p className="text-sm text-slate-400">
             {simulationConfirmAction.type === "approve"
-              ? "Ao aprovar, o sistema cria o empréstimo real e vincula esta simulação ao contrato."
+              ? approvalWillOpenWhatsApp
+                ? "Novo empréstimo: a agenda atualizada será aberta no WhatsApp."
+                : "Primeiro empréstimo: a proposta já foi enviada e nenhuma nova mensagem será aberta."
               : "A simulação permanece no histórico, mas deixa de ficar disponível como proposta ativa."}
           </p>
         </ModalBase>

@@ -355,7 +355,7 @@ export function ParcelasClient() {
         if (periodFilter === "today") return d.getTime() === now.getTime();
         if (periodFilter === "next7") {
           const limit = new Date(now.getTime() + 7 * 86400000);
-          return d >= now && d <= limit;
+          return d > now && d <= limit;
         }
         if (periodFilter === "month_current") return isCurrentMonth(d);
         if (periodFilter === "last30") {
@@ -424,17 +424,7 @@ export function ParcelasClient() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
-      {/* Header */}
-      <section className="mb-6 hidden flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">Controle de Cobrança</h1>
-        </div>
-      </section>
-
-      <PageHeader
-        subtitle="Acompanhe cobranças, vencimentos e baixas das parcelas."
-        title="Controle de Cobrança"
-      />
+      <PageHeader title="Parcelas" />
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -561,8 +551,7 @@ export function ParcelasClient() {
         </div>
 
         {/* Tabela */}
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-100">Parcelas da cobrança</h3>
+        <div className="mb-3 flex items-center justify-end">
           <span className="text-sm text-slate-400">
             Resultados: <strong className="text-slate-200">{filtered.length}</strong>
           </span>

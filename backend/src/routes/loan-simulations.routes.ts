@@ -9,6 +9,11 @@ import {
 } from "@prisma/client";
 import { Router } from "express";
 import { addDays, DEFAULT_TIME_ZONE, getIsoTodayInTimeZone } from "../lib/date-time";
+import {
+  buildSimulationProposalSchedule,
+  buildScheduleWithPaymentHistory,
+  type ScheduleHistoryItem,
+} from "../lib/consolidated-schedule";
 import { upsertLoanDisbursementTransaction } from "../lib/installment-income-transaction";
 import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
@@ -171,17 +176,18 @@ function formatCurrencyBRL(value: unknown): string {
   }).format(toNumber(value));
 }
 
-function formatDateDayMonthShort(input: unknown): string {
+function formatCurrencyNumberBRL(value: unknown): string {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(toNumber(value));
+}
+
+function formatDateDayMonthNumeric(input: unknown): string {
   const raw = String(input ?? "").trim().slice(0, 10);
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return "-";
-
-  const monthIndex = Number(match[2]) - 1;
-  const months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-  const month = months[monthIndex] ?? null;
-  if (!month) return "-";
-
-  return `${match[3]} ${month}`;
+  return `${match[3]}/${match[2]}`;
 }
 
 function normalizeDigits(value: unknown): string {
@@ -206,6 +212,44 @@ function toWhatsAppPhone(value: unknown): string | null {
   const digits = normalizeBrazilPhoneDigits(value);
   if (digits.length !== 10 && digits.length !== 11) return null;
   return `55${digits}`;
+}
+
+function buildWhatsAppUrl(phone: unknown, message: string): string {
+  const waPhone = toWhatsAppPhone(phone);
+  return waPhone
+    ? `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+
+function formatScheduleLines(displaySchedule: ScheduleHistoryItem[]): string {
+  const scheduleAmounts = displaySchedule.map((item) => formatCurrencyNumberBRL(item.amount));
+  const widestAmount = scheduleAmounts.reduce((width, amount) => Math.max(width, amount.length), 0);
+
+  return displaySchedule
+    .map((item, index) => `${formatDateDayMonthNumeric(item.dueDate)}  R$ ${scheduleAmounts[index].padStart(widestAmount, " ")}${item.paid ? "  \u2713" : ""}`)
+    .join("\n");
+}
+
+function buildProposalWhatsAppMessage(
+  displaySchedule: ScheduleHistoryItem[],
+  total: number,
+): string {
+  const scheduleLines = formatScheduleLines(displaySchedule);
+
+  if (displaySchedule.length === 0) return "Nenhuma parcela foi informada na simulação.";
+  return `\`\`\`\n${scheduleLines}\n\nTotal:  ${formatCurrencyBRL(total)}\n\`\`\``;
+}
+
+function buildConsolidatedWhatsAppMessage(
+  displaySchedule: ScheduleHistoryItem[],
+  totals: { total: number; open: number; paid: number },
+): string {
+  const scheduleLines = formatScheduleLines(displaySchedule);
+  const summaryLine = `Total:  ${formatCurrencyBRL(totals.total)}`;
+
+  return displaySchedule.length > 0
+    ? `\`\`\`\n${scheduleLines}\n\n${summaryLine}\n\`\`\``
+    : `Nenhum valor pendente.\n\n\`\`\`\n${summaryLine}\n\`\`\``;
 }
 
 async function findClient(ownerUserId: number, clientId: number): Promise<ClientLite | null> {
@@ -364,6 +408,98 @@ async function readSimulation(ownerUserId: number, simulationId: string) {
   });
 }
 
+async function clientHasOtherActiveLoan(
+  ownerUserId: number,
+  clientId: number,
+  excludedLoanId: number,
+): Promise<boolean> {
+  const activeLoan = await prisma.loan.findFirst({
+    where: {
+      ownerUserId,
+      clientId,
+      id: { not: excludedLoanId },
+      installments: {
+        some: {
+          paymentDate: null,
+          status: {
+            in: [InstallmentStatus.PENDENTE, InstallmentStatus.ATRASADO],
+          },
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(activeLoan);
+}
+
+async function buildApprovedSchedulePayload(
+  ownerUserId: number,
+  simulation: LoanSimulationWithRefs,
+) {
+  const currentInstallments = await prisma.installment.findMany({
+    where: {
+      ownerUserId,
+      clientId: simulation.clientId,
+      paymentDate: null,
+      status: {
+        in: [InstallmentStatus.PENDENTE, InstallmentStatus.ATRASADO],
+      },
+    },
+    select: {
+      loanId: true,
+      dueDate: true,
+      amount: true,
+    },
+    orderBy: [
+      { dueDate: "asc" },
+      { id: "asc" },
+    ],
+  });
+
+  const activeLoanIds = [...new Set(currentInstallments.map((installment) => installment.loanId))];
+  const paidInstallments = activeLoanIds.length > 0
+    ? await prisma.installment.findMany({
+      where: {
+        ownerUserId,
+        clientId: simulation.clientId,
+        loanId: { in: activeLoanIds },
+        OR: [
+          { status: InstallmentStatus.PAGO },
+          { paymentDate: { not: null } },
+        ],
+      },
+      select: {
+        dueDate: true,
+        amount: true,
+      },
+      orderBy: [
+        { dueDate: "asc" },
+        { id: "asc" },
+      ],
+    })
+    : [];
+
+  const { openSchedule: consolidatedSchedule, displaySchedule, totals } = buildScheduleWithPaymentHistory(
+    currentInstallments.map((installment) => ({
+      dueDate: installment.dueDate.toISOString().slice(0, 10),
+      amount: installment.amount,
+    })),
+    paidInstallments.map((installment) => ({
+      dueDate: installment.dueDate.toISOString().slice(0, 10),
+      amount: installment.amount,
+    })),
+  );
+  const whatsappMessage = buildConsolidatedWhatsAppMessage(displaySchedule, totals);
+  const clientPhone = simulation.client?.phone ?? simulation.clientPhone ?? null;
+
+  return {
+    consolidatedSchedule,
+    whatsappMessage,
+    whatsappUrl: buildWhatsAppUrl(clientPhone, whatsappMessage),
+  };
+}
+
 router.get("/", async (req, res) => {
   const ownerUserId = readUserId(req);
   if (!Number.isFinite(ownerUserId)) return res.status(401).json({ message: "Nao autenticado" });
@@ -468,6 +604,12 @@ router.post("/:id/send", async (req, res) => {
   const id = String(req.params.id ?? "").trim();
   const row = await readSimulation(ownerUserId, id);
   if (!row) return res.status(404).json({ message: "Simulacao nao encontrada" });
+  if (row.status === LoanSimulationStatus.CANCELED) {
+    return res.status(409).json({ message: "Simulacao cancelada nao pode ser enviada." });
+  }
+  if (row.status === LoanSimulationStatus.ACCEPTED || row.loan?.id) {
+    return res.status(409).json({ message: "Simulacao aprovada ja foi convertida em emprestimo." });
+  }
 
   await prisma.loanSimulation.update({
     where: { id: row.id },
@@ -480,35 +622,39 @@ router.post("/:id/send", async (req, res) => {
   if (!updatedRow) return res.status(404).json({ message: "Simulacao nao encontrada" });
 
   const clientPhone = updatedRow.client?.phone ?? updatedRow.clientPhone ?? null;
-  const waPhone = toWhatsAppPhone(clientPhone);
-  const paymentDatesList = updatedRow.dueDates
-    .map((date) => formatDateDayMonthShort(date))
-    .filter((date) => date !== "-");
-  const paymentDatesBlock = paymentDatesList.length > 0
-    ? paymentDatesList.map((date) => `- ${date}`).join("\n")
-    : "- -";
+  const simulationAmounts = splitAmount(
+    round2(updatedRow.totalAmount),
+    Math.max(1, updatedRow.installmentsCount),
+  );
+  const proposalItems = updatedRow.dueDates.map((dueDate, index) => ({
+    dueDate,
+    amount: simulationAmounts[index] ?? updatedRow.installmentAmount,
+  }));
+  const { proposalSchedule, displaySchedule, totals } = buildSimulationProposalSchedule(proposalItems);
+  const whatsappMessage = buildProposalWhatsAppMessage(displaySchedule, totals.total);
+  const whatsappUrl = buildWhatsAppUrl(clientPhone, whatsappMessage);
 
-  const whatsappMessage = [
-    `*Valor total:* ${formatCurrencyBRL(updatedRow.totalAmount)}`,
-    `*Valor da parcela:* ${formatCurrencyBRL(updatedRow.installmentAmount)}`,
-    "",
-    "*Datas de pagamento:*",
-    paymentDatesBlock,
-  ].join("\n");
-  const whatsappUrl = waPhone
-    ? `https://wa.me/${waPhone}?text=${encodeURIComponent(whatsappMessage)}`
-    : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
-
-  return res.json({ data: { ...mapRowForResponse(updatedRow), whatsappMessage, whatsappUrl } });
+  return res.json({
+    data: {
+      ...mapRowForResponse(updatedRow),
+      proposalSchedule,
+      whatsappMessage,
+      whatsappUrl,
+    },
+  });
 });
 
 router.post("/:id/approve", async (req, res) => {
   const ownerUserId = readUserId(req);
   if (!Number.isFinite(ownerUserId)) return res.status(401).json({ message: "Nao autenticado" });
+  const forceWhatsAppNotification = req.body?.notifyWhatsApp === true;
 
   const id = String(req.params.id ?? "").trim();
   const existingSimulation = await readSimulation(ownerUserId, id);
   if (!existingSimulation) return res.status(404).json({ message: "Simulacao nao encontrada" });
+  if (existingSimulation.status === LoanSimulationStatus.CANCELED) {
+    return res.status(409).json({ message: "Simulacao cancelada nao pode ser aprovada." });
+  }
 
   if (existingSimulation.loan?.id) {
     await prisma.loanSimulation.update({
@@ -518,7 +664,28 @@ router.post("/:id/approve", async (req, res) => {
 
     const alreadyAccepted = await readSimulation(ownerUserId, id);
     if (!alreadyAccepted) return res.status(404).json({ message: "Simulacao nao encontrada" });
-    return res.json({ data: mapRowForResponse(alreadyAccepted) });
+    const shouldSendUpdatedAgenda = forceWhatsAppNotification || await clientHasOtherActiveLoan(
+      ownerUserId,
+      alreadyAccepted.clientId,
+      existingSimulation.loan.id,
+    );
+    if (!shouldSendUpdatedAgenda) {
+      return res.json({
+        data: {
+          ...mapRowForResponse(alreadyAccepted),
+          whatsappNotificationRequired: false,
+        },
+      });
+    }
+
+    const approvedSchedule = await buildApprovedSchedulePayload(ownerUserId, alreadyAccepted);
+    return res.json({
+      data: {
+        ...mapRowForResponse(alreadyAccepted),
+        ...approvedSchedule,
+        whatsappNotificationRequired: true,
+      },
+    });
   }
 
   const client = await findClient(ownerUserId, existingSimulation.clientId);
@@ -694,8 +861,29 @@ router.post("/:id/approve", async (req, res) => {
 
   const approvedSimulation = await readSimulation(ownerUserId, id);
   if (!approvedSimulation) return res.status(404).json({ message: "Simulacao nao encontrada" });
+  const shouldSendUpdatedAgenda = forceWhatsAppNotification || await clientHasOtherActiveLoan(
+    ownerUserId,
+    approvedSimulation.clientId,
+    createdLoanId,
+  );
+  if (!shouldSendUpdatedAgenda) {
+    return res.json({
+      data: {
+        ...mapRowForResponse(approvedSimulation),
+        whatsappNotificationRequired: false,
+      },
+    });
+  }
 
-  return res.json({ data: mapRowForResponse(approvedSimulation) });
+  const approvedSchedule = await buildApprovedSchedulePayload(ownerUserId, approvedSimulation);
+
+  return res.json({
+    data: {
+      ...mapRowForResponse(approvedSimulation),
+      ...approvedSchedule,
+      whatsappNotificationRequired: true,
+    },
+  });
 });
 
 router.post("/:id/cancel", async (req, res) => {
@@ -705,6 +893,9 @@ router.post("/:id/cancel", async (req, res) => {
   const id = String(req.params.id ?? "").trim();
   const row = await readSimulation(ownerUserId, id);
   if (!row) return res.status(404).json({ message: "Simulacao nao encontrada" });
+  if (row.status === LoanSimulationStatus.ACCEPTED || row.loan?.id) {
+    return res.status(409).json({ message: "Simulacao aprovada nao pode ser cancelada." });
+  }
 
   await prisma.loanSimulation.update({
     where: { id: row.id },
