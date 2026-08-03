@@ -18,6 +18,7 @@ concurrency:
 env:
   BACKEND_IMAGE: dbentooooojj/credix-backend
   FRONTEND_IMAGE: dbentooooojj/credix-frontend
+  PROD_PATH: /opt/credix
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
@@ -106,10 +107,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=frontend
 
   deploy:
-    name: Atualizar VPS
+    name: Atualizar VPS Ubuntu 24.04
     needs: publish
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment:
       name: production
       url: ${{ vars.PRODUCTION_URL }}
@@ -118,23 +119,24 @@ jobs:
       - name: Baixar código
         uses: actions/checkout@v7
 
-      - name: Validar configuração da VPS
+      - name: Validar secrets obrigatórios
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
-          PROD_PATH: ${{ secrets.PROD_PATH }}
           PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
           PROD_KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}
         run: |
-          for name in DOCKERHUB_USERNAME DOCKERHUB_TOKEN PROD_HOST PROD_USER PROD_PORT PROD_PATH PROD_SSH_KEY PROD_KNOWN_HOSTS; do
+          for name in DOCKERHUB_USERNAME DOCKERHUB_TOKEN PROD_ENV_FILE PROD_HOST PROD_USER PROD_PORT PROD_SSH_KEY PROD_KNOWN_HOSTS; do
             if [ -z "${!name}" ]; then
               echo "Secret obrigatório ausente: $name"
               exit 1
             fi
           done
+          [[ "$PROD_PORT" =~ ^[0-9]{1,5}$ ]] || { echo "PROD_PORT inválida."; exit 1; }
 
       - name: Configurar conexão segura
         env:
@@ -147,13 +149,28 @@ jobs:
           printf '%s\n' "$PROD_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Preparar diretório da aplicação
+      - name: Preparar VPS e Docker Compose plugin
         env:
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
-          PROD_PATH: ${{ secrets.PROD_PATH }}
-        run: ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "mkdir -p '$PROD_PATH'"
+        run: ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- '$PROD_PATH'" < ops/bootstrap-vps.sh
+
+      - name: Atualizar arquivo de ambiente de forma atômica
+        env:
+          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+        run: |
+          printf '%s' "$PROD_ENV_FILE" | ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "umask 077; cat > '$PROD_PATH/.env.next'; chmod 600 '$PROD_PATH/.env.next'; mv -f '$PROD_PATH/.env.next' '$PROD_PATH/.env'"
+
+      - name: Validar /opt/credix/.env e Docker Compose
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+        run: ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- preflight '$PROD_PATH'" < ops/deploy-production.sh
 
       - name: Autenticar Docker Hub na VPS
         env:
@@ -164,19 +181,19 @@ jobs:
           PROD_PORT: ${{ secrets.PROD_PORT }}
         run: printf '%s' "$DOCKERHUB_TOKEN" | ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "docker login -u '$DOCKERHUB_USERNAME' --password-stdin"
 
-      - name: Enviar configuração do deploy
+      - name: Enviar Compose candidato
         env:
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
-          PROD_PATH: ${{ secrets.PROD_PATH }}
-        run: scp -P "$PROD_PORT" docker-compose.yml "$PROD_USER@$PROD_HOST:$PROD_PATH/docker-compose.yml.next"
+        run: |
+          scp -P "$PROD_PORT" docker-compose.production.yml "$PROD_USER@$PROD_HOST:$PROD_PATH/docker-compose.yml.next"
+          scp -P "$PROD_PORT" ops/Caddyfile "$PROD_USER@$PROD_HOST:$PROD_PATH/Caddyfile.next"
 
-      - name: Publicar versão e verificar saúde
+      - name: Publicar versão, seed e verificar saúde
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
-          PROD_PATH: ${{ secrets.PROD_PATH }}
-        run: ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- '$PROD_PATH' '${{ github.sha }}' '$DOCKERHUB_USERNAME'" < ops/deploy-production.sh
+        run: ssh -p "$PROD_PORT" "$PROD_USER@$PROD_HOST" "bash -s -- deploy '$PROD_PATH' '${{ github.sha }}' '$DOCKERHUB_USERNAME'" < ops/deploy-production.sh

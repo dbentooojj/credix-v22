@@ -30,7 +30,9 @@ Aplicacao full-stack com autenticacao, PostgreSQL e deploy via Docker para VPS U
 - `backend/prisma/migrations/*`: migrations
 - `backend/prisma/seed.ts`: cria admin
 - `frontend/app/*`: base do novo frontend Next.js (rota inicial em `/app`)
-- `docker-compose.yml`: backend + frontend + postgres
+- `docker-compose.yml`: ambiente Docker local (backend + frontend + postgres)
+- `docker-compose.production.yml`: infraestrutura de produção com Caddy, backend, frontend e PostgreSQL interno
+- `ops/Caddyfile`: proxy reverso HTTPS de produção
 
 ## Modelos do banco
 - `User` (admin)
@@ -161,107 +163,53 @@ npm run notify:weekly-backup:once
 O repositório possui duas esteiras:
 
 - `Validar aplicação`: executa testes e builds em todo pull request e push na `main`.
-- `Publicar em produção`: execução manual que valida a aplicação, publica imagens versionadas no Docker Hub, cria um backup do PostgreSQL na VPS e atualiza os containers.
+- `Publicar em produção`: execução manual, confirmada com `PRODUCAO`, que prepara uma VPS Ubuntu 24.04, publica imagens versionadas, cria backup, atualiza os containers, aguarda saúde e executa rollback da aplicação se necessário.
 
 Crie o environment `production` no GitHub e cadastre estes secrets:
 
 - `DOCKERHUB_USERNAME`: usuário do Docker Hub.
 - `DOCKERHUB_TOKEN`: token de acesso do Docker Hub.
 - `PROD_HOST`: IP ou domínio da VPS.
-- `PROD_USER`: usuário SSH da VPS.
+- `PROD_USER`: usuário SSH com `sudo` sem senha.
 - `PROD_PORT`: porta SSH, normalmente `22`.
-- `PROD_PATH`: diretório da aplicação, por exemplo `/opt/credix`.
 - `PROD_SSH_KEY`: chave SSH privada exclusiva para o deploy.
-- `PROD_KNOWN_HOSTS`: chave pública do host retornada por `ssh-keyscan -H SEU_HOST`.
+- `PROD_KNOWN_HOSTS`: resultado de `ssh-keyscan -H SEU_HOST`.
+- `PROD_ENV_FILE`: conteúdo completo do ambiente de produção; use [ops/production.env.example](ops/production.env.example) como modelo.
 
 Opcionalmente, crie a variável `PRODUCTION_URL` no environment para exibir o link da aplicação no resumo do deploy.
 
-Antes do primeiro deploy, crie `PROD_PATH/.env` na VPS com os dados reais. Em produção, use:
+Não é necessário criar arquivos ou clonar o repositório na VPS. A esteira instala o Docker Engine e o plugin `docker compose` quando necessário, cria `/opt/credix`, `backups` e `releases`, grava `/opt/credix/.env` de forma atômica a partir de `PROD_ENV_FILE` e envia o Compose e o Caddyfile candidatos.
 
-```env
-NODE_ENV=production
-BIND_ADDRESS=127.0.0.1
-COOKIE_SECURE=true
-```
+O primeiro administrador é criado automaticamente apenas se o banco não possuir nenhum dado da aplicação. Caso o seed precise ser executado manualmente, use:
 
-Para publicar, abra **Actions → Publicar em produção → Run workflow**, selecione a branch `main` e digite `PRODUCAO`. Os backups anteriores a cada deploy ficam em `PROD_PATH/backups` por 30 dias.
-
-### 1) Pre-requisitos no VPS
 ```bash
-sudo apt update
-sudo apt install -y ca-certificates curl gnupg
-
-# Docker
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-newgrp docker
-
-# Docker Compose plugin
-docker compose version
+cd /opt/credix
+docker compose --env-file .env --env-file .deploy.env exec -T backend npm run db:seed:production
 ```
 
-### 2) DNS do dominio
+Para publicar, abra **Actions → Publicar em produção → Run workflow**, selecione a branch `main` e digite `PRODUCAO`. Os backups e arquivos de rollback são preservados por 30 dias.
+
+### 2) DNS e HTTPS
 No provedor DNS, crie:
-- `A` para `@` apontando para o IP publico do VPS
-- `A` para `www` apontando para o mesmo IP
+- `A` para `credix.app.br` apontando para o IP público da VPS
+- `A` para `www.credix.app.br` apontando para o mesmo IP
+
+Libere as portas TCP `80` e `443` no firewall/provedor da VPS. O Caddy usa esses domínios para emitir e renovar os certificados HTTPS automaticamente. O valor de `CADDY_EMAIL` em `PROD_ENV_FILE` recebe avisos relacionados aos certificados.
 
 Confirme propagacao:
 ```bash
-dig +short seu-dominio.com
-dig +short www.seu-dominio.com
+dig +short credix.app.br
+dig +short www.credix.app.br
 ```
 
-### 3) Subir com Docker
-```bash
-git clone <SEU_REPO>
-cd <PASTA_DO_REPO>
-cp .env.example .env
-```
+### Topologia final na VPS
 
-Edite `.env` e troque senhas/chaves (`POSTGRES_PASSWORD`, `JWT_SECRET`, etc).
-Em ambiente sem HTTPS, mantenha `COOKIE_SECURE=false`.
-Quando o dominio estiver atras do `nginx` da VPS com SSL, ajuste:
-- `APP_BASE_URL=https://seu-dominio.com`
-- `COOKIE_SECURE=true`
+Na VPS, somente o Caddy publica as portas `80` e `443` (incluindo `443/udp` para HTTP/3). PostgreSQL, backend e frontend não têm portas expostas publicamente.
 
-Baixe as imagens e suba os containers:
-```bash
-docker compose pull
-docker compose up -d
-```
-
-Ver logs:
-```bash
-docker compose logs -f backend
-```
-
-### 4) Migrations e admin
-A migration roda no startup do container `backend` (`prisma migrate deploy`).
-
-Se quiser rodar manualmente:
-```bash
-docker compose exec backend npm run prisma:migrate:deploy
-```
-
-Criar/atualizar admin:
-```bash
-docker compose exec backend npm run db:seed
-```
-
-Acesso inicial:
-- Email: `ADMIN_EMAIL` do `.env`
-- Senha: `ADMIN_PASSWORD` do `.env`
-
-### 5) Topologia final na VPS
-O `docker-compose` publica apenas:
-- frontend em `127.0.0.1:3000`
-- backend em `127.0.0.1:4000`
-- banco sem exposicao publica
-
-O `nginx` e o SSL ficam fora do projeto, instalados na propria VPS. Configure o proxy reverso da VPS para:
-- enviar `/app` para `http://127.0.0.1:3000`
-- enviar `/` para `http://127.0.0.1:4000`
-- encaminhar `Host`, `X-Real-IP`, `X-Forwarded-For` e `X-Forwarded-Proto`
+- `credix.app.br` redireciona permanentemente para `https://www.credix.app.br`.
+- `www.credix.app.br` atende o frontend.
+- `/api/*` e `/auth/*` são encaminhadas ao backend Express.
+- O Caddy mantém certificados e configuração nos volumes Docker `credix_caddy_data` e `credix_caddy_config`.
 
 ## Backup e restore PostgreSQL
 

@@ -1,0 +1,25 @@
+{
+	email {$CADDY_EMAIL}
+}
+
+credix.app.br {
+	redir https://www.credix.app.br{uri} permanent
+}
+
+www.credix.app.br {
+	route {
+		@health path /healthz
+		respond @health "ok" 200
+
+		@backend path /api /api/* /auth /auth/*
+		handle @backend {
+			reverse_proxy backend:4000
+		}
+
+		handle {
+			reverse_proxy frontend:3000
+		}
+	}
+
+	encode zstd gzip
+}
