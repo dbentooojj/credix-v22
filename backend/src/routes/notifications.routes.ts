@@ -101,6 +101,8 @@ async function handleDueEmail(req: Request, res: Response) {
     force: true,
     targetDateIso: targetDateRaw,
     ownerUserId,
+    // Acao manual autenticada: nao deve consumir a entrega reservada ao cron.
+    skipDeliveryDeduplication: true,
   });
 
   if (!result.ok) {

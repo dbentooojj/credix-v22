@@ -6,17 +6,21 @@ import { sendDueTodayInstallmentsEmail } from "../services/email-reminder.servic
 
 async function main() {
   const targetDateArg = process.argv[2]?.trim();
+  const recipientArg = process.argv[3]?.trim();
 
   const result = await sendDueTodayInstallmentsEmail({
     force: true,
     targetDateIso: targetDateArg || undefined,
     timeZone: normalizeTimeZone(env.EMAIL_NOTIFY_TZ),
+    recipients: recipientArg ? [recipientArg] : undefined,
+    // O comando existe para testes e nao deve bloquear o cron real da data.
+    skipDeliveryDeduplication: true,
   });
 
   const log = result.ok ? console.log : console.error;
   log(`[due-today-email-manual] ${result.message}`);
   console.log(
-    `[due-today-email-manual] data=${result.targetDateIso || "-"} parcelas=${result.dueCount} receber=${result.receivableCount} pagar=${result.payableCount} itens=${result.totalEntries} totalReceber=${result.totalToReceiveAmount.toFixed(2)} totalPagar=${result.payableAmount.toFixed(2)} destinatarios=${result.recipients.length}`,
+    `[due-today-email-manual] data=${result.targetDateIso || "-"} parcelas=${result.dueCount} clientes=${result.clientCount} total=${result.totalAmount.toFixed(2)} enviados=${result.sentEmailCount} destinatarios=${result.recipients.length}`,
   );
 
   if (!result.ok) {

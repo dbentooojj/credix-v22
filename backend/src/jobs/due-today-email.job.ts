@@ -1,10 +1,5 @@
 import { env } from "../config/env";
-import {
-  addDays,
-  getHourMinuteInTimeZone,
-  getIsoTodayInTimeZone,
-  normalizeTimeZone,
-} from "../lib/date-time";
+import { getHourMinuteInTimeZone, getIsoTodayInTimeZone, normalizeTimeZone } from "../lib/date-time";
 import { sendDueTodayInstallmentsEmail } from "../services/email-reminder.service";
 
 const JOB_TICK_MS = 30_000;
@@ -32,7 +27,8 @@ export function startDueTodayEmailJob(): void {
 
   const timeZone = normalizeTimeZone(env.EMAIL_NOTIFY_TZ);
   const scheduleTime = env.EMAIL_NOTIFY_TIME;
-  const daysAhead = env.EMAIL_NOTIFY_DAYS_AHEAD;
+  // O relatorio diario sempre cobre recebimentos da data atual no fuso configurado.
+  const daysAhead = 0;
 
   console.log(
     `[due-today-email-job] Job iniciado. Execucao diaria as ${scheduleTime} (${timeZone}), daysAhead=${daysAhead}.`,
@@ -40,11 +36,10 @@ export function startDueTodayEmailJob(): void {
 
   const run = async (label: string) => {
     const runDateIso = getIsoTodayInTimeZone(timeZone);
-    const targetDateIso = addDays(runDateIso, daysAhead);
+    const targetDateIso = runDateIso;
 
     try {
       const result = await sendDueTodayInstallmentsEmail({
-        force: true,
         targetDateIso,
         timeZone,
         daysAhead,
@@ -53,11 +48,9 @@ export function startDueTodayEmailJob(): void {
       console.log(`[due-today-email-job] (${label}) Data alvo: ${result.targetDateIso}`);
       console.log(`[due-today-email-job] (${label}) Total de parcelas: ${result.dueCount}`);
       console.log(`[due-today-email-job] (${label}) Total de clientes: ${result.clientCount}`);
-      console.log(`[due-today-email-job] (${label}) Contas a receber: ${result.receivableCount}`);
-      console.log(`[due-today-email-job] (${label}) Contas a pagar: ${result.payableCount}`);
-      console.log(`[due-today-email-job] (${label}) Total de itens: ${result.totalEntries}`);
-      console.log(`[due-today-email-job] (${label}) Total a receber: ${formatCurrency(result.totalToReceiveAmount)}`);
-      console.log(`[due-today-email-job] (${label}) Total a pagar: ${formatCurrency(result.payableAmount)}`);
+      console.log(`[due-today-email-job] (${label}) Total previsto: ${formatCurrency(result.totalAmount)}`);
+      console.log(`[due-today-email-job] (${label}) E-mails enviados: ${result.sentEmailCount}`);
+      console.log(`[due-today-email-job] (${label}) Duplicados ignorados: ${result.duplicateOwnerCount}`);
 
       if (result.skipped) {
         console.log(`[due-today-email-job] (${label}) Envio pulado: ${result.message}`);
