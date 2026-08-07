@@ -108,7 +108,7 @@ EMAIL_NOTIFY_ENABLED=true
 EMAIL_NOTIFY_TO=seu-email@dominio.com,financeiro@dominio.com
 EMAIL_NOTIFY_TZ=America/Sao_Paulo
 EMAIL_NOTIFY_TIME=08:00
-EMAIL_NOTIFY_DAYS_AHEAD=1
+EMAIL_NOTIFY_DAYS_AHEAD=0
 EMAIL_NOTIFY_RUN_ON_START=false
 
 EMAIL_WEEKLY_BACKUP_ENABLED=true
@@ -119,15 +119,15 @@ EMAIL_WEEKLY_BACKUP_RUN_ON_START=false
 ```
 
 Com isso, o app envia:
-- 1 e-mail por dia no horario configurado com a lista de parcelas em aberto.
+- 1 e-mail por dia no horario configurado com as parcelas nao pagas que vencem no proprio dia. Se `EMAIL_NOTIFY_TO` estiver vazio, cada proprietario recebe apenas o seu relatorio.
 - 1 e-mail semanal no domingo, no horario configurado, com PDF resumido e CSVs de backup.
 
 Se `EMAIL_WEEKLY_BACKUP_TO` estiver vazio, o backup semanal vai para o e-mail do proprio usuario dono dos dados.
 
-Para testar manualmente o lembrete diario sem esperar o horario:
+Para testar manualmente o relatorio do usuario autenticado sem esperar o horario:
 
 ```bash
-curl -X POST http://localhost:4000/api/notifications/email/due-tomorrow \
+curl -X POST http://localhost:4000/api/notifications/email/due-today \
   -H "Content-Type: application/json" \
   -b "credix_token=<SEU_COOKIE_DE_LOGIN>"
 ```
@@ -135,7 +135,7 @@ curl -X POST http://localhost:4000/api/notifications/email/due-tomorrow \
 Para testar uma data especifica:
 
 ```bash
-curl -X POST http://localhost:4000/api/notifications/email/due-tomorrow \
+curl -X POST http://localhost:4000/api/notifications/email/due-today \
   -H "Content-Type: application/json" \
   -H "Cookie: credix_token=<SEU_COOKIE_DE_LOGIN>" \
   -d '{"targetDate":"2026-02-15"}'
@@ -153,6 +153,9 @@ Opcional via script local do backend:
 
 ```bash
 cd backend
+npm run notify:due-today:once -- 2026-08-07 destinatario-de-teste@exemplo.com
+# Preview seguro em desenvolvimento: usa dados ficticios e nao consulta nem altera o banco.
+npm run notify:due-today:preview -- destinatario-de-teste@exemplo.com
 npm run notify:weekly-backup:once
 ```
 
@@ -252,7 +255,7 @@ cat backup.sql | docker compose exec -T db psql -U $POSTGRES_USER -d $POSTGRES_D
 - Tabelas frontend: `/api/tables/:tableName`
 - Pagamentos: `/api/payments`
 - Notificacoes WhatsApp: `/api/notifications/whatsapp/batch`
-- Notificacao e-mail (teste manual): `/api/notifications/email/due-tomorrow`
+- Notificacao e-mail (teste manual): `/api/notifications/email/due-today`
 - Backup semanal e-mail (teste manual): `/api/notifications/email/weekly-backup`
 - Healthcheck: `/health`
 

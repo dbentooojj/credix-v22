@@ -12,6 +12,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "notify:due-today:once": "tsx src/scripts/run-due-today-email.ts",
+    "notify:due-today:preview": "tsx src/scripts/preview-due-today-email.ts",
     "notify:weekly-backup:once": "tsx src/scripts/run-weekly-backup-email.ts",
     "cash:backfill:loan-disbursements": "tsx src/scripts/backfill-loan-disbursements.ts",
     "db:seed": "tsx prisma/seed.ts",

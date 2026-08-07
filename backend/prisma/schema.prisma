@@ -41,6 +41,12 @@ enum InstallmentStatus {
   ATRASADO
 }
 
+enum DailyReceivablesEmailStatus {
+  SENDING
+  SENT
+  FAILED
+}
+
 enum FinanceTransactionType {
   INCOME
   EXPENSE
@@ -71,6 +77,7 @@ model User {
   clients      Client[]
   loans        Loan[]
   installments Installment[]
+  dailyReceivablesEmailDeliveries DailyReceivablesEmailDelivery[]
   payments     Payment[]
   loanSimulations    LoanSimulation[]
   financeCategories   FinanceCategory[]
@@ -187,6 +194,21 @@ model Installment {
   @@index([clientId])
   @@index([status])
   @@index([dueDate])
+}
+
+model DailyReceivablesEmailDelivery {
+  id            Int                         @id @default(autoincrement())
+  ownerUserId   Int
+  ownerUser     User                        @relation(fields: [ownerUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  referenceDate DateTime                    @db.Date
+  status        DailyReceivablesEmailStatus @default(SENDING)
+  sentAt        DateTime?
+  failureReason String?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  @@unique([ownerUserId, referenceDate])
+  @@index([referenceDate, status])
 }
 
 model Payment {
