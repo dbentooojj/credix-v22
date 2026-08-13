@@ -23,3 +23,9 @@ www.credix.app.br {
 
 	encode zstd gzip
 }
+
+rangelab.duckdns.org {
+	reverse_proxy rangelab_app:3000
+
+	encode zstd gzip
+}
