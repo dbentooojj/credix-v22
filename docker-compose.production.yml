@@ -96,6 +96,9 @@ services:
     image: caddy:2-alpine
     container_name: credix_caddy
     restart: unless-stopped
+    networks:
+      - default
+      - web_proxy
     depends_on:
       backend:
         condition: service_healthy
@@ -129,3 +132,7 @@ volumes:
     name: credix_caddy_data
   caddy_config:
     name: credix_caddy_config
+
+networks:
+  web_proxy:
+    external: true
