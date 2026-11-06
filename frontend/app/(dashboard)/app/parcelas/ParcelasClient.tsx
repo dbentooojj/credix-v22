@@ -19,7 +19,7 @@ import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDat
 import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
 import { readJsonOrThrow } from "../../../../utils/apiClient";
-import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
+import { formatCurrencyInputFromNumber } from "../../../../utils/currencyInput";
 import { getDateOnlyRelationToToday } from "../../../../utils/dateOnlyStatus";
 
 // --- TYPES ---
@@ -154,7 +154,6 @@ export function ParcelasClient() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedInst, setSelectedInst] = useState<any>(null);
   const [payDate, setPayDate] = useState("");
-  const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("PIX");
   const [payNotes, setPayNotes] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
@@ -195,7 +194,6 @@ export function ParcelasClient() {
   function openPayModal(inst: any) {
     setSelectedInst(inst);
     setPayDate(toDateInputValue(new Date()));
-    setPayAmount(formatCurrencyInputFromNumber(inst.amount || 0));
     setPayMethod("PIX");
     setPayNotes("");
     setShowPayModal(true);
@@ -212,8 +210,8 @@ export function ParcelasClient() {
   }
 
   async function handlePay() {
-    const parsedAmount = parseCurrencyInput(payAmount);
-    if (!selectedInst || !payDate || !payAmount || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    const parsedAmount = Number(selectedInst?.amount);
+    if (!selectedInst || !payDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       toast.error("Preencha valor e data válidos para registrar o pagamento.", "Dados incompletos");
       return;
     }
@@ -728,7 +726,7 @@ export function ParcelasClient() {
         footer={<><ModalBtnGhost onClick={() => setShowPayModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={handlePay} disabled={actionLoading}>{actionLoading ? "Salvando..." : "Confirmar pagamento"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
-          <ModalField label="Valor (R$)"><input className={modalInputClass} inputMode="decimal" maxLength={24} type="text" value={payAmount} onChange={(e) => setPayAmount(formatCurrencyInput(e.target.value))} /></ModalField>
+          <ModalField label="Valor integral da parcela (R$)"><input className={`${modalInputClass} bg-slate-50`} type="text" value={formatCurrencyInputFromNumber(Number(selectedInst?.amount || 0))} readOnly /></ModalField>
           <ModalField label="Data do pagamento"><input className={modalInputClass} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></ModalField>
           <ModalField label="Método de pagamento">
             <select className={modalInputClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>

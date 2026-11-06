@@ -166,6 +166,9 @@ router.post("/", async (req, res) => {
       if (!installment || installment.loanId !== payload.loanId) {
         throw new AppError("Parcela nao encontrada para este emprestimo", 404);
       }
+      if (!new Prisma.Decimal(payload.amount).equals(installment.amount)) {
+        throw new AppError("O valor pago deve ser igual ao valor integral da parcela", 400);
+      }
     }
 
     const payment = payload.installmentId
