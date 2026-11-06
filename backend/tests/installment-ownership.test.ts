@@ -41,6 +41,20 @@ async function saveRows(rows: Row[]) {
   });
 }
 
+async function readLoanRows(): Promise<Row[]> {
+  const response = await fetch(`${baseUrl}/api/tables/loans`, { headers: { cookie: cookieA } });
+  assert.equal(response.status, 200);
+  return (await response.json() as { data: Row[] }).data;
+}
+
+async function saveLoanRows(rows: Row[]) {
+  return fetch(`${baseUrl}/api/tables/loans`, {
+    method: "PUT",
+    headers: { cookie: cookieA, "content-type": "application/json" },
+    body: JSON.stringify({ rows }),
+  });
+}
+
 before(async () => {
   // Load after selecting the test database, using the backend's CommonJS
   // module graph so the router and error handler share the same AppError class.
@@ -153,4 +167,49 @@ test("aceita cliente correto e o deriva do emprestimo quando omitido", async () 
     assert.equal(response.status, 200);
     assert.ok((await readRows()).every((row) => row.debtor_id === clientA));
   }
+});
+
+test("preserva emprestimo com pagamento antigo sem parcela vinculada", async () => {
+  const originalLoans = await readLoanRows();
+  const originalInstallments = await readRows();
+  assert.equal(originalLoans.length, 1);
+  const loanId = Number(originalLoans[0].id);
+  const payment = await prisma.payment.create({
+    data: {
+      ownerUserId: userIds[0], loanId, amount: 25,
+      paymentDate: new Date("2099-01-15"), method: "PIX",
+    },
+  });
+  assert.equal(payment.installmentId, null);
+  assert.ok(originalInstallments.every((row) => row.status !== "Pago"));
+
+  const editedRows = structuredClone(originalLoans);
+  editedRows[0].principal_amount = 999;
+
+  for (const rows of [editedRows, []]) {
+    const response = await saveLoanRows(rows);
+    assert.equal(response.status, 400);
+    assert.match((await response.json() as { message: string }).message, /pagamento registrado/);
+    assert.deepEqual(await readLoanRows(), originalLoans);
+    assert.deepEqual(await readRows(), originalInstallments);
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).amount.toString(), "25");
+  }
+
+  const unpaidLoan = await prisma.loan.create({
+    data: {
+      ownerUserId: userIds[0], clientId: clientA, principalAmount: 50, totalAmount: 50,
+      interestRate: 0, installmentsCount: 1, startDate: new Date("2099-01-01"),
+      firstDueDate: new Date("2099-02-01"), dueDate: new Date("2099-02-01"),
+    },
+  });
+  await prisma.installment.create({
+    data: {
+      ownerUserId: userIds[0], clientId: clientA, loanId: unpaidLoan.id,
+      installmentNumber: 1, amount: 50, dueDate: new Date("2099-02-01"),
+    },
+  });
+  assert.equal((await saveLoanRows(originalLoans)).status, 200);
+  assert.deepEqual(await readLoanRows(), originalLoans);
+  assert.equal(await prisma.installment.count({ where: { loanId: unpaidLoan.id } }), 0);
+  assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).loanId, loanId);
 });

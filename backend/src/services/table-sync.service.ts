@@ -566,17 +566,27 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
       });
       const paidLoanIds = [...new Set(paidLoanRows.map((item) => item.loanId))];
 
-      if (paidLoanIds.length > 0) {
+      const paymentLoanRows = await tx.payment.findMany({
+        where: { loanId: { in: [...existingLoanIdSet] } },
+        select: { loanId: true },
+        distinct: ["loanId"],
+      });
+      const protectedLoanIds = [...new Set([
+        ...paidLoanIds,
+        ...paymentLoanRows.map((item) => item.loanId),
+      ])];
+
+      if (protectedLoanIds.length > 0) {
         const normalizedById = new Map(normalized.map((row) => [row.id, row]));
-        const missingPaidLoan = paidLoanIds.find((loanId) => !normalizedById.has(loanId));
-        if (missingPaidLoan) {
-          throw new AppError("Nao e permitido excluir emprestimo com parcela paga. Estorne os pagamentos antes de editar ou excluir.", 400);
+        const missingProtectedLoan = protectedLoanIds.find((loanId) => !normalizedById.has(loanId));
+        if (missingProtectedLoan) {
+          throw new AppError("Nao e permitido excluir emprestimo com parcela paga ou pagamento registrado. Estorne os pagamentos antes de editar ou excluir.", 400);
         }
 
-        const persistedPaidLoans = await tx.loan.findMany({
+        const persistedProtectedLoans = await tx.loan.findMany({
           where: {
             ownerUserId,
-            id: { in: paidLoanIds },
+            id: { in: protectedLoanIds },
           },
           select: {
             id: true,
@@ -594,7 +604,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
           },
         });
 
-        for (const persistedLoan of persistedPaidLoans) {
+        for (const persistedLoan of persistedProtectedLoans) {
           const nextLoan = normalizedById.get(persistedLoan.id);
           if (!nextLoan) continue;
 
@@ -611,7 +621,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
             && sameDateOnly(nextLoan.dueDate, persistedLoan.dueDate);
 
           if (!unchanged) {
-            throw new AppError("Nao e permitido editar emprestimo com parcela paga. Estorne os pagamentos antes de editar.", 400);
+            throw new AppError("Nao e permitido editar emprestimo com parcela paga ou pagamento registrado. Estorne os pagamentos antes de editar.", 400);
           }
         }
       }
