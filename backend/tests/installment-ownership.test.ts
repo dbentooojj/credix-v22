@@ -41,6 +41,20 @@ async function saveRows(rows: Row[]) {
   });
 }
 
+async function readLoanRows(): Promise<Row[]> {
+  const response = await fetch(`${baseUrl}/api/tables/loans`, { headers: { cookie: cookieA } });
+  assert.equal(response.status, 200);
+  return (await response.json() as { data: Row[] }).data;
+}
+
+async function saveLoanRows(rows: Row[]) {
+  return fetch(`${baseUrl}/api/tables/loans`, {
+    method: "PUT",
+    headers: { cookie: cookieA, "content-type": "application/json" },
+    body: JSON.stringify({ rows }),
+  });
+}
+
 before(async () => {
   // Load after selecting the test database, using the backend's CommonJS
   // module graph so the router and error handler share the same AppError class.
@@ -153,4 +167,40 @@ test("aceita cliente correto e o deriva do emprestimo quando omitido", async () 
     assert.equal(response.status, 200);
     assert.ok((await readRows()).every((row) => row.debtor_id === clientA));
   }
+});
+
+test("rejeita cliente invalido no lote de emprestimos sem apagar emprestimos ou parcelas", async () => {
+  const secondLoan = await prisma.loan.create({
+    data: {
+      ownerUserId: userIds[0], clientId: clientA, principalAmount: 300, totalAmount: 300,
+      interestRate: 0, installmentsCount: 1, startDate: new Date("2099-01-01"),
+      firstDueDate: new Date("2099-02-01"), dueDate: new Date("2099-02-01"),
+    },
+  });
+  await prisma.installment.create({
+    data: {
+      ownerUserId: userIds[0], clientId: clientA, loanId: secondLoan.id,
+      installmentNumber: 1, amount: 300, dueDate: new Date("2099-02-01"),
+    },
+  });
+
+  const originalLoans = await readLoanRows();
+  const originalInstallments = await readRows();
+  assert.equal(originalLoans.length, 2);
+
+  for (const invalidClientId of [clientB, 2147483647, null, undefined]) {
+    const rows = structuredClone(originalLoans);
+    rows[0].observations = "alteracao que nao pode ser gravada";
+    rows[1].debtor_id = invalidClientId;
+
+    const response = await saveLoanRows(rows);
+    assert.equal(response.status, 400);
+    assert.match((await response.json() as { message: string }).message, /Cliente do emprestimo invalido/);
+    assert.deepEqual(await readLoanRows(), originalLoans);
+    assert.deepEqual(await readRows(), originalInstallments);
+  }
+
+  assert.equal((await saveLoanRows(originalLoans)).status, 200);
+  assert.deepEqual(await readLoanRows(), originalLoans);
+  assert.deepEqual(await readRows(), originalInstallments);
 });

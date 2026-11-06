@@ -516,7 +516,9 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
       const normalized = rows
         .map((row) => {
           const clientId = toSafeInteger(row.debtor_id ?? row.client_id ?? row.clientId);
-          if (!clientId || !clientIds.has(clientId)) return null;
+          if (!clientId || !clientIds.has(clientId)) {
+            throw new AppError("Cliente do emprestimo invalido ou nao pertence ao usuario.", 400);
+          }
 
           const id = toSafeInteger(row.id) ?? nextId++;
           const startDate = toDateOnly(row.start_date ?? row.startDate ?? new Date());
@@ -543,8 +545,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
             dueDate,
             status: normalizeLoanStatus(row.status),
           };
-        })
-        .filter((row): row is NonNullable<typeof row> => Boolean(row));
+        });
 
       const ids = normalized.map((row) => row.id);
       await ensureRowsOwnedByUser(tx, "loans", ids, ownerUserId);
