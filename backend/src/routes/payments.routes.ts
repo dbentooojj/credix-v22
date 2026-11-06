@@ -44,14 +44,14 @@ function readInstallmentId(raw: unknown): number {
   return Math.trunc(parsed);
 }
 
-async function refreshLoanStatus(loanId: number, ownerUserId: number) {
-  const installments = await prisma.installment.findMany({
+async function refreshLoanStatus(tx: Prisma.TransactionClient, loanId: number, ownerUserId: number) {
+  const installments = await tx.installment.findMany({
     where: { loanId, ownerUserId },
     select: { status: true, dueDate: true },
   });
 
   if (installments.length === 0) {
-    await prisma.loan.updateMany({
+    await tx.loan.updateMany({
       where: { id: loanId, ownerUserId },
       data: { status: LoanStatus.PENDENTE },
     });
@@ -59,7 +59,7 @@ async function refreshLoanStatus(loanId: number, ownerUserId: number) {
   }
 
   if (installments.every((i) => i.status === InstallmentStatus.PAGO)) {
-    await prisma.loan.updateMany({
+    await tx.loan.updateMany({
       where: { id: loanId, ownerUserId },
       data: { status: LoanStatus.QUITADO },
     });
@@ -71,7 +71,7 @@ async function refreshLoanStatus(loanId: number, ownerUserId: number) {
     || (i.status !== InstallmentStatus.PAGO && isDateBeforeTodayInTimeZone(i.dueDate))
   ));
 
-  await prisma.loan.updateMany({
+  await tx.loan.updateMany({
     where: { id: loanId, ownerUserId },
     data: { status: hasOverdue ? LoanStatus.ATRASADO : LoanStatus.EM_DIA },
   });
@@ -227,6 +227,7 @@ router.post("/", async (req, res) => {
       });
     }
 
+    await refreshLoanStatus(tx, payload.loanId, userId);
     return payment;
   });
 
@@ -238,8 +239,6 @@ router.post("/", async (req, res) => {
     await syncPaymentIdSequence(prisma);
     result = await persistPaymentInTransaction();
   }
-
-  await refreshLoanStatus(payload.loanId, userId);
 
   return res.status(201).json({
     message: "Pagamento registrado",
@@ -307,14 +306,13 @@ router.post("/installments/:installmentId/revert", async (req, res) => {
       loanId: installment.loanId,
     });
 
+    await refreshLoanStatus(tx, installment.loanId, userId);
     return {
       installmentId,
       loanId: installment.loanId,
       status: revertedStatus,
     };
   });
-
-  await refreshLoanStatus(result.loanId, userId);
 
   return res.json({
     message: "Pagamento estornado",
@@ -419,6 +417,7 @@ router.delete("/installments/:installmentId", async (req, res) => {
       },
     });
 
+    await refreshLoanStatus(tx, installment.loanId, userId);
     return {
       installmentId,
       loanId: installment.loanId,
@@ -426,8 +425,6 @@ router.delete("/installments/:installmentId", async (req, res) => {
       newLoanTotalAmount: totalAmount,
     };
   });
-
-  await refreshLoanStatus(result.loanId, userId);
 
   return res.json({
     message: "Parcela excluida",

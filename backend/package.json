@@ -10,6 +10,7 @@
     "test": "tsx --test src/**/*.test.ts",
     "test:ownership": "node tests/run-ownership-tests.cjs",
     "test:payment-amount": "node tests/run-payment-amount-tests.cjs",
+    "test:payment-status": "node tests/run-payment-status-tests.cjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
