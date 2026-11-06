@@ -22,6 +22,7 @@ import { tablesRoutes } from "./routes/tables.routes";
 const app = express();
 
 app.disable("x-powered-by");
+app.set("trust proxy", env.TRUST_PROXY_HOPS);
 
 app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json({ limit: "2mb" }));

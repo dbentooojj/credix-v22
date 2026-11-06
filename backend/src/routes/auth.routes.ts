@@ -6,6 +6,7 @@ import { signPasswordResetToken, signToken, verifyPasswordResetToken } from "../
 import { createPasswordResetVersion } from "../lib/password-reset";
 import { prisma } from "../lib/prisma";
 import { requireAuthApi } from "../middleware/auth";
+import { createLoginRateLimiter } from "../middleware/login-rate-limit";
 import {
   forgotPasswordSchema,
   loginSchema,
@@ -57,7 +58,7 @@ function resolvePublicBaseUrl(req: Request): string {
   return `${protocol}://${host}`;
 }
 
-router.post("/auth/login", async (req, res) => {
+router.post("/auth/login", createLoginRateLimiter(), async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
 
   const user = await prisma.user.findUnique({

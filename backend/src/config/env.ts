@@ -14,6 +14,7 @@ function normalizeOptional(value?: string): string | undefined {
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
   DATABASE_URL: z.string().min(1),
   APP_BASE_URL: z
     .string()
