@@ -720,16 +720,15 @@ export default function CarteiraDashboardClient() {
           </div>
 
           <div className="grid min-w-0 gap-2.5 sm:grid-cols-2">
+            <HeroStat label="Total já emprestado" value={formatCurrency(kpis.totalOriginated)} />
             <HeroStat label="Dinheiro adicionado" value={formatCurrency(cashAdded)} />
             <HeroStat label="Dinheiro retirado" value={formatCurrency(cashWithdrawn)} />
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 sm:col-span-2">
-              <div>
-                <p className="text-xs font-medium text-slate-600">Aporte líquido</p>
-                <p className="mt-0.5 text-xs text-slate-500">Adicionado − retirado</p>
-              </div>
-              <p className={cn('break-words text-lg font-bold tracking-tight', cashAdjustmentNet < 0 ? 'text-rose-600' : 'text-slate-950')}>
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3">
+              <p className="text-xs font-medium text-slate-600">Aporte líquido</p>
+              <p className={cn('mt-1 break-words text-lg font-bold tracking-tight', cashAdjustmentNet < 0 ? 'text-rose-600' : 'text-slate-950')}>
                 {formatCurrency(cashAdjustmentNet)}
               </p>
+              <p className="mt-0.5 text-xs text-slate-500">Adicionado − retirado</p>
             </div>
           </div>
         </div>
