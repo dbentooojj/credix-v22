@@ -692,7 +692,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
 
   await prisma.$transaction(async (tx) => {
     const loans = await tx.loan.findMany({
-      where: { ownerUserId },
+      where: { ownerUserId, client: { ownerUserId } },
       select: { id: true, clientId: true, paymentMethod: true },
     });
     const loanMap = new Map(loans.map((loan) => [loan.id, loan]));
@@ -702,11 +702,20 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
 
     const normalized = rows
       .map((row) => {
-        const loanId = toSafeInteger(row.loan_id ?? row.loanId);
-        if (!loanId) return null;
-
+        const loanId = Number(row.loan_id ?? row.loanId);
         const loan = loanMap.get(loanId);
-        if (!loan) return null;
+        if (!loan) {
+          throw new AppError("Emprestimo invalido para esta parcela.", 400);
+        }
+
+        // The owned loan is the source of truth for the client relationship.
+        // Validate every supported alias so conflicting fields cannot be ignored.
+        for (const field of ["debtor_id", "client_id", "clientId"] as const) {
+          const clientId = row[field];
+          if (clientId !== undefined && clientId !== null && Number(clientId) !== loan.clientId) {
+            throw new AppError("O cliente da parcela deve ser o mesmo do emprestimo.", 400);
+          }
+        }
 
         const id = toSafeInteger(row.id) ?? nextId++;
         const status = normalizeInstallmentStatus(row.status);
@@ -718,7 +727,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
         return {
           id,
           loanId,
-          clientId: toSafeInteger(row.debtor_id ?? row.client_id ?? row.clientId) ?? loan.clientId,
+          clientId: loan.clientId,
           installmentNumber: Math.max(1, toSafeInteger(row.installment_number ?? row.installmentNumber) ?? 1),
           dueDate: toDateOnly(row.due_date ?? row.dueDate ?? new Date()),
           paymentDate: status === InstallmentStatus.PAGO ? toDateOnly(row.payment_date ?? row.paymentDate ?? new Date()) : null,
