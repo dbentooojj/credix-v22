@@ -10,7 +10,7 @@ const normalizeMethodInput = (value: unknown) =>
 
 export const createPaymentSchema = z.object({
   loanId: z.coerce.number().int().positive(),
-  installmentId: z.coerce.number().int().positive().optional(),
+  installmentId: z.coerce.number().int().positive(),
   amount: z.coerce.number().positive(),
   paymentDate: z.string().min(1),
   method: z.string().transform(normalizeMethodInput).pipe(paymentMethodSchema),

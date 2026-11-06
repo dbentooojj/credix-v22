@@ -155,77 +155,61 @@ router.post("/", async (req, res) => {
       throw new AppError("Emprestimo nao encontrado", 404);
     }
 
-    if (payload.installmentId) {
-      const installment = await tx.installment.findFirst({
-        where: {
-          id: payload.installmentId,
-          loanId: payload.loanId,
-          ownerUserId: userId,
-        },
-      });
-      if (!installment || installment.loanId !== payload.loanId) {
-        throw new AppError("Parcela nao encontrada para este emprestimo", 404);
-      }
-      if (!new Prisma.Decimal(payload.amount).equals(installment.amount)) {
-        throw new AppError("O valor pago deve ser igual ao valor integral da parcela", 400);
-      }
+    const installment = await tx.installment.findFirst({
+      where: {
+        id: payload.installmentId,
+        loanId: payload.loanId,
+        ownerUserId: userId,
+      },
+    });
+    if (!installment) {
+      throw new AppError("Parcela nao encontrada para este emprestimo", 404);
+    }
+    if (!new Prisma.Decimal(payload.amount).equals(installment.amount)) {
+      throw new AppError("O valor pago deve ser igual ao valor integral da parcela", 400);
     }
 
-    const payment = payload.installmentId
-      ? await tx.payment.upsert({
-          where: { installmentId: payload.installmentId },
-          create: {
-            ownerUserId: userId,
-            loanId: payload.loanId,
-            installmentId: payload.installmentId,
-            amount: payload.amount,
-            paymentDate,
-            method: payload.method as PaymentMethod,
-            notes: payload.notes?.trim() || null,
-          },
-          update: {
-            ownerUserId: userId,
-            loanId: payload.loanId,
-            amount: payload.amount,
-            paymentDate,
-            method: payload.method as PaymentMethod,
-            notes: payload.notes?.trim() || null,
-          },
-        })
-      : await tx.payment.create({
-          data: {
-            ownerUserId: userId,
-            loanId: payload.loanId,
-            installmentId: payload.installmentId,
-            amount: payload.amount,
-            paymentDate,
-            method: payload.method as PaymentMethod,
-            notes: payload.notes?.trim() || null,
-          },
-        });
-
-    if (payload.installmentId) {
-      await tx.installment.updateMany({
-        where: {
-          id: payload.installmentId,
-          ownerUserId: userId,
-        },
-        data: {
-          status: InstallmentStatus.PAGO,
-          paymentDate,
-          paymentMethod: payload.method as PaymentMethod,
-          notes: payload.notes?.trim() || null,
-        },
-      });
-
-      await upsertInstallmentIncomeTransaction(tx, {
+    const payment = await tx.payment.upsert({
+      where: { installmentId: payload.installmentId },
+      create: {
         ownerUserId: userId,
+        loanId: payload.loanId,
         installmentId: payload.installmentId,
+        amount: payload.amount,
+        paymentDate,
+        method: payload.method as PaymentMethod,
+        notes: payload.notes?.trim() || null,
+      },
+      update: {
+        ownerUserId: userId,
         loanId: payload.loanId,
         amount: payload.amount,
-        date: paymentDate,
-      });
-    }
+        paymentDate,
+        method: payload.method as PaymentMethod,
+        notes: payload.notes?.trim() || null,
+      },
+    });
+
+    await tx.installment.updateMany({
+      where: {
+        id: payload.installmentId,
+        ownerUserId: userId,
+      },
+      data: {
+        status: InstallmentStatus.PAGO,
+        paymentDate,
+        paymentMethod: payload.method as PaymentMethod,
+        notes: payload.notes?.trim() || null,
+      },
+    });
+
+    await upsertInstallmentIncomeTransaction(tx, {
+      ownerUserId: userId,
+      installmentId: payload.installmentId,
+      loanId: payload.loanId,
+      amount: payload.amount,
+      date: paymentDate,
+    });
 
     await refreshLoanStatus(tx, payload.loanId, userId);
     return payment;

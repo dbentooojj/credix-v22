@@ -104,3 +104,35 @@ test("nao altera pagamento ja registrado com valor divergente", async () => {
   assert.equal(payment.amount.toString(), "100.01");
   assert.equal(await prisma.financeTransaction.count(), 1);
 });
+
+test("recusa novo pagamento sem parcela e preserva registros antigos", async () => {
+  const loan = await prisma.loan.findUniqueOrThrow({ where: { id: loanId } });
+  const legacyPayment = await prisma.payment.create({
+    data: {
+      ownerUserId: loan.ownerUserId,
+      loanId,
+      amount: 25,
+      paymentDate: new Date("2099-01-15"),
+      method: "PIX",
+    },
+  });
+  const paymentCount = await prisma.payment.count();
+  const transactionCount = await prisma.financeTransaction.count();
+
+  const response = await fetch(`${baseUrl}/api/payments`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ loanId, amount: 25, paymentDate: "2099-02-01", method: "PIX" }),
+  });
+  assert.equal(response.status, 400);
+  const error = await response.json() as { issues: { fieldErrors: { installmentId?: string[] } } };
+  assert.ok(error.issues.fieldErrors.installmentId?.length);
+  assert.equal(await prisma.payment.count(), paymentCount);
+  assert.equal(await prisma.financeTransaction.count(), transactionCount);
+  assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: legacyPayment.id } })).amount.toString(), "25");
+
+  const history = await fetch(`${baseUrl}/api/payments`, { headers: { cookie } });
+  assert.equal(history.status, 200);
+  const body = await history.json() as { data: { id: number; installmentId: number | null }[] };
+  assert.ok(body.data.some((item) => item.id === legacyPayment.id && item.installmentId === null));
+});
