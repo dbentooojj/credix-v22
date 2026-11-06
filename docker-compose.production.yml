@@ -32,7 +32,6 @@ services:
       PORT: ${PORT:-4000}
       # Caddy e Next.js sao os dois proxies antes do backend, que nao expoe porta no host.
       TRUST_PROXY_HOPS: 2
-      APP_BASE_URL: ${APP_BASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}

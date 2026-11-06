@@ -18,7 +18,6 @@ import {
   LogoutIcon,
   MenuIcon,
   ProfileIcon,
-  ShieldIcon,
   UsersIcon,
 } from "./icons";
 
@@ -295,13 +294,6 @@ export function AppShell({ children }: AppShellProps) {
               >
                 <ProfileIcon className="h-4 w-4 text-slate-400" />
                 <span>Meu perfil</span>
-              </Link>
-              <Link
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                href="/account.html?tab=security"
-              >
-                <ShieldIcon className="h-4 w-4 text-slate-400" />
-                <span>Segurança</span>
               </Link>
               <Link
                 className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"

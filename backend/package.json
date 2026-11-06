@@ -18,6 +18,7 @@
     "cash:backfill:loan-disbursements": "tsx src/scripts/backfill-loan-disbursements.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:production": "tsx prisma/seed-production.ts",
+    "admin:change-password": "node dist/scripts/change-admin-password.js",
     "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:seed:stress": "tsx prisma/seed-stress.ts",
     "db:reset": "prisma migrate reset --force"

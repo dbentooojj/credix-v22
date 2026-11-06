@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { Mail, User, ShieldCheck, HelpCircle } from "lucide-react";
+import { Mail, User, HelpCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "../../../components/PageHeader";
 
@@ -24,7 +24,6 @@ function ContaPageContent() {
 
   const tabs = [
     { key: "profile", label: "Meu perfil", icon: User },
-    { key: "security", label: "Seguranca", icon: ShieldCheck },
     { key: "help", label: "Ajuda", icon: HelpCircle },
   ];
 
@@ -69,28 +68,6 @@ function ContaPageContent() {
                 </div>
                 <button className="min-h-[44px] rounded-xl bg-[#4F7EF7] px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition hover:bg-[#3b6ef0] active:translate-y-px">
                   Salvar alteracoes
-                </button>
-              </div>
-            </div>
-          )}
-
-          {currentTab === "security" && (
-            <div className="animate-fade-in">
-              <div className="max-w-lg space-y-5">
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Senha atual</label>
-                  <input type="password" className={inputClass} placeholder="••••••••" />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Nova senha</label>
-                  <input type="password" className={inputClass} placeholder="••••••••" />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Confirmar nova senha</label>
-                  <input type="password" className={inputClass} placeholder="••••••••" />
-                </div>
-                <button className="min-h-[44px] rounded-xl bg-[#4F7EF7] px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(79,126,247,0.4)] transition hover:bg-[#3b6ef0] active:translate-y-px">
-                  Atualizar senha
                 </button>
               </div>
             </div>
