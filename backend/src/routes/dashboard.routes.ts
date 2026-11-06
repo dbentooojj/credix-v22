@@ -1559,6 +1559,8 @@ router.get("/", async (req, res) => {
     },
     kpiCards,
     cashAdjustment: {
+      added: ledgerAccumulator.cashAdded,
+      withdrawn: ledgerAccumulator.cashWithdrawn,
       net: cashAdjustmentNet,
       last: latestCashAdjustment
         ? {

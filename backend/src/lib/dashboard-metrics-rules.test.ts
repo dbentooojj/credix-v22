@@ -50,6 +50,23 @@ test("ajuste manual afeta apenas saldo", () => {
   assert.equal(withAdjustment.cashAdjustmentNet, 700);
 });
 
+test("separa dinheiro adicionado e retirado sem confundir com lucro", () => {
+  const ledger = createDashboardLedgerAccumulator();
+  for (const [type, amountSigned] of [
+    ["adjustment", 1_000],
+    ["adjustment", -300],
+    ["revenue", 50],
+  ] as const) {
+    applyDashboardLedgerTransaction(ledger, { type, amountSigned, monthKey: "2026-11" }, "2026-11");
+  }
+
+  assert.equal(ledger.cashAdded, 1_000);
+  assert.equal(ledger.cashWithdrawn, 300);
+  assert.equal(ledger.cashAdjustmentNet, 700);
+  assert.equal(ledger.cashBalance, 750);
+  assert.equal(ledger.profitTotal, 50);
+});
+
 test("ajuste manual nao altera lucro", () => {
   const base = buildBaseMetrics();
   const withAdjustment = applyDashboardAdjustments(base, [

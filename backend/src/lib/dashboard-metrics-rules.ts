@@ -19,6 +19,8 @@ export type DashboardLedgerTransaction = DashboardTransaction & {
 export type DashboardLedgerAccumulator = {
   cashBalance: number;
   cashAdjustmentNet: number;
+  cashAdded: number;
+  cashWithdrawn: number;
   totalReceived: number;
   receivedThisMonth: number;
   profitTotal: number;
@@ -111,6 +113,8 @@ export function createDashboardLedgerAccumulator(): DashboardLedgerAccumulator {
   return {
     cashBalance: 0,
     cashAdjustmentNet: 0,
+    cashAdded: 0,
+    cashWithdrawn: 0,
     totalReceived: 0,
     receivedThisMonth: 0,
     profitTotal: 0,
@@ -135,6 +139,11 @@ export function applyDashboardLedgerTransaction(
 
   if (impact.isAdjustment) {
     accumulator.cashAdjustmentNet += transaction.amountSigned;
+    if (transaction.amountSigned > 0) {
+      accumulator.cashAdded += transaction.amountSigned;
+    } else {
+      accumulator.cashWithdrawn -= transaction.amountSigned;
+    }
   }
 
   if (impact.affectsRevenue) {

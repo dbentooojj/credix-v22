@@ -98,6 +98,11 @@ type DashboardPayload = {
     timezone?: string;
   };
   kpis: FinancialKpis;
+  cashAdjustment?: {
+    added: number;
+    withdrawn: number;
+    net: number;
+  };
   portfolio?: {
     kpis?: Partial<FinancialKpis>;
     chart?: { points: ChartPoint[] };
@@ -225,9 +230,9 @@ function MetricCard({
 
 function HeroStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
       <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-bold tracking-tight text-slate-900">{value}</p>
+      <p className="mt-1 break-words text-lg font-bold tracking-tight text-slate-900">{value}</p>
     </div>
   );
 }
@@ -495,8 +500,9 @@ export default function CarteiraDashboardClient() {
   const totalToReceive = kpis.totalToReceive ?? kpis.totalOpenReceivable ?? 0;
   const totalOverdue = kpis.totalOverdue ?? kpis.openReceivableOverdue ?? 0;
   const overdueInstallmentsCount = kpis.overdueInstallmentsCount ?? data?.dailySummary.overdue.count ?? 0;
-  const activeLoansCount = kpis.activeLoansCount ?? 0;
-  const activeClientsCount = kpis.activeClientsCount ?? 0;
+  const cashAdded = data?.cashAdjustment?.added ?? 0;
+  const cashWithdrawn = data?.cashAdjustment?.withdrawn ?? 0;
+  const cashAdjustmentNet = data?.cashAdjustment?.net ?? kpis.cashAdjustmentNet ?? 0;
 
   const upcomingItems = data?.upcomingDue || [];
   const overdueItems = data?.overduePayments || [];
@@ -687,7 +693,7 @@ export default function CarteiraDashboardClient() {
       ) : null}
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
-        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[1.35fr_1fr] lg:items-end lg:p-8">
+        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-end lg:p-8">
           <div>
             <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
@@ -713,10 +719,18 @@ export default function CarteiraDashboardClient() {
             </div>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            <HeroStat label="Total já emprestado" value={formatCurrency(kpis.totalOriginated)} />
-            <HeroStat label="Empréstimos ativos" value={String(activeLoansCount)} />
-            <HeroStat label="Clientes ativos" value={String(activeClientsCount)} />
+          <div className="grid min-w-0 gap-2.5 sm:grid-cols-2">
+            <HeroStat label="Dinheiro adicionado" value={formatCurrency(cashAdded)} />
+            <HeroStat label="Dinheiro retirado" value={formatCurrency(cashWithdrawn)} />
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 sm:col-span-2">
+              <div>
+                <p className="text-xs font-medium text-slate-600">Aporte líquido</p>
+                <p className="mt-0.5 text-xs text-slate-500">Adicionado − retirado</p>
+              </div>
+              <p className={cn('break-words text-lg font-bold tracking-tight', cashAdjustmentNet < 0 ? 'text-rose-600' : 'text-slate-950')}>
+                {formatCurrency(cashAdjustmentNet)}
+              </p>
+            </div>
           </div>
         </div>
       </section>
