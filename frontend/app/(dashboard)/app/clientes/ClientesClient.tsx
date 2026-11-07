@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import Link from "next/link";
+import { Fragment, useState, useEffect, useMemo, useCallback, type MouseEvent } from "react";
+import { ClientFinancialPanel, useClientFinancials } from "./ClientFinancialPanel";
 import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { PageHeader } from "../../../components/PageHeader";
@@ -16,7 +16,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ArrowUpDownIcon,
-  EyeIcon,
+  ChevronDownIcon,
   Edit2Icon,
   Trash2Icon,
   Plus,
@@ -34,56 +34,15 @@ type Debtor = {
   created_at?: string;
 };
 
-type Loan = {
-  id: string | number;
-  debtor_id: string | number;
-  status?: string;
+type ClientOverview = Debtor & {
+  uiStatus: string; loansCount: number; overdueCount: number; pendingCount: number;
+  maxOverdueDays: number; openTotal: number; overdueTotal: number; score: number; totalDueCount: number;
 };
 
-type Installment = {
-  id: string | number;
-  debtor_id: string | number;
-  loan_id: string | number;
-  status?: string;
-  payment_date?: string;
-  due_date?: string;
-  amount?: number | string;
-  value?: number | string;
-};
-
-// --- HELPERS ---
-function sameId(a: any, b: any) {
-  return String(a ?? "") === String(b ?? "");
-}
-
-function parseDateValue(value: any) {
-  if (!value) return null;
-  if (value instanceof Date) return new Date(value.getTime());
-
-  const raw = String(value).trim();
-  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnlyMatch) {
-    const year = Number(dateOnlyMatch[1]);
-    const month = Number(dateOnlyMatch[2]) - 1;
-    const day = Number(dateOnlyMatch[3]);
-    return new Date(year, month, day);
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
-}
-
-function startOfDay(value: any) {
-  const date = parseDateValue(value);
-  if (!date) return null;
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function daysBetween(fromDate: Date, toDate: Date) {
-  if (!(fromDate instanceof Date) || !(toDate instanceof Date)) return 0;
-  return Math.floor((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
+function situationText(debtor: ClientOverview) {
+  if (debtor.overdueCount > 0) return debtor.overdueCount + (debtor.overdueCount === 1 ? " parcela vencida" : " parcelas vencidas");
+  if (debtor.pendingCount > 0) return debtor.pendingCount + (debtor.pendingCount === 1 ? " parcela a vencer" : " parcelas a vencer");
+  return debtor.openTotal > 0 ? "Em dia" : debtor.loansCount > 0 ? "Sem saldo em aberto" : "Sem empréstimos";
 }
 
 function formatCurrency(value: any) {
@@ -153,11 +112,42 @@ function getScoreIndicator(scoreValue: number) {
 
 export function ClientesClient() {
   const toast = useToast();
-  const [debtors, setDebtors] = useState<Debtor[]>([]);
-  const [installments, setInstallments] = useState<Installment[]>([]);
-  const [loans, setLoans] = useState<Loan[]>([]);
+  const [debtors, setDebtors] = useState<ClientOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(5);
+  const financials = useClientFinancials(expandedId, historyPage, historyPageSize);
+
+  function toggleClient(id: string | number) {
+    setExpandedId((current) => current === String(id) ? null : String(id));
+    setHistoryPage(1);
+    setHistoryPageSize(5);
+  }
+
+  function handleClientRowClick(event: MouseEvent<HTMLElement>, id: string | number) {
+    // Buttons retain their own action; interacting with the open history must
+    // never collapse the mobile card or toggle the row twice.
+    if ((event.target as Element).closest("button, a, input, select, textarea, [data-client-details]")) return;
+    toggleClient(id);
+  }
+
+  function renderClientName(debtor: ClientOverview, mobile = false) {
+    const expanded = expandedId === String(debtor.id);
+    return <button type="button" onClick={() => toggleClient(debtor.id)} aria-expanded={expanded}
+      aria-controls={(mobile ? "mobile" : "table") + "-client-financials-" + debtor.id}
+      className="inline-flex max-w-full items-center gap-1.5 rounded text-left font-semibold hover:text-blue-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-400">
+      <span className="break-words">{debtor.name || "-"}</span>
+      <ChevronDownIcon className={"h-3.5 w-3.5 shrink-0 transition-transform " + (expanded ? "rotate-180" : "")} />
+    </button>;
+  }
+
+  function renderFinancialPanel() {
+    return <ClientFinancialPanel financials={financials} page={historyPage} pageSize={historyPageSize}
+      onPageChange={setHistoryPage} onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }} />;
+  }
 
   // Filtros
   const [search, setSearch] = useState("");
@@ -194,14 +184,12 @@ export function ClientesClient() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [resDebtors, resInstallments, resLoans] = await Promise.all([
-        fetch("/api/tables/debtors").then((r) => r.json()),
-        fetch("/api/tables/installments").then((r) => r.json()),
-        fetch("/api/tables/loans").then((r) => r.json()),
-      ]);
-      if (resDebtors.data) setDebtors(resDebtors.data);
-      if (resInstallments.data) setInstallments(resInstallments.data);
-      if (resLoans.data) setLoans(resLoans.data);
+      setError(null);
+      const response = await fetch("/api/tables/debtors/overview", { cache: "no-store" });
+      if (!response.ok) throw new Error("Falha ao carregar dados dos clientes.");
+      const body = await response.json();
+      setDebtors(body.data);
+      setExpandedId(null);
     } catch (err: any) {
       setError("Falha ao carregar dados dos clientes.");
     } finally {
@@ -283,148 +271,7 @@ export function ClientesClient() {
     } finally { setSaving(false); }
   }
 
-  // --- ENGINE DE PROCESSAMENTO (Réplica exata do backend/ejs) ---
-  const enrichedDebtors = useMemo(() => {
-    const today = startOfDay(new Date());
-
-    return debtors.map((debtor) => {
-      // Filtrar parcelas desse devedor
-      const debInstallments = installments.filter((i) => sameId(i.debtor_id, debtor.id));
-      const debLoans = loans.filter((l) => sameId(l.debtor_id, debtor.id));
-
-      let loansCount = debLoans.length;
-      let overdueCount = 0;
-      let maxOverdueDays = 0;
-      let openTotal = 0;
-
-      let hasActiveLoan = false;
-
-      // Histórico de parcelas passadas
-      const history: any[] = [];
-
-      debInstallments.forEach((inst) => {
-        const status = String(inst.status || "").trim().toLowerCase();
-        const amount = Number(inst.amount ?? inst.value ?? 0);
-        const dueDate = startOfDay(inst.due_date);
-        const paymentDate = startOfDay(inst.payment_date);
-
-        if (dueDate) {
-          history.push({
-            status,
-            dueDate,
-            paymentDate,
-            amount: Number.isFinite(amount) ? amount : 0,
-          });
-
-          if (status !== "pago" && today) {
-            openTotal += Number.isFinite(amount) ? amount : 0;
-            const daysOverdue = daysBetween(dueDate, today);
-            if (daysOverdue > 0 || status === "atrasado") {
-              overdueCount += 1;
-              maxOverdueDays = Math.max(maxOverdueDays, daysOverdue);
-            }
-          }
-        }
-      });
-
-      // Status derivation
-      let uiStatus = "Inativo";
-      const userRawStatus = String(debtor.status || "").trim().toLowerCase();
-      if (userRawStatus === "ativo") {
-        uiStatus = "Ativo";
-      } else if (userRawStatus === "inativo") {
-        uiStatus = "Inativo";
-      }
-
-      if (uiStatus === "Ativo") {
-        if (overdueCount > 0) {
-          uiStatus = "Atrasado";
-        } else if (openTotal === 0 && loansCount > 0) {
-          uiStatus = "Quitado";
-        }
-      }
-
-      // --- CÁLCULO ÍNDICE CREDIX ---
-      let scoreRaw = 500;
-      history.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-
-      let paidOnTimeCount = 0;
-      let paidLateCount = 0;
-      let unpaidOverdueCount = 0;
-      let totalLateDays = 0;
-      let totalOverdueOpenDays = 0;
-
-      history.forEach((item) => {
-        if (!item.dueDate || !today) return;
-        if (item.dueDate > today && item.status !== "pago") return;
-
-        const isPaid = item.status === "pago" || Boolean(item.paymentDate);
-        if (isPaid) {
-          const lateDays = item.paymentDate ? Math.max(daysBetween(item.dueDate, item.paymentDate), 0) : 0;
-          if (lateDays === 0) {
-            scoreRaw += 12;
-            paidOnTimeCount += 1;
-          } else if (lateDays <= 3) {
-            scoreRaw -= 8;
-            paidLateCount += 1;
-            totalLateDays += lateDays;
-          } else if (lateDays <= 7) {
-            scoreRaw -= 20;
-            paidLateCount += 1;
-            totalLateDays += lateDays;
-          } else if (lateDays <= 15) {
-            scoreRaw -= 38;
-            paidLateCount += 1;
-            totalLateDays += lateDays;
-          } else {
-            scoreRaw -= 60;
-            paidLateCount += 1;
-            totalLateDays += lateDays;
-          }
-          return;
-        }
-
-        const overdueDays = Math.max(daysBetween(item.dueDate, today), 0);
-        if (overdueDays > 0) {
-          unpaidOverdueCount += 1;
-          totalOverdueOpenDays += overdueDays;
-          if (overdueDays <= 7) scoreRaw -= 48;
-          else if (overdueDays <= 15) scoreRaw -= 78;
-          else if (overdueDays <= 30) scoreRaw -= 118;
-          else scoreRaw -= 165;
-        }
-      });
-
-      let onTimeStreak = 0;
-      for (let index = history.length - 1; index >= 0; index -= 1) {
-        const item = history[index];
-        const isPaid = item.status === "pago" || Boolean(item.paymentDate);
-        if (!isPaid) break;
-        const lateDays = item.paymentDate ? Math.max(daysBetween(item.dueDate, item.paymentDate), 0) : 0;
-        if (lateDays === 0) onTimeStreak += 1;
-        else break;
-      }
-
-      scoreRaw += Math.min(onTimeStreak * 6, 30);
-      const closedLoansCount = debLoans.filter((l) => String(l.status).toLowerCase() === "quitado").length;
-      scoreRaw += Math.min(closedLoansCount * 10, 40);
-
-      const totalDueCount = history.filter((i) => i.dueDate <= today!).length;
-      const score = Math.max(0, Math.min(1000, Math.round(scoreRaw)));
-      // Fim Índice
-
-      return {
-        ...debtor,
-        uiStatus,
-        loansCount,
-        overdueCount,
-        maxOverdueDays,
-        openTotal,
-        score,
-        totalDueCount,
-      };
-    });
-  }, [debtors, installments, loans]);
+  const enrichedDebtors = debtors;
 
   // Aplicação de Filtros e Ordenação
   const filteredAndSorted = useMemo(() => {
@@ -477,6 +324,9 @@ export function ClientesClient() {
   const currentPageSafe = Math.min(Math.max(1, page), totalPages);
   const startIdx = (currentPageSafe - 1) * pageSize;
   const pageRows = filteredAndSorted.slice(startIdx, startIdx + pageSize);
+
+  useEffect(() => { setExpandedId(null); setPage(1); }, [search, statusFilter, sortBy, sortDir]);
+  useEffect(() => { setExpandedId(null); }, [currentPageSafe]);
 
   // KPIs
   const totalDebtors = enrichedDebtors.length;
@@ -613,7 +463,11 @@ export function ClientesClient() {
 
         {/* Tabela */}
         <div className="hidden overflow-x-auto rounded-xl border border-slate-800 md:block">
-          <table className="w-full text-left text-sm text-slate-300">
+          <table className="w-full min-w-[820px] table-fixed text-left text-sm text-slate-300">
+            <colgroup>
+              <col className="w-[26%]" /><col className="w-[12%]" /><col className="w-[20%]" />
+              <col className="w-[14%]" /><col className="w-[18%]" /><col className="w-[10%]" />
+            </colgroup>
             <thead className="bg-slate-900/80 text-xs font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th
@@ -628,14 +482,8 @@ export function ClientesClient() {
                 >
                   Status {renderSortIcon("status")}
                 </th>
-                <th className="px-4 py-3">Situacao</th>
-                <th className="px-4 py-3 text-center">Indice Credix</th>
-                <th
-                  className="px-4 py-3 text-right cursor-pointer hover:bg-slate-800 transition-colors"
-                  onClick={() => toggleSort("overdue_count")}
-                >
-                  Atrasos {renderSortIcon("overdue_count")}
-                </th>
+                <th className="px-4 py-3 cursor-pointer" onClick={() => toggleSort("overdue_count")}>Situação {renderSortIcon("overdue_count")}</th>
+                <th className="px-4 py-3 text-center">Índice Credix</th>
                 <th
                   className="px-4 py-3 text-right cursor-pointer hover:bg-slate-800 transition-colors"
                   onClick={() => toggleSort("open_total")}
@@ -645,34 +493,35 @@ export function ClientesClient() {
                 <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
+            <tbody className="bg-slate-900/20">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
                     Carregando clientes...
                   </td>
                 </tr>
               ) : pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
                     Nenhum cliente encontrado
                   </td>
                 </tr>
               ) : (
                 pageRows.map((debtor) => {
                   const scoreInfo = getScoreIndicator(debtor.score);
+                  const expanded = expandedId === String(debtor.id);
                   return (
-                    <tr
-                      key={debtor.id}
-                      className="transition-colors hover:bg-slate-800/40"
-                    >
-                      <td className="px-4 py-4">
-                        <div className="font-semibold text-slate-100">{debtor.name || "-"}</div>
+                    <Fragment key={debtor.id}>
+                    <tr onClick={(event) => handleClientRowClick(event, debtor.id)}
+                      className={`cursor-pointer border-t border-slate-200/70 first:border-t-0 transition-colors ${expanded ? "bg-[#eef4ff]" : "hover:bg-slate-800/40"}`}>
+                      <td className="px-4 py-3">
+                        <div className="text-slate-100">{renderClientName(debtor)}</div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {formatDocument(debtor.document || debtor.cpf) || "Sem doc."} - {formatPhone(debtor.phone) || "Sem cel."}
+                          {debtor.document || debtor.cpf ? <>{formatDocument(debtor.document || debtor.cpf)} · </> : null}
+                          {debtor.phone ? formatPhone(debtor.phone) : "Sem telefone"}
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3">
                         <span
                           className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(
                             debtor.uiStatus
@@ -681,19 +530,19 @@ export function ClientesClient() {
                           {debtor.uiStatus}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3">
                         {debtor.overdueCount > 0 ? (
-                          <div className="text-red-400 font-semibold">{debtor.overdueCount} boleto(s) pendente(s)</div>
+                          <div className="text-red-400 font-semibold">{situationText(debtor)}</div>
                         ) : debtor.openTotal > 0 ? (
-                          <div className="text-emerald-400 font-semibold">Em dia</div>
+                          <div className="text-emerald-400 font-semibold">{situationText(debtor)}</div>
                         ) : (
-                          <div className="text-slate-500 font-semibold">-</div>
+                          <div className="text-slate-500">{situationText(debtor)}</div>
                         )}
                         {debtor.maxOverdueDays > 0 && (
-                          <div className="text-xs text-red-400/80">({debtor.maxOverdueDays} dias atrasado)</div>
+                          <div className="text-xs text-red-400/80">{debtor.maxOverdueDays} {debtor.maxOverdueDays === 1 ? "dia" : "dias"} em atraso</div>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-4 py-3 text-center">
                         {debtor.totalDueCount > 0 ? (
                           <div className="inline-flex flex-col items-center">
                             <div
@@ -710,31 +559,29 @@ export function ClientesClient() {
                           <span className="text-xs font-semibold text-slate-600">Sem histórico</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-right">
-                        {debtor.overdueCount > 0 ? (
-                          <span className="text-base font-bold text-red-400">{debtor.overdueCount}</span>
-                        ) : (
-                          <span className="text-slate-600 font-semibold">0</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="px-4 py-3 text-right">
                         {debtor.openTotal > 0 ? (
                           <span className="text-sm font-bold text-slate-100">{formatCurrency(debtor.openTotal)}</span>
                         ) : (
                           <span className="text-slate-600 font-semibold">R$ 0,00</span>
                         )}
+                        {debtor.overdueTotal > 0 ? <div className="mt-0.5 text-xs text-red-400">{formatCurrency(debtor.overdueTotal)} vencidos</div> : null}
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => openEditModal(debtor)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 transition-colors hover:bg-emerald-500/20" title="Editar">
+                          <button onClick={(event) => { event.stopPropagation(); openEditModal(debtor); }} className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 transition-colors hover:bg-emerald-500/20" title="Editar" aria-label={"Editar cliente " + (debtor.name || debtor.id)}>
                             <Edit2Icon className="h-4 w-4" />
                           </button>
-                          <button onClick={() => openDeleteModal(debtor)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20" title="Excluir">
+                          <button onClick={(event) => { event.stopPropagation(); openDeleteModal(debtor); }} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20" title="Excluir" aria-label={"Excluir cliente " + (debtor.name || debtor.id)}>
                             <Trash2Icon className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
                     </tr>
+                    {expanded ? <tr id={"table-client-financials-" + debtor.id} className="bg-[#eef4ff]">
+                      <td colSpan={6} className="p-0">{renderFinancialPanel()}</td>
+                    </tr> : null}
+                    </Fragment>
                   );
                 })
               )}
@@ -757,22 +604,20 @@ export function ClientesClient() {
               const scoreInfo = getScoreIndicator(debtor.score);
               const documentText = formatDocument(debtor.document || debtor.cpf) || "Sem documento";
               const phoneText = formatPhone(debtor.phone) || "Sem telefone";
-              const situation = debtor.overdueCount > 0
-                ? `${debtor.overdueCount} boleto(s) pendente(s)`
-                : debtor.openTotal > 0
-                  ? "Em dia"
-                  : "-";
+              const situation = situationText(debtor);
+              const expanded = expandedId === String(debtor.id);
 
               return (
+                <div key={debtor.id} onClick={(event) => handleClientRowClick(event, debtor.id)} className="cursor-pointer rounded-2xl">
                 <MobileDataCard
-                  key={debtor.id}
-                  title={debtor.name || "-"}
+                  className={expanded ? "!bg-[#eef4ff]" : undefined}
+                  title={renderClientName(debtor, true)}
                   subtitle={(
                     <div className="space-y-1">
-                      <p className="truncate">
+                      {debtor.document || debtor.cpf ? <p className="truncate">
                         <span className="font-semibold text-slate-600">CPF/CNPJ:</span>{" "}
                         <span>{documentText}</span>
-                      </p>
+                      </p> : null}
                       <p className="truncate">
                         <span className="font-semibold text-slate-600">Telefone:</span>{" "}
                         <span>{phoneText}</span>
@@ -787,7 +632,7 @@ export function ClientesClient() {
                   actions={(
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => openEditModal(debtor)}
+                        onClick={(event) => { event.stopPropagation(); openEditModal(debtor); }}
                         className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.28)] transition-colors hover:bg-emerald-500"
                         title="Editar"
                         aria-label={`Editar cliente ${debtor.name || debtor.id}`}
@@ -795,7 +640,7 @@ export function ClientesClient() {
                         <Edit2Icon className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => openDeleteModal(debtor)}
+                        onClick={(event) => { event.stopPropagation(); openDeleteModal(debtor); }}
                         className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20"
                         title="Excluir"
                         aria-label={`Excluir cliente ${debtor.name || debtor.id}`}
@@ -807,46 +652,42 @@ export function ClientesClient() {
                 >
                   <div className="space-y-2">
                     <MobileDataCardRow
-                      label="Situacao"
+                      label="Situação"
                       value={(
                         <div>
                           <div className={debtor.overdueCount > 0 ? "text-red-400" : debtor.openTotal > 0 ? "text-emerald-400" : "text-slate-400"}>
                             {situation}
                           </div>
                           {debtor.maxOverdueDays > 0 ? (
-                            <div className="mt-1 text-xs text-red-400/80">{debtor.maxOverdueDays} dias atrasado</div>
+                            <div className="mt-1 text-xs text-red-400/80">{debtor.maxOverdueDays} {debtor.maxOverdueDays === 1 ? "dia" : "dias"} em atraso</div>
                           ) : null}
                         </div>
                       )}
                       className="bg-slate-50"
                     />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div>
                       <MobileDataCardRow
-                        label="Indice Credix"
-                        value={debtor.totalDueCount > 0 ? debtor.score : "Sem histórico"}
+                        label="Índice Credix"
+                        value={debtor.totalDueCount > 0 ? debtor.score + " · " + scoreInfo.label : "Sem histórico"}
                         valueClassName={debtor.totalDueCount > 0 ? scoreInfo.textClass : "text-slate-400"}
-                        className="bg-slate-50"
-                      />
-                      <MobileDataCardRow
-                        label="Atrasos"
-                        value={debtor.overdueCount > 0 ? debtor.overdueCount : "0"}
-                        valueClassName={debtor.overdueCount > 0 ? "text-red-400" : "text-slate-300"}
                         className="bg-slate-50"
                       />
                     </div>
                     <MobileDataCardRow
                       label="Total em aberto"
-                      value={debtor.openTotal > 0 ? formatCurrency(debtor.openTotal) : "R$ 0,00"}
+                      value={<>{formatCurrency(debtor.openTotal)}{debtor.overdueTotal > 0 ? <div className="mt-1 text-xs text-red-400">{formatCurrency(debtor.overdueTotal)} vencidos</div> : null}</>}
                       className="bg-slate-50"
                     />
                   </div>
+                  {expanded ? <div id={"mobile-client-financials-" + debtor.id} className="-mx-3 mt-2 cursor-auto">{renderFinancialPanel()}</div> : null}
                 </MobileDataCard>
+                </div>
               );
             })
           )}
         </div>
 
-        {!loading && (
+        {!loading && totalPages > 1 && (
           <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/60 pt-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
               Mostrando <span className="text-slate-200">{filteredAndSorted.length > 0 ? startIdx + 1 : 0}</span> ate{" "}
@@ -855,8 +696,8 @@ export function ClientesClient() {
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
-                disabled={page <= 1}
-                onClick={() => setPage(p => p - 1)}
+                disabled={currentPageSafe <= 1}
+                onClick={() => setPage(currentPageSafe - 1)}
                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 disabled:opacity-50"
               >
                 <ChevronLeftIcon className="h-4 w-4" />
@@ -865,8 +706,8 @@ export function ClientesClient() {
                 Página <span className="text-slate-200">{currentPageSafe}</span> de {totalPages}
               </span>
               <button
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
+                disabled={currentPageSafe >= totalPages}
+                onClick={() => setPage(currentPageSafe + 1)}
                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 disabled:opacity-50"
               >
                 <ChevronRightIcon className="h-4 w-4" />

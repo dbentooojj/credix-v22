@@ -1,0 +1,77 @@
+name: credix-local
+
+x-node: &node
+  image: credix-local-dev
+  build:
+    context: .
+    dockerfile: Dockerfile.local
+  working_dir: /app
+  env_file: .env.local
+  volumes:
+    - .:/app
+    - node_modules:/app/node_modules
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  setup:
+    <<: *node
+    command: sh -c "npm ci --no-audit --no-fund && npm run prisma:generate --workspace backend"
+    restart: "no"
+
+  backend:
+    <<: *node
+    restart: unless-stopped
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      TRUST_PROXY_HOPS: 1
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    command: sh -c "npm run prisma:migrate:deploy --workspace backend && npm run db:seed:production --workspace backend && npm run dev --workspace backend"
+    ports:
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  frontend:
+    <<: *node
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      LEGACY_BACKEND_URL: http://backend:4000
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - next_cache:/app/frontend/.next
+    command: npm run dev --workspace frontend -- --hostname 0.0.0.0
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  postgres_data:
+  node_modules:
+  next_cache:

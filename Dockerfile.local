@@ -1,0 +1,6 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache openssl
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+

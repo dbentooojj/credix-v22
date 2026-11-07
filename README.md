@@ -43,7 +43,82 @@ Aplicacao full-stack com autenticacao, PostgreSQL e deploy via Docker para VPS U
 
 Com integridade referencial por FK e cascatas.
 
+## Desenvolvimento local com Docker Desktop
+
+Com o Docker Desktop iniciado e usando containers Linux, execute na raiz do repositorio:
+
+```powershell
+Copy-Item .env.local.example .env.local
+docker compose --env-file .env.local -f docker-compose.local.yml up -d --build
+```
+
+Copie o ambiente somente na primeira execucao. Acesse `http://localhost:3000/login`
+com `admin@credix.local` e a senha local `CredixLocal!2026` (ou os valores de
+`ADMIN_EMAIL` e `ADMIN_PASSWORD` em `.env.local`). O administrador e criado somente
+quando o banco esta vazio. A primeira inicializacao instala dependencias, gera o
+Prisma Client e aplica migrations automaticamente.
+
+O projeto aparece como `credix-local` no Docker Desktop, com banco e volumes
+proprios. As portas ficam acessiveis apenas neste computador. Frontend e backend
+executam em desenvolvimento e acompanham edicoes no codigo. Depois de alterar
+dependencias ou migrations, recrie os containers para repetir a preparacao:
+
+```powershell
+docker compose --env-file .env.local -f docker-compose.local.yml up -d --build --force-recreate
+```
+
+```powershell
+# Acompanhar a inicializacao e os logs
+docker compose --env-file .env.local -f docker-compose.local.yml logs -f setup backend frontend
+# Rodar os testes existentes do backend
+docker compose --env-file .env.local -f docker-compose.local.yml exec backend npm test --workspace backend
+# Parar o ambiente preservando os dados
+docker compose --env-file .env.local -f docker-compose.local.yml down
+```
+
+## Base local para validacao
+
+Com o ambiente Docker local iniciado, execute:
+
+```powershell
+docker compose --env-file .env.local -f docker-compose.local.yml exec -T backend npm run db:seed:validation --workspace backend
+```
+
+A base adiciona 48 clientes ficticios identificados por `[Teste]` ao administrador
+local, preservando os registros existentes e a senha de acesso. A execucao inteira
+usa uma transacao; repetir o comando preserva a base ja criada sem duplicar dados.
+O script aceita apenas bancos locais `credix_local`, `credix_test` ou
+`credix_validation` e recusa `NODE_ENV=production`.
+
+Cenarios disponiveis:
+
+- Clientes ativos e inativos, sem contratos, com campos opcionais vazios e com
+  varios contratos; um cliente possui 25 contratos para validar paginacao.
+- Emprestimos quitados no prazo, quitados apos atrasos e antecipadamente; contratos
+  em dia, pendentes de liberacao e com ultima parcela em aberto.
+- Vencimentos hoje, amanha, em 7 e 30 dias; atrasos de 1, 7, 15, 30, 60 e mais de
+  90 dias; inadimplencia sem nenhum pagamento.
+- Parcelas unicas, contratos sem juros, juros simples e compostos, ajustes de
+  centavos, alta concentracao de capital e historico de 12 meses.
+- Pagamentos por PIX, dinheiro, transferencia e cartao, com recebimentos e
+  desembolsos correspondentes no caixa; aportes e receitas/despesas concluidas,
+  pendentes e agendadas.
+- Simulacoes em todos os estados, incluindo uma aceita vinculada ao contrato.
+
+As datas usam o dia da execucao em `America/Sao_Paulo`. Para uma base nova com data
+fixa, acrescente `-e SEED_DATE=2026-11-07` antes de `backend` no comando Docker.
+Para escolher outro usuario existente, use `-e SEED_USER_EMAIL=email-do-usuario`.
+Uma nova execucao nao recalcula datas nem desfaz edicoes feitas na base existente.
+Pagamentos parciais nao sao gerados, pois a API exige o valor integral da parcela.
+
+Validacao das regras de geracao:
+
+```powershell
+docker compose --env-file .env.local -f docker-compose.local.yml exec -T backend npm run test:validation-data --workspace backend
+```
+
 ## Rodando localmente (sem Docker)
+
 1. Copie o arquivo de ambiente:
 ```bash
 cp .env.example .env
@@ -162,6 +237,9 @@ npm run notify:weekly-backup:once
 ## Deploy no VPS Ubuntu (Serverspace)
 
 ### Esteira de produção pelo GitHub Actions
+
+Referencia preservada antes da entrega de clientes de 07/11/2026:
+[versao de producao e procedimento de retorno](docs/rollback-2026-11-07.md).
 
 O repositório possui duas esteiras:
 

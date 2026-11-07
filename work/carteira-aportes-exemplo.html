@@ -1,0 +1,84 @@
+<style>
+  #credix-wallet-preview {
+    --cw-bg: light-dark(#f3f6fb, #111827);
+    --cw-surface: light-dark(#ffffff, #1f2937);
+    --cw-text: light-dark(#10182b, #f8fafc);
+    --cw-muted: light-dark(#7c8daa, #abb9cf);
+    --cw-border: light-dark(#dce4ef, #435168);
+    --cw-chip: light-dark(#f7f9fc, #283448);
+    --cw-green: light-dark(#147d54, #61d6a2);
+    --cw-red: light-dark(#bd4b52, #f7a1a6);
+    color: var(--cw-text);
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 18px;
+  }
+  #credix-wallet-preview * { box-sizing: border-box; }
+  #credix-wallet-preview .cw-window {
+    background: var(--cw-bg);
+    border: 1px solid var(--cw-border);
+    border-radius: 18px;
+    padding: 26px;
+  }
+  #credix-wallet-preview h1 { font-size: 29px; font-weight: 700; margin: 0 0 22px; }
+  #credix-wallet-preview .cw-hero {
+    background: var(--cw-surface);
+    border: 1px solid var(--cw-border);
+    border-radius: 24px;
+    padding: 30px;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(340px, 1.15fr);
+    gap: 32px;
+    align-items: end;
+  }
+  #credix-wallet-preview .cw-label { color: var(--cw-muted); font-size: 14px; }
+  #credix-wallet-preview .cw-balance { font-size: clamp(36px, 6vw, 54px); font-weight: 700; letter-spacing: -0.045em; margin: 16px 0 20px; white-space: nowrap; }
+  #credix-wallet-preview .cw-action {
+    display: inline-block;
+    border: 1px solid var(--cw-border);
+    border-radius: 12px;
+    padding: 11px 17px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  #credix-wallet-preview .cw-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #credix-wallet-preview .cw-stat { background: var(--cw-chip); border: 1px solid var(--cw-border); border-radius: 15px; padding: 16px; min-width: 0; }
+  #credix-wallet-preview .cw-stat strong { display: block; font-size: 19px; margin-top: 9px; white-space: nowrap; }
+  #credix-wallet-preview .cw-net {
+    background: var(--cw-chip);
+    border: 1px solid var(--cw-border);
+    border-radius: 15px;
+    padding: 16px;
+    font-size: 14px;
+  }
+  #credix-wallet-preview .cw-net strong { display: block; font-size: 19px; margin-top: 9px; white-space: nowrap; }
+  #credix-wallet-preview .cw-net small { display: block; color: var(--cw-muted); margin-top: 4px; }
+  @media (max-width: 760px) {
+    #credix-wallet-preview { padding: 6px; }
+    #credix-wallet-preview .cw-window { padding: 17px; }
+    #credix-wallet-preview .cw-hero { grid-template-columns: 1fr; gap: 24px; padding: 22px; }
+  }
+  @media (max-width: 520px) {
+    #credix-wallet-preview .cw-stats { grid-template-columns: 1fr; }
+    #credix-wallet-preview .cw-stat strong { font-size: 17px; }
+  }
+</style>
+<div class="viz-dotted-background">
+  <div id="credix-wallet-preview">
+    <div class="cw-window" role="img" aria-label="Exemplo do topo da Carteira: saldo em caixa de mil e setecentos reais, total já emprestado de quarenta e quatro mil oitocentos e quarenta reais, mil reais adicionados, trezentos reais retirados e aporte líquido de setecentos reais.">
+      <h1>Carteira</h1>
+      <section class="cw-hero" aria-label="Resumo da carteira">
+        <div>
+          <div class="cw-label">▣ &nbsp;Saldo em caixa</div>
+          <div class="cw-balance">R$ 1.700,00</div>
+          <span class="cw-action">▣ &nbsp;Alterar caixa</span>
+        </div>
+        <div class="cw-stats">
+          <div class="cw-stat"><div class="cw-label">Total já emprestado</div><strong>R$ 44.840,00</strong></div>
+          <div class="cw-stat"><div class="cw-label">Dinheiro adicionado</div><strong>R$ 1.000,00</strong></div>
+          <div class="cw-stat"><div class="cw-label">Dinheiro retirado</div><strong>R$ 300,00</strong></div>
+          <div class="cw-net"><div class="cw-label">Aporte líquido</div><strong>R$ 700,00</strong><small>Adicionado − retirado</small></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
