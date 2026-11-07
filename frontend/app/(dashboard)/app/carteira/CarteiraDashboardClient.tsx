@@ -10,7 +10,6 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   CircleDollarSign,
   Clock3,
   Info,
@@ -41,6 +40,7 @@ import {
 } from '../../../components/ModalBase';
 import { PageHeader } from '../../../components/PageHeader';
 import { useToast } from '../../../components/ToastProvider';
+import { AppSelect } from '../../../components/AppSelect';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip);
 
@@ -98,8 +98,9 @@ type ChartPoint = {
 type EvolutionPoint = {
   month: string;
   label: string;
-  open: number;
-  principalOutstanding: number;
+  invested: number;
+  result: number;
+  capital: number;
 };
 
 type DashboardPayload = {
@@ -458,6 +459,7 @@ export default function CarteiraDashboardClient() {
   const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m');
   const [chartView, setChartView] = useState<'movement' | 'evolution'>('movement');
   const [evolutionPeriod, setEvolutionPeriod] = useState<'all' | '3m' | '6m' | '12m'>('all');
+  const [chartFont, setChartFont] = useState('system-ui, sans-serif');
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [overduePage, setOverduePage] = useState(1);
   const [paymentItem, setPaymentItem] = useState<QueueItem | null>(null);
@@ -465,6 +467,16 @@ export default function CarteiraDashboardClient() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    const syncFont = () => {
+      if (active) setChartFont(window.getComputedStyle(document.body).fontFamily);
+    };
+    syncFont();
+    void document.fonts.ready.then(syncFont);
+    return () => { active = false; };
+  }, []);
 
   const fetchDashboard = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -569,10 +581,24 @@ export default function CarteiraDashboardClient() {
     labels: evolutionPoints.map((point) => point.label),
     datasets: [
       {
-        label: 'Principal ainda emprestado',
-        data: evolutionPoints.map((point) => point.principalOutstanding),
+        label: 'Dinheiro investido',
+        data: evolutionPoints.map((point) => point.invested),
         borderColor: '#4F7EF7',
         pointBackgroundColor: '#4F7EF7',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: evolutionPoints.length > 48 ? 1 : 3,
+        pointHoverRadius: 5,
+        pointHitRadius: 16,
+        borderWidth: 2.5,
+        borderDash: [5, 4],
+        tension: 0,
+      },
+      {
+        label: 'Capital com ganhos',
+        data: evolutionPoints.map((point) => point.capital),
+        borderColor: '#4f8a70',
+        pointBackgroundColor: '#4f8a70',
         pointBorderColor: '#ffffff',
         pointBorderWidth: 2,
         pointRadius: evolutionPoints.length > 48 ? 1 : 3,
@@ -588,11 +614,14 @@ export default function CarteiraDashboardClient() {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
+    font: { family: chartFont },
     plugins: {
       legend: { display: false },
       tooltip: {
         backgroundColor: '#292524',
         padding: 12,
+        titleFont: { family: chartFont },
+        bodyFont: { family: chartFont },
         callbacks: {
           label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
         },
@@ -602,7 +631,7 @@ export default function CarteiraDashboardClient() {
       x: {
         grid: { display: false },
         border: { display: false },
-        ticks: { color: '#78716c', font: { size: 11, weight: 600 } },
+        ticks: { color: '#78716c', font: { family: chartFont, size: 11, weight: 600 } },
       },
       y: {
         beginAtZero: true,
@@ -610,25 +639,30 @@ export default function CarteiraDashboardClient() {
         grid: { color: 'rgba(231, 229, 228, 0.85)' },
         ticks: {
           color: '#a8a29e',
-          font: { size: 11, weight: 600 },
+          font: { family: chartFont, size: 11, weight: 600 },
           callback: (value) => formatCompactCurrency(value),
         },
       },
     },
-  }), []);
+  }), [chartFont]);
 
   const evolutionOptions = useMemo<ChartOptions<'line'>>(() => ({
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
+    font: { family: chartFont },
     plugins: {
       legend: { display: false },
       tooltip: {
         backgroundColor: '#292524',
         padding: 12,
+        titleFont: { family: chartFont },
+        bodyFont: { family: chartFont },
         callbacks: {
           label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
-          afterLabel: (context) => `Saldo com juros: ${formatCurrency(evolutionPoints[context.dataIndex]?.open)}`,
+          afterBody: (items) => items.length > 0
+            ? `Resultado acumulado: ${formatCurrency(evolutionPoints[items[0].dataIndex]?.result)}`
+            : '',
         },
       },
     },
@@ -638,7 +672,7 @@ export default function CarteiraDashboardClient() {
         border: { display: false },
         ticks: {
           color: '#78716c',
-          font: { size: 11, weight: 600 },
+          font: { family: chartFont, size: 11, weight: 600 },
           autoSkip: true,
           maxTicksLimit: 8,
           maxRotation: 0,
@@ -650,12 +684,12 @@ export default function CarteiraDashboardClient() {
         grid: { color: 'rgba(231, 229, 228, 0.85)' },
         ticks: {
           color: '#64748b',
-          font: { size: 11, weight: 600 },
+          font: { family: chartFont, size: 11, weight: 600 },
           callback: (value) => formatCompactCurrency(value),
         },
       },
     },
-  }), [evolutionPoints]);
+  }), [evolutionPoints, chartFont]);
 
   function goToInstallments(filters?: { period?: string; status?: string }) {
     const params = new URLSearchParams();
@@ -921,66 +955,46 @@ export default function CarteiraDashboardClient() {
       <section>
         <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <h2 className="relative inline-flex max-w-full items-center">
-                <select
-                  aria-label="Gráfico da carteira"
-                  className="max-w-full cursor-pointer appearance-none rounded-lg bg-transparent py-1 pr-8 text-base font-bold text-slate-900 outline-none transition hover:text-[#4F7EF7] focus-visible:ring-2 focus-visible:ring-[#4F7EF7]/30"
-                  onChange={(event) => setChartView(event.target.value as 'movement' | 'evolution')}
-                  value={chartView}
-                >
-                  <option value="movement">Movimento da carteira</option>
-                  <option value="evolution">Evolução da carteira</option>
-                </select>
-                <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-1 h-4 w-4 text-slate-400" />
-              </h2>
-              {chartView === 'evolution' ? (
-                <div className="mt-1 flex items-center gap-1.5">
-                  <p className="text-xs text-slate-500">Principal ainda emprestado no fechamento de cada mês.</p>
-                  <InfoHint text="Mostra o principal dos empréstimos liberados, descontando o principal recuperado nos pagamentos. Os juros contratados aparecem no detalhe de cada ponto." />
-                </div>
-              ) : null}
-            </div>
-            <select
-              aria-label="Período do gráfico"
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 outline-none focus:border-[#4F7EF7]"
-              onChange={(event) => {
-                if (chartView === 'movement') setPeriod(event.target.value as '3m' | '6m' | '12m');
-                else setEvolutionPeriod(event.target.value as 'all' | '3m' | '6m' | '12m');
+            <h2 className="min-w-0">
+              <AppSelect
+                label="Gráfico da carteira"
+                onChange={(value) => setChartView(value as 'movement' | 'evolution')}
+                options={[
+                  { value: 'movement', label: 'Movimento da carteira' },
+                  { value: 'evolution', label: 'Evolução da carteira' },
+                ]}
+                value={chartView}
+                variant="heading"
+              />
+            </h2>
+            <AppSelect
+              align="end"
+              className="w-full shrink-0 sm:w-auto"
+              label="Período do gráfico"
+              onChange={(value) => {
+                if (chartView === 'movement') setPeriod(value as '3m' | '6m' | '12m');
+                else setEvolutionPeriod(value as 'all' | '3m' | '6m' | '12m');
               }}
+              options={[
+                ...(chartView === 'evolution' ? [{ value: 'all', label: 'Desde o início' }] : []),
+                { value: '3m', label: '3 meses' },
+                { value: '6m', label: '6 meses' },
+                { value: '12m', label: '12 meses' },
+              ]}
               value={chartView === 'movement' ? period : evolutionPeriod}
-            >
-              {chartView === 'evolution' ? <option value="all">Desde o início</option> : null}
-              <option value="3m">3 meses</option>
-              <option value="6m">6 meses</option>
-              <option value="12m">12 meses</option>
-            </select>
+            />
           </div>
-
-          {chartView === 'evolution' && hasEvolutionData ? (
-            <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium text-slate-500">Principal em aberto hoje</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 sm:text-3xl">
-                  {formatCurrency(evolutionPoints[evolutionPoints.length - 1].principalOutstanding)}
-                </p>
-              </div>
-              <p className="text-xs text-slate-500">
-                {evolutionPoints[0].label} — {evolutionPoints[evolutionPoints.length - 1].label}
-              </p>
-            </div>
-          ) : null}
 
           <div className="mt-4 h-[280px] min-w-0 sm:h-[320px]">
             {chartView === 'movement' && hasChartData ? (
               <Bar aria-label="Movimento mensal da carteira em reais" data={chartData} options={chartOptions} role="img" />
             ) : chartView === 'evolution' && hasEvolutionData ? (
-              <Line aria-label="Evolução mensal do principal ainda emprestado em reais" data={evolutionData} options={evolutionOptions} role="img" />
+              <Line aria-label="Evolução mensal do dinheiro investido e do capital com ganhos em reais" data={evolutionData} options={evolutionOptions} role="img" />
             ) : (
               <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-slate-500">
                 <TrendingUp className="h-8 w-8 text-slate-300" />
                 <p className="mt-3 text-sm font-semibold">
-                  {chartView === 'movement' ? 'Sem movimentação no período' : 'Sem empréstimos liberados para mostrar a evolução.'}
+                  {chartView === 'movement' ? 'Sem movimentação no período' : 'Sem movimentos financeiros para mostrar a evolução.'}
                 </p>
               </div>
             )}
@@ -994,7 +1008,11 @@ export default function CarteiraDashboardClient() {
             </div>
           ) : hasEvolutionData ? (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-              <span className="inline-flex items-center gap-2 font-medium"><span className="h-0.5 w-5 rounded-full bg-[#4F7EF7]" />Principal ainda emprestado</span>
+              <div className="flex flex-wrap items-center gap-4 font-medium">
+                <span className="inline-flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-[#4F7EF7]" />Dinheiro investido</span>
+                <span className="inline-flex items-center gap-2"><span className="h-0.5 w-5 rounded-full bg-[#4f8a70]" />Capital com ganhos</span>
+                <InfoHint text="Dinheiro investido é a soma das adições menos as retiradas. Capital com ganhos inclui os juros recebidos e desconta as despesas financeiras registradas. O histórico usa a data de cada movimento." />
+              </div>
               <span>Mês atual: posição de hoje.</span>
             </div>
           ) : null}

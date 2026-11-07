@@ -33,6 +33,8 @@ import {
 import { toSafeNumber } from "../lib/numbers";
 import { requireAuthApi } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
+import { buildPortfolioCapitalEvolution, type PortfolioCapitalMovement } from "../lib/portfolio-capital-evolution";
+import { cashAdjustmentCreateSchema } from "../schemas/cash-adjustment.schemas";
 
 const router = Router();
 
@@ -42,13 +44,6 @@ const dashboardQuerySchema = z.object({
   tz: z.string().optional(),
   recentMovementsPage: z.coerce.number().int().positive().optional(),
   recentMovementsPageSize: z.coerce.number().int().min(1).max(20).optional(),
-});
-
-const cashAdjustmentCreateSchema = z.object({
-  type: z.enum(["income", "expense"]),
-  amount: z.number().positive(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  description: z.string().trim().max(300).optional(),
 });
 
 type InstallmentDerivedStatus = "PAGA" | "ATRASADA" | "VENCE_HOJE" | "EM_DIA";
@@ -487,9 +482,11 @@ router.get("/", async (req, res) => {
   const profitByMonthAll = new Map<string, number>();
   const portfolioProfitByMonthAll = new Map<string, number>();
   const balanceByMonthAll = new Map<string, number>();
+  const capitalMovements: PortfolioCapitalMovement[] = [];
   const installmentIncomeTransactions = new Map<string, {
     amountSigned: number;
     monthKey: string;
+    dateIso: string;
   }>();
   const processedInstallmentIncomeDescriptions = new Set<string>();
   const ledgerAccumulator = createDashboardLedgerAccumulator();
@@ -586,6 +583,12 @@ router.get("/", async (req, res) => {
       return;
     }
 
+    if (transaction.category === CASH_ADJUSTMENT_CATEGORY) {
+      capitalMovements.push({ date: dateToIso(transaction.date), investedChange: amountSigned, resultChange: 0 });
+    } else if (transaction.type === FinanceTransactionType.EXPENSE) {
+      capitalMovements.push({ date: dateToIso(transaction.date), investedChange: 0, resultChange: amountSigned });
+    }
+
     const dashboardType: DashboardTransactionType = transaction.category === CASH_ADJUSTMENT_CATEGORY
       ? "adjustment"
       : transaction.type === FinanceTransactionType.INCOME
@@ -596,6 +599,7 @@ router.get("/", async (req, res) => {
       installmentIncomeTransactions.set(transaction.description.trim(), {
         amountSigned,
         monthKey,
+        dateIso: dateToIso(transaction.date),
       });
       return;
     }
@@ -661,6 +665,7 @@ router.get("/", async (req, res) => {
       }
 
       const paymentSplit = resolveInstallmentPaymentSplit(installment, paymentAmount);
+      capitalMovements.push({ date: paymentDateIso, investedChange: 0, resultChange: paymentSplit.interestAmount });
       applyPortfolioReceipt({
         receivedAmount: paymentAmount,
         profitAmount: paymentSplit.interestAmount,
@@ -708,6 +713,7 @@ router.get("/", async (req, res) => {
 
     if (installment) {
       const paymentSplit = resolveInstallmentPaymentSplit(installment, entry.amountSigned);
+      capitalMovements.push({ date: entry.dateIso, investedChange: 0, resultChange: paymentSplit.interestAmount });
       applyPortfolioReceipt({
         receivedAmount: entry.amountSigned,
         profitAmount: paymentSplit.interestAmount,
@@ -1026,25 +1032,8 @@ router.get("/", async (req, res) => {
   const previousSnapshot = sparklineSnapshotByMonth.get(previousMonthKey)
     ?? computeSnapshotAt(getMonthEndIso(previousMonthKey));
 
-  const firstFundedLoanMonth = loans
-    .filter((loan) => loan.status !== LoanStatus.PENDENTE && dateToIso(loan.startDate) <= todayIso)
-    .map((loan) => dateToMonthKey(loan.startDate))
-    .sort()[0];
-  const evolutionMonthCount = firstFundedLoanMonth
-    ? Math.max(1, (Number(currentMonthKey.slice(0, 4)) - Number(firstFundedLoanMonth.slice(0, 4))) * 12
-      + Number(currentMonthKey.slice(5, 7)) - Number(firstFundedLoanMonth.slice(5, 7)) + 1)
-    : 0;
-  const evolutionPoints = firstFundedLoanMonth
-    ? buildMonthSeries(currentMonthKey, evolutionMonthCount).map((monthKey) => {
-      const snapshot = computeSnapshotAt(monthKey === currentMonthKey ? todayIso : getMonthEndIso(monthKey));
-      return {
-        month: monthKey,
-        label: monthLabel(monthKey),
-        open: round2(snapshot.openReceivable),
-        principalOutstanding: round2(snapshot.totalLoaned),
-      };
-    })
-    : [];
+  const evolutionPoints = buildPortfolioCapitalEvolution(capitalMovements, todayIso)
+    .map((point) => ({ ...point, label: monthLabel(point.month) }));
 
   const receivedMonthlySeries = buildMonthlySeries(sparklineMonthKeys, receivedByMonthAll);
   const portfolioReceivedMonthlySeries = buildMonthlySeries(sparklineMonthKeys, portfolioReceivedByMonthAll);

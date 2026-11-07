@@ -15,6 +15,7 @@ import {
 } from "./ModalBase";
 import { formatCurrencyInput, parseCurrencyInput } from "../../utils/currencyInput";
 import { useToast } from "./ToastProvider";
+import { getTodayIsoInAppTimeZone } from "../../utils/dateOnlyStatus";
 
 const cashAdjustmentInputClass = `${modalInputClass} min-h-[40px] py-2`;
 
@@ -33,6 +34,7 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
   const [open, setOpen] = useState(false);
   const [cashType, setCashType] = useState<"income" | "expense">("income");
   const [cashAmount, setCashAmount] = useState("");
+  const [cashDate, setCashDate] = useState(getTodayIsoInAppTimeZone);
   const [cashSaving, setCashSaving] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
   const [onSuccess, setOnSuccess] = useState<(() => void) | null>(null);
@@ -40,6 +42,7 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
   function resetForm() {
     setCashType("income");
     setCashAmount("");
+    setCashDate(getTodayIsoInAppTimeZone());
     setCashError(null);
   }
 
@@ -60,6 +63,10 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
       setCashError("Informe um valor valido maior que zero.");
       return;
     }
+    if (!cashDate || cashDate > getTodayIsoInAppTimeZone()) {
+      setCashError("Informe uma data válida até hoje.");
+      return;
+    }
 
     setCashSaving(true);
     setCashError(null);
@@ -72,6 +79,7 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
         body: JSON.stringify({
           type: cashType,
           amount: parsedAmount,
+          date: cashDate,
         }),
       });
 
@@ -153,6 +161,18 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
                 value={cashAmount}
               />
             </div>
+          </ModalField>
+
+          <ModalField label="Data do movimento">
+            <input
+              className={cashAdjustmentInputClass}
+              disabled={cashSaving}
+              max={getTodayIsoInAppTimeZone()}
+              onChange={(event) => setCashDate(event.target.value)}
+              required
+              type="date"
+              value={cashDate}
+            />
           </ModalField>
 
           <ModalField label="Tipo da alteração">
