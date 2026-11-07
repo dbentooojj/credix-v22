@@ -10,6 +10,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   Clock3,
   Info,
@@ -22,11 +23,13 @@ import {
   BarElement,
   CategoryScale,
   Chart as ChartJS,
+  LineElement,
   LinearScale,
+  PointElement,
   Tooltip,
   type ChartOptions,
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 
 import { useCashAdjustmentModal } from '../../../components/CashAdjustmentModalProvider';
 import {
@@ -39,7 +42,7 @@ import {
 import { PageHeader } from '../../../components/PageHeader';
 import { useToast } from '../../../components/ToastProvider';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip);
 
 type QueueItem = {
   installmentId: number;
@@ -92,6 +95,13 @@ type ChartPoint = {
   open: number;
 };
 
+type EvolutionPoint = {
+  month: string;
+  label: string;
+  open: number;
+  principalOutstanding: number;
+};
+
 type DashboardPayload = {
   meta?: {
     generatedAt?: string;
@@ -106,6 +116,7 @@ type DashboardPayload = {
   portfolio?: {
     kpis?: Partial<FinancialKpis>;
     chart?: { points: ChartPoint[] };
+    evolution?: { points: EvolutionPoint[] };
   };
   chart: { points: ChartPoint[] };
   dailySummary: {
@@ -445,6 +456,8 @@ export default function CarteiraDashboardClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [period, setPeriod] = useState<'3m' | '6m' | '12m'>('6m');
+  const [chartView, setChartView] = useState<'movement' | 'evolution'>('movement');
+  const [evolutionPeriod, setEvolutionPeriod] = useState<'all' | '3m' | '6m' | '12m'>('all');
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [overduePage, setOverduePage] = useState(1);
   const [paymentItem, setPaymentItem] = useState<QueueItem | null>(null);
@@ -461,6 +474,7 @@ export default function CarteiraDashboardClient() {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
       const response = await fetch(`/api/dashboard?period=${period}&metric=recebido&tz=${encodeURIComponent(timezone)}`, {
         credentials: 'include',
+        cache: 'no-store',
       });
 
       if (response.status === 401) {
@@ -497,6 +511,12 @@ export default function CarteiraDashboardClient() {
   }), [data]);
 
   const chart = data?.portfolio?.chart || data?.chart;
+  const allEvolutionPoints = data?.portfolio?.evolution?.points;
+  const evolutionPoints = useMemo(() => {
+    const points = allEvolutionPoints || [];
+    if (evolutionPeriod === 'all') return points;
+    return points.slice(-Number(evolutionPeriod.replace('m', '')));
+  }, [allEvolutionPoints, evolutionPeriod]);
   const totalToReceive = kpis.totalToReceive ?? kpis.totalOpenReceivable ?? 0;
   const totalOverdue = kpis.totalOverdue ?? kpis.openReceivableOverdue ?? 0;
   const overdueInstallmentsCount = kpis.overdueInstallmentsCount ?? data?.dailySummary.overdue.count ?? 0;
@@ -545,6 +565,25 @@ export default function CarteiraDashboardClient() {
     ],
   }), [chart]);
 
+  const evolutionData = useMemo(() => ({
+    labels: evolutionPoints.map((point) => point.label),
+    datasets: [
+      {
+        label: 'Principal ainda emprestado',
+        data: evolutionPoints.map((point) => point.principalOutstanding),
+        borderColor: '#4F7EF7',
+        pointBackgroundColor: '#4F7EF7',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: evolutionPoints.length > 48 ? 1 : 3,
+        pointHoverRadius: 5,
+        pointHitRadius: 16,
+        borderWidth: 2.5,
+        tension: 0,
+      },
+    ],
+  }), [evolutionPoints]);
+
   const chartOptions = useMemo<ChartOptions<'bar'>>(() => ({
     responsive: true,
     maintainAspectRatio: false,
@@ -577,6 +616,46 @@ export default function CarteiraDashboardClient() {
       },
     },
   }), []);
+
+  const evolutionOptions = useMemo<ChartOptions<'line'>>(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#292524',
+        padding: 12,
+        callbacks: {
+          label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
+          afterLabel: (context) => `Saldo com juros: ${formatCurrency(evolutionPoints[context.dataIndex]?.open)}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: {
+          color: '#78716c',
+          font: { size: 11, weight: 600 },
+          autoSkip: true,
+          maxTicksLimit: 8,
+          maxRotation: 0,
+        },
+      },
+      y: {
+        beginAtZero: true,
+        border: { display: false },
+        grid: { color: 'rgba(231, 229, 228, 0.85)' },
+        ticks: {
+          color: '#64748b',
+          font: { size: 11, weight: 600 },
+          callback: (value) => formatCompactCurrency(value),
+        },
+      },
+    },
+  }), [evolutionPoints]);
 
   function goToInstallments(filters?: { period?: string; status?: string }) {
     const params = new URLSearchParams();
@@ -678,6 +757,7 @@ export default function CarteiraDashboardClient() {
   }
 
   const hasChartData = chartData.datasets.some((dataset) => dataset.data.some((value) => toFiniteNumber(value) > 0));
+  const hasEvolutionData = evolutionPoints.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-5 pb-24 lg:pb-8">
@@ -841,34 +921,83 @@ export default function CarteiraDashboardClient() {
       <section>
         <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="font-bold text-slate-900">Movimento da carteira</h2>
+            <div className="min-w-0">
+              <h2 className="relative inline-flex max-w-full items-center">
+                <select
+                  aria-label="Gráfico da carteira"
+                  className="max-w-full cursor-pointer appearance-none rounded-lg bg-transparent py-1 pr-8 text-base font-bold text-slate-900 outline-none transition hover:text-[#4F7EF7] focus-visible:ring-2 focus-visible:ring-[#4F7EF7]/30"
+                  onChange={(event) => setChartView(event.target.value as 'movement' | 'evolution')}
+                  value={chartView}
+                >
+                  <option value="movement">Movimento da carteira</option>
+                  <option value="evolution">Evolução da carteira</option>
+                </select>
+                <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-1 h-4 w-4 text-slate-400" />
+              </h2>
+              {chartView === 'evolution' ? (
+                <div className="mt-1 flex items-center gap-1.5">
+                  <p className="text-xs text-slate-500">Principal ainda emprestado no fechamento de cada mês.</p>
+                  <InfoHint text="Mostra o principal dos empréstimos liberados, descontando o principal recuperado nos pagamentos. Os juros contratados aparecem no detalhe de cada ponto." />
+                </div>
+              ) : null}
+            </div>
             <select
               aria-label="Período do gráfico"
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 outline-none focus:border-emerald-600"
-              onChange={(event) => setPeriod(event.target.value as '3m' | '6m' | '12m')}
-              value={period}
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 outline-none focus:border-[#4F7EF7]"
+              onChange={(event) => {
+                if (chartView === 'movement') setPeriod(event.target.value as '3m' | '6m' | '12m');
+                else setEvolutionPeriod(event.target.value as 'all' | '3m' | '6m' | '12m');
+              }}
+              value={chartView === 'movement' ? period : evolutionPeriod}
             >
+              {chartView === 'evolution' ? <option value="all">Desde o início</option> : null}
               <option value="3m">3 meses</option>
               <option value="6m">6 meses</option>
               <option value="12m">12 meses</option>
             </select>
           </div>
+
+          {chartView === 'evolution' && hasEvolutionData ? (
+            <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-slate-500">Principal em aberto hoje</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 sm:text-3xl">
+                  {formatCurrency(evolutionPoints[evolutionPoints.length - 1].principalOutstanding)}
+                </p>
+              </div>
+              <p className="text-xs text-slate-500">
+                {evolutionPoints[0].label} — {evolutionPoints[evolutionPoints.length - 1].label}
+              </p>
+            </div>
+          ) : null}
+
           <div className="mt-4 h-[280px] min-w-0 sm:h-[320px]">
-            {hasChartData ? (
-              <Bar data={chartData} options={chartOptions} />
+            {chartView === 'movement' && hasChartData ? (
+              <Bar aria-label="Movimento mensal da carteira em reais" data={chartData} options={chartOptions} role="img" />
+            ) : chartView === 'evolution' && hasEvolutionData ? (
+              <Line aria-label="Evolução mensal do principal ainda emprestado em reais" data={evolutionData} options={evolutionOptions} role="img" />
             ) : (
-              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-center text-slate-500">
+              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-slate-500">
                 <TrendingUp className="h-8 w-8 text-slate-300" />
-                <p className="mt-3 text-sm font-semibold">Sem movimentação no período</p>
+                <p className="mt-3 text-sm font-semibold">
+                  {chartView === 'movement' ? 'Sem movimentação no período' : 'Sem empréstimos liberados para mostrar a evolução.'}
+                </p>
               </div>
             )}
           </div>
-          <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium text-slate-500">
-            <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-[#4F7EF7]" />Emprestado</span>
-            <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-[#4f8a70]" />Recebido</span>
-            <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-stone-300" />A receber</span>
-            <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" />Vencido</span>
-          </div>
+          {chartView === 'movement' ? (
+            <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium text-slate-500">
+              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-[#4F7EF7]" />Emprestado</span>
+              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-[#4f8a70]" />Recebido</span>
+              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-stone-300" />A receber</span>
+              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" />Vencido</span>
+            </div>
+          ) : hasEvolutionData ? (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-2 font-medium"><span className="h-0.5 w-5 rounded-full bg-[#4F7EF7]" />Principal ainda emprestado</span>
+              <span>Mês atual: posição de hoje.</span>
+            </div>
+          ) : null}
         </article>
       </section>
 

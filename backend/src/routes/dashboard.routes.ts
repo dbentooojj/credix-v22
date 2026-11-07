@@ -1026,6 +1026,26 @@ router.get("/", async (req, res) => {
   const previousSnapshot = sparklineSnapshotByMonth.get(previousMonthKey)
     ?? computeSnapshotAt(getMonthEndIso(previousMonthKey));
 
+  const firstFundedLoanMonth = loans
+    .filter((loan) => loan.status !== LoanStatus.PENDENTE && dateToIso(loan.startDate) <= todayIso)
+    .map((loan) => dateToMonthKey(loan.startDate))
+    .sort()[0];
+  const evolutionMonthCount = firstFundedLoanMonth
+    ? Math.max(1, (Number(currentMonthKey.slice(0, 4)) - Number(firstFundedLoanMonth.slice(0, 4))) * 12
+      + Number(currentMonthKey.slice(5, 7)) - Number(firstFundedLoanMonth.slice(5, 7)) + 1)
+    : 0;
+  const evolutionPoints = firstFundedLoanMonth
+    ? buildMonthSeries(currentMonthKey, evolutionMonthCount).map((monthKey) => {
+      const snapshot = computeSnapshotAt(monthKey === currentMonthKey ? todayIso : getMonthEndIso(monthKey));
+      return {
+        month: monthKey,
+        label: monthLabel(monthKey),
+        open: round2(snapshot.openReceivable),
+        principalOutstanding: round2(snapshot.totalLoaned),
+      };
+    })
+    : [];
+
   const receivedMonthlySeries = buildMonthlySeries(sparklineMonthKeys, receivedByMonthAll);
   const portfolioReceivedMonthlySeries = buildMonthlySeries(sparklineMonthKeys, portfolioReceivedByMonthAll);
   const loanedMonthlyFlows = buildMonthlySeries(sparklineMonthKeys, loanedByMonthAll);
@@ -1554,6 +1574,9 @@ router.get("/", async (req, res) => {
       },
       chart: {
         points: portfolioChartPoints,
+      },
+      evolution: {
+        points: evolutionPoints,
       },
       kpiCards: portfolioKpiCards,
     },
