@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useGlobalScrollLock } from "./useGlobalScrollLock";
 
@@ -33,18 +33,10 @@ export function ModalBase({
   footerClassName = "",
 }: ModalBaseProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const subtitleId = useId();
   useGlobalScrollLock(open);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  useModalFocus(open, onClose, panelRef);
 
   if (!open) return null;
 
@@ -53,6 +45,8 @@ export function ModalBase({
       className="fixed inset-0 z-[60] flex items-center justify-center px-4 py-4 sm:px-5 sm:py-5"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={subtitle ? subtitleId : undefined}
       style={{
         paddingTop: "calc(1rem + var(--safe-area-top))",
         paddingBottom: "calc(1rem + var(--safe-area-bottom))",
@@ -68,12 +62,13 @@ export function ModalBase({
 
       <div
         ref={panelRef}
+        tabIndex={-1}
         className={`relative z-10 mx-auto flex w-full max-h-[calc(100dvh-2rem)] flex-col rounded-2xl border border-slate-200 bg-white shadow-[0_24px_64px_rgba(15,23,42,0.16)] animate-slide-up sm:max-h-[calc(100dvh-2.5rem)] ${size}`}
       >
         <div className={`flex items-start justify-between border-b border-slate-100 px-5 py-3.5 sm:px-6 ${headerClassName}`}>
           <div className="min-w-0 pr-4">
-            <h3 className="truncate text-lg font-bold text-slate-800">{title}</h3>
-            {subtitle ? <p className="mt-1 line-clamp-2 text-sm text-slate-500">{subtitle}</p> : null}
+            <h3 id={titleId} className="truncate text-lg font-bold text-slate-800">{title}</h3>
+            {subtitle ? <p id={subtitleId} className="mt-1 line-clamp-2 text-sm text-slate-500">{subtitle}</p> : null}
           </div>
           <button
             aria-label="Fechar"
@@ -100,6 +95,48 @@ export function ModalBase({
       </div>
     </div>
   );
+}
+
+export function useModalFocus(open: boolean, onClose: () => void, panelRef: { current: HTMLDivElement | null }) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'))
+        .filter((dialog) => dialog.getClientRects().length > 0);
+      if (!dialogs.at(-1)?.contains(panelRef.current)) return;
+      if (event.key === "Escape") onCloseRef.current();
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? []).filter((item) => item.getClientRects().length > 0);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        panelRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panelRef.current)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [open, panelRef]);
 }
 
 export function ModalBtnGhost({
@@ -169,10 +206,10 @@ export function ModalField({
 }) {
   return (
     <div className={full ? "col-span-2" : ""}>
-      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">
-        {label}
+      <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+        <span className="mb-1.5 block">{label}</span>
+        {children}
       </label>
-      {children}
     </div>
   );
 }

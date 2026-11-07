@@ -6,6 +6,7 @@ import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass 
 import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
+import { readApiMessage, readJsonOrThrow } from "../../../../utils/apiClient";
 
 import {
   UsersIcon,
@@ -169,29 +170,17 @@ export function ClientesClient() {
   const [formEmail, setFormEmail] = useState("");
   const [formStatus, setFormStatus] = useState("ativo");
 
-  async function readApiMessage(response: Response, fallback: string) {
-    try {
-      const body = await response.json();
-      if (typeof body?.message === "string" && body.message.trim()) {
-        return body.message;
-      }
-    } catch {
-      // ignore body parsing failures
-    }
-    return fallback;
-  }
-
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await fetch("/api/tables/debtors/overview", { cache: "no-store" });
-      if (!response.ok) throw new Error("Falha ao carregar dados dos clientes.");
-      const body = await response.json();
+      const body = await readJsonOrThrow<{ data?: ClientOverview[] }>(response, "Falha ao carregar dados dos clientes.");
+      if (!Array.isArray(body?.data)) throw new Error("Resposta inválida ao carregar clientes.");
       setDebtors(body.data);
       setExpandedId(null);
     } catch (err: any) {
-      setError("Falha ao carregar dados dos clientes.");
+      setError(err instanceof Error ? err.message : "Falha ao carregar dados dos clientes.");
     } finally {
       setLoading(false);
     }
@@ -225,19 +214,16 @@ export function ClientesClient() {
     if (!formName.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/tables/debtors").then((r) => r.json());
-      let rows: any[] = res.data || [];
-      if (editingDebtor) {
-        rows = rows.map((r: any) => String(r.id) === String(editingDebtor.id)
-          ? { ...r, name: formName.trim(), document: formDocument.trim(), cpf: formDocument.trim(), phone: formPhone.trim(), email: formEmail.trim(), status: formStatus }
-          : r);
-      } else {
-        const maxId = rows.reduce((m: number, r: any) => Math.max(m, Number(r.id) || 0), 0);
-        rows.push({ id: maxId + 1, name: formName.trim(), document: formDocument.trim(), cpf: formDocument.trim(), phone: formPhone.trim(), email: formEmail.trim(), status: formStatus, created_at: new Date().toISOString() });
-      }
-      const putResponse = await fetch("/api/tables/debtors", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
-      if (!putResponse.ok) {
-        throw new Error(await readApiMessage(putResponse, "Não foi possível salvar o cliente."));
+      const response = await fetch(
+        editingDebtor ? `/api/records/debtors/${editingDebtor.id}` : "/api/records/debtors",
+        {
+          method: editingDebtor ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: formName.trim(), document: formDocument.trim(), phone: formPhone.trim(), email: formEmail.trim(), status: formStatus }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(await readApiMessage(response, "Não foi possível salvar o cliente."));
       }
       setShowFormModal(false);
       await fetchData();
@@ -253,11 +239,9 @@ export function ClientesClient() {
     const debtorName = deletingDebtor.name || `#${deletingDebtor.id}`;
     setSaving(true);
     try {
-      const res = await fetch("/api/tables/debtors").then((r) => r.json());
-      const rows = (res.data || []).filter((r: any) => String(r.id) !== String(deletingDebtor.id));
-      const putResponse = await fetch("/api/tables/debtors", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
-      if (!putResponse.ok) {
-        throw new Error(await readApiMessage(putResponse, "Não foi possível excluir o cliente."));
+      const response = await fetch(`/api/records/debtors/${deletingDebtor.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error(await readApiMessage(response, "Não foi possível excluir o cliente."));
       }
       setShowDeleteModal(false); setDeletingDebtor(null);
       await fetchData();
@@ -331,7 +315,7 @@ export function ClientesClient() {
   // KPIs
   const totalDebtors = enrichedDebtors.length;
   const activeDebtors = enrichedDebtors.filter((d) => d.uiStatus === "Ativo").length;
-  const inactiveDebtors = enrichedDebtors.filter((d) => ["Inativo", "Quitado"].includes(d.uiStatus)).length;
+  const inactiveDebtors = enrichedDebtors.filter((d) => String(d.status || "").toLowerCase() === "inativo").length;
   const overdueDebtors = enrichedDebtors.filter((d) => d.uiStatus === "Atrasado").length;
 
   function toggleSort(field: string) {
@@ -372,6 +356,8 @@ export function ClientesClient() {
           </button>
         )}
       />
+
+      {error && <div role="alert" className="mb-4 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800">{error} <button type="button" className="ml-2 underline" onClick={() => void fetchData()}>Recarregar dados</button></div>}
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -723,7 +709,7 @@ export function ClientesClient() {
       >
         <div className="grid grid-cols-2 gap-4">
           <ModalField label="Nome completo" full><input className={modalInputClass} maxLength={200} placeholder="Ex: Joao Silva" value={formName} onChange={(e) => setFormName(e.target.value)} /></ModalField>
-          <ModalField label="CPF / CNPJ"><input className={modalInputClass} maxLength={18} placeholder="000.000.000-00" value={formDocument} onChange={(e) => setFormDocument(e.target.value)} /></ModalField>
+          <ModalField label="CPF"><input className={modalInputClass} maxLength={14} inputMode="numeric" placeholder="000.000.000-00" value={formDocument} onChange={(e) => setFormDocument(e.target.value)} /></ModalField>
           <ModalField label="Telefone"><input className={modalInputClass} maxLength={15} placeholder="(00) 90000-0000" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></ModalField>
           <ModalField label="E-mail"><input className={modalInputClass} type="email" placeholder="email@exemplo.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></ModalField>
           <ModalField label="Status"><select className={modalInputClass} value={formStatus} onChange={(e) => setFormStatus(e.target.value)}><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></ModalField>

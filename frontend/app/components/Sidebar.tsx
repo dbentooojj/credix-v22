@@ -49,8 +49,8 @@ export function Sidebar({
       <aside
         aria-label="Menu principal"
         className={`fixed left-0 top-16 z-40 h-[calc(100vh-4rem)] w-[272px] border-r border-slate-200/80 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition-transform duration-300 will-change-transform sm:top-20 sm:h-[calc(100vh-5rem)] ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        } ${isCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"}`}
+          isOpen ? "visible translate-x-0" : "invisible -translate-x-full"
+        } ${isCollapsed ? "lg:invisible lg:-translate-x-full" : "lg:visible lg:translate-x-0"}`}
         role="navigation"
       >
         <div className="h-full overflow-y-auto overflow-x-hidden p-4 pb-8 scrollbar-none">

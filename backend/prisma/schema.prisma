@@ -153,6 +153,7 @@ model LoanSimulation {
   startDate         DateTime             @db.Date
   firstDueDate      DateTime             @db.Date
   dueDates          String[]
+  plan              Json?
   observations      String?
   status            LoanSimulationStatus @default(DRAFT)
   totalAmount       Decimal              @db.Decimal(14, 2)

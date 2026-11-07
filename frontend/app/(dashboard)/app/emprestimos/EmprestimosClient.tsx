@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from "react";
 import {
   Ban,
   Hash,
@@ -20,13 +20,14 @@ import {
   FlaskConical,
   X,
 } from "lucide-react";
-import { ModalBase, ModalBtnGhost, ModalBtnPrimary } from "../../../components/ModalBase";
+import { ModalBase, ModalBtnGhost, ModalBtnPrimary, useModalFocus } from "../../../components/ModalBase";
 import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
 import { useGlobalScrollLock } from "../../../components/useGlobalScrollLock";
-import { readJsonOrThrow } from "../../../../utils/apiClient";
+import { fetchDataArray, readJsonOrThrow } from "../../../../utils/apiClient";
 import { calculateLoanPreview } from "../../../../utils/loanCalculator";
+import { getDateOnlyRelationToToday, getTodayIsoInAppTimeZone } from "../../../../utils/dateOnlyStatus";
 import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
 
 // --- TYPES ---
@@ -220,7 +221,7 @@ function translateStatus(status: string) {
   if (normalized === "ativo" || normalized === "active") return "Ativo";
   if (normalized === "inativo" || normalized === "inactive") return "Inativo";
   if (normalized === "atrasado" || normalized === "late" || normalized === "overdue") return "Atrasado";
-  if (normalized === "quitado" || normalized === "paid") return "Quitado";
+  if (normalized === "quitado" || normalized === "finalizado" || normalized === "paid") return "Quitado";
   return status || "Desconhecido";
 }
 
@@ -238,13 +239,18 @@ function isInstallmentPaid(installment: Installment) {
   );
 }
 
+function isInstallmentOverdue(installment: Installment) {
+  return !isInstallmentPaid(installment)
+    && (translateInstallmentStatus(String(installment.status || "")) === "Atrasado"
+      || getDateOnlyRelationToToday(installment.due_date ?? installment.dueDate) === "past");
+}
+
 function getInstallmentStatusBadgeClass(installment: Installment) {
   if (isInstallmentPaid(installment)) {
     return "bg-emerald-100 text-emerald-700 border-emerald-200";
   }
 
-  const label = translateInstallmentStatus(String(installment.status || ""));
-  if (label === "Atrasado") {
+  if (isInstallmentOverdue(installment)) {
     return "bg-rose-100 text-rose-700 border-rose-200";
   }
 
@@ -385,8 +391,13 @@ export function EmprestimosClient() {
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [simulations, setSimulations] = useState<LoanSimulation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [businessDate, setBusinessDate] = useState(getTodayIsoInAppTimeZone);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
+  useEffect(() => {
+    const timer = window.setInterval(() => setBusinessDate(getTodayIsoInAppTimeZone()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Filtros
   const [search, setSearch] = useState("");
@@ -400,6 +411,8 @@ export function EmprestimosClient() {
 
   // Modal state
   const [showLoanModal, setShowLoanModal] = useState(false);
+  const loanModalRef = useRef<HTMLDivElement>(null);
+  const deleteModalRef = useRef<HTMLDivElement>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [loanModalMode, setLoanModalMode] = useState<LoanModalMode>("loan");
   const [selectedLoanId, setSelectedLoanId] = useState<string | number | null>(null);
@@ -498,16 +511,17 @@ export function EmprestimosClient() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const [resLoans, resDebtors, resInstallments, resSimulations] = await Promise.all([
-        fetch("/api/tables/loans").then((r) => r.json()),
-        fetch("/api/tables/debtors").then((r) => r.json()),
-        fetch("/api/tables/installments").then((r) => r.json()),
-        fetch("/api/loan-simulations").then((r) => r.json()),
+        fetchDataArray<Loan>("/api/tables/loans", "Falha ao carregar empréstimos."),
+        fetchDataArray<Debtor>("/api/tables/debtors", "Falha ao carregar clientes."),
+        fetchDataArray<Installment>("/api/tables/installments", "Falha ao carregar parcelas."),
+        fetchDataArray<LoanSimulation>("/api/loan-simulations", "Falha ao carregar simulações."),
       ]);
-      if (resLoans.data) setLoans(resLoans.data);
-      if (resDebtors.data) setDebtors(resDebtors.data);
-      if (resInstallments.data) setInstallments(resInstallments.data);
-      if (resSimulations.data) setSimulations(resSimulations.data);
+      setLoans(resLoans);
+      setDebtors(resDebtors);
+      setInstallments(resInstallments);
+      setSimulations(resSimulations);
     } catch (err) {
       setError("Erro ao carregar dados. Verifique a conexão.");
     } finally {
@@ -679,6 +693,13 @@ export function EmprestimosClient() {
       startDate: safeStartDate,
       firstDueDate,
       dueDates,
+      plan: loanSummary.plan.map((item) => ({
+        installmentNumber: item.installmentNumber,
+        dueDate: item.dueDate,
+        amount: item.amount,
+        principalAmount: item.principalAmount,
+        interestAmount: item.interestAmount,
+      })),
       observations: formObservations,
       _preview: {
         totalAmount: loanSummary.totalAmount,
@@ -848,6 +869,8 @@ export function EmprestimosClient() {
     setShowLoanModal(false);
     setSelectedLoanId(null);
   }
+  useModalFocus(showLoanModal, closeLoanModal, loanModalRef);
+  useModalFocus(showDeleteModal, () => setShowDeleteModal(false), deleteModalRef);
 
   function closeViewModal() {
     setShowViewModal(false);
@@ -1090,13 +1113,7 @@ export function EmprestimosClient() {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/tables/loans").then((r) => r.json());
-      const rows = (res.data || []).filter((r: any) => String(r.id) !== String(deletingLoan.id));
-      const putResponse = await fetch("/api/tables/loans", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows }),
-      });
+      const putResponse = await fetch(`/api/records/loans/${deletingLoan.id}`, { method: "DELETE" });
 
       await readJsonOrThrow(putResponse, "Não foi possível excluir o empréstimo.");
       setShowDeleteModal(false);
@@ -1152,7 +1169,9 @@ export function EmprestimosClient() {
         ]
           .map(toFiniteNumber)
           .find((value) => value > 0) ?? 0;
-      const uiStatus = translateStatus(loan.status || "");
+      const storedStatus = translateStatus(loan.status || "");
+      const uiStatus = storedStatus !== "Quitado" && loanInstallments.some(isInstallmentOverdue)
+        ? "Atrasado" : storedStatus;
       const createdAt = parseDateValue(loan.created_at || loan.start_date || loan.date);
 
       return {
@@ -1169,7 +1188,7 @@ export function EmprestimosClient() {
         searchStr: `${loan.id} ${debtor?.name || ""} ${debtor?.document || debtor?.cpf || ""}`.toLowerCase(),
       };
     });
-  }, [loans, debtors, installments]);
+  }, [loans, debtors, installments, businessDate]);
 
   const selectedLoan = useMemo(
     () => enrichedLoans.find((loan) => sameId(loan.id, selectedLoanId)) ?? null,
@@ -1196,10 +1215,10 @@ export function EmprestimosClient() {
     const totalInterest = Math.max(0, selectedLoan.total - selectedLoan.principal);
     const paidInstallments = selectedLoan.installments.filter(isInstallmentPaid);
     const overdueInstallments = selectedLoan.installments.filter(
-      (item) => !isInstallmentPaid(item) && translateInstallmentStatus(String(item.status || "")) === "Atrasado",
+      isInstallmentOverdue,
     );
     const pendingInstallments = selectedLoan.installments.filter(
-      (item) => !isInstallmentPaid(item) && translateInstallmentStatus(String(item.status || "")) !== "Atrasado",
+      (item) => !isInstallmentPaid(item) && !isInstallmentOverdue(item),
     );
     const fixedAddition = toFiniteNumber(loanMeta.meta.fixedAddition);
     const interestRate = toFiniteNumber(selectedLoan.interest_rate ?? selectedLoan.interestRate);
@@ -1228,7 +1247,7 @@ export function EmprestimosClient() {
       rateValue: interestMode === "fixo" ? formatCurrency(fixedAddition) : formatPercent(interestRate),
       observations: loanMeta.text,
       installments: selectedLoan.installments.map((item) => {
-        const statusLabel = isInstallmentPaid(item) ? "Pago" : translateInstallmentStatus(String(item.status || ""));
+        const statusLabel = isInstallmentPaid(item) ? "Pago" : isInstallmentOverdue(item) ? "Atrasado" : "Pendente";
         return {
           id: item.id,
           number: Number(item.installment_number ?? item.installmentNumber ?? 0),
@@ -1626,6 +1645,8 @@ export function EmprestimosClient() {
           </>
         )}
       />
+
+      {error && <div role="alert" className="mb-4 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800">{error} <button type="button" className="ml-2 underline" onClick={() => void fetchData()}>Recarregar dados</button></div>}
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -2286,13 +2307,18 @@ export function EmprestimosClient() {
           }}
         >
           <div
+            ref={loanModalRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="loan-form-dialog-title"
             className="mx-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl sm:max-h-[calc(100dvh-2.5rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="shrink-0 flex items-start justify-between border-b border-slate-800 px-5 py-4">
               <div>
-                <h2 className="text-xl font-bold text-slate-100">
+                <h2 id="loan-form-dialog-title" className="text-xl font-bold text-slate-100">
                   {loanModalMode === "loan"
                     ? "Novo empréstimo"
                     : loanModalMode === "simulation"
@@ -2300,7 +2326,7 @@ export function EmprestimosClient() {
                       : `Editar empréstimo #${selectedLoan?.id ?? ""}`}
                 </h2>
               </div>
-              <button onClick={closeLoanModal} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"><X className="h-5 w-5" /></button>
+              <button aria-label="Fechar" type="button" onClick={closeLoanModal} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"><X className="h-5 w-5" /></button>
             </div>
 
             {/* Body: 2 columns */}
@@ -2685,8 +2711,8 @@ export function EmprestimosClient() {
             paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
           }}
         >
-          <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-slate-100">Confirmar exclusão</h2>
+          <div ref={deleteModalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="delete-loan-dialog-title" className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 id="delete-loan-dialog-title" className="text-lg font-bold text-slate-100">Confirmar exclusão</h2>
             <p className="mt-1 text-sm text-slate-400">Deseja excluir o empréstimo #{deletingLoan?.id}?</p>
             <p className="mt-3 text-sm text-slate-400">Esta ação não pode ser desfeita. O empréstimo e suas parcelas serão removidos permanentemente.</p>
             <div className="mt-5 flex justify-end gap-3">

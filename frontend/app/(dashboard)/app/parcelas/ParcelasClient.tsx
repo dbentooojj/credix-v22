@@ -18,9 +18,9 @@ import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass 
 import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
-import { readJsonOrThrow } from "../../../../utils/apiClient";
+import { fetchDataArray, readJsonOrThrow } from "../../../../utils/apiClient";
 import { formatCurrencyInputFromNumber } from "../../../../utils/currencyInput";
-import { getDateOnlyRelationToToday } from "../../../../utils/dateOnlyStatus";
+import { getDateOnlyRelationToToday, getTodayIsoInAppTimeZone, toIsoDateOnly } from "../../../../utils/dateOnlyStatus";
 
 // --- TYPES ---
 type Debtor = {
@@ -47,6 +47,8 @@ type Installment = {
   payment_method?: string;
   paid_at?: string;
 };
+
+type Payment = { id: number; amount: number; paymentDate: string };
 
 // --- HELPERS ---
 function sameId(a: any, b: any) {
@@ -104,8 +106,7 @@ function isOverdue(dueDate: unknown, status: string) {
 
 function isCurrentMonth(date: Date | null) {
   if (!date) return false;
-  const now = new Date();
-  return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  return toIsoDateOnly(date)?.slice(0, 7) === getTodayIsoInAppTimeZone().slice(0, 7);
 }
 
 function toDateInputValue(d: Date) {
@@ -134,8 +135,15 @@ export function ParcelasClient() {
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [businessDate, setBusinessDate] = useState(getTodayIsoInAppTimeZone);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const toast = useToast();
+  useEffect(() => {
+    const timer = window.setInterval(() => setBusinessDate(getTodayIsoInAppTimeZone()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Filtros
   const [search, setSearch] = useState("");
@@ -161,16 +169,19 @@ export function ParcelasClient() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [resInstallments, resLoans, resDebtors] = await Promise.all([
-        fetch("/api/tables/installments").then((r) => r.json()),
-        fetch("/api/tables/loans").then((r) => r.json()),
-        fetch("/api/tables/debtors").then((r) => r.json()),
+      setLoadError(null);
+      const [resInstallments, resLoans, resDebtors, resPayments] = await Promise.all([
+        fetchDataArray<Installment>("/api/tables/installments", "Falha ao carregar parcelas."),
+        fetchDataArray<Loan>("/api/tables/loans", "Falha ao carregar empréstimos."),
+        fetchDataArray<Debtor>("/api/tables/debtors", "Falha ao carregar clientes."),
+        fetchDataArray<Payment>("/api/payments", "Falha ao carregar pagamentos."),
       ]);
-      if (resInstallments.data) setInstallments(resInstallments.data);
-      if (resLoans.data) setLoans(resLoans.data);
-      if (resDebtors.data) setDebtors(resDebtors.data);
-    } catch {
-      // erro silencioso
+      setInstallments(resInstallments);
+      setLoans(resLoans);
+      setDebtors(resDebtors);
+      setPayments(resPayments);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Falha ao carregar parcelas.");
     } finally {
       setLoading(false);
     }
@@ -294,26 +305,24 @@ export function ParcelasClient() {
         searchStr: `${debtor?.name || ""} ${debtor?.phone || ""} ${inst.loan_id} ${inst.id}`.toLowerCase(),
       };
     });
-  }, [installments, loans, debtors]);
+  }, [installments, loans, debtors, businessDate]);
 
   // KPIs
   const kpis = useMemo(() => {
-    const now = new Date();
-    const paidThisMonth = enriched.filter(
-      (i) => i.uiStatus === "Pago" && i.dueDate && isCurrentMonth(i.dueDate)
-    );
+    const monthIso = businessDate.slice(0, 7);
+    const paidThisMonth = payments.filter((payment) => String(payment.paymentDate).slice(0, 7) === monthIso);
     const pending = enriched.filter((i) => i.uiStatus === "Pendente");
     const overdue = enriched.filter((i) => i.uiStatus === "Atrasado");
 
     return {
-      receivedValue: paidThisMonth.reduce((s, i) => s + i.amount, 0),
+      receivedValue: paidThisMonth.reduce((s, payment) => s + Number(payment.amount || 0), 0),
       receivedCount: paidThisMonth.length,
       pendingValue: pending.reduce((s, i) => s + i.amount, 0),
       pendingCount: pending.length,
       overdueValue: overdue.reduce((s, i) => s + i.amount, 0),
       overdueCount: overdue.length,
     };
-  }, [enriched]);
+  }, [enriched, payments, businessDate]);
 
   // Lista de clientes para o filtro
   const clientOptions = useMemo(() => {
@@ -423,6 +432,7 @@ export function ParcelasClient() {
   return (
     <div className="w-full max-w-[1600px] mx-auto pb-24 lg:pb-8">
       <PageHeader title="Parcelas" />
+      {loadError && <div role="alert" className="mb-4 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800">{loadError} <button type="button" className="ml-2 underline" onClick={() => void fetchData()}>Tentar novamente</button></div>}
 
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -436,7 +446,7 @@ export function ParcelasClient() {
           <p className="mt-2 sm:mt-3 text-xl sm:text-[1.375rem] font-bold text-emerald-400">{loading ? "..." : formatCurrency(kpis.receivedValue)}</p>
           <p className="mt-1 hidden text-xs font-semibold text-slate-500 sm:block">
             <CheckCircle2 className="inline h-3 w-3 mr-1 text-emerald-500" />
-            {loading ? "..." : `${kpis.receivedCount} parcela(s) paga(s)`}
+            {loading ? "..." : `${kpis.receivedCount} pagamento(s) recebido(s)`}
           </p>
         </div>
         {/* Total pendente */}
@@ -730,7 +740,7 @@ export function ParcelasClient() {
           <ModalField label="Data do pagamento"><input className={modalInputClass} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></ModalField>
           <ModalField label="Método de pagamento">
             <select className={modalInputClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="TRANSFERENCIA">Transferência</option><option value="CARTAO">Cartão</option><option value="BOLETO">Boleto</option><option value="OUTRO">Outro</option>
+              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="TRANSFERENCIA">Transferência</option><option value="CARTAO">Cartão</option>
             </select>
           </ModalField>
           <ModalField label="Observações"><input className={modalInputClass} placeholder="Opcional" maxLength={200} value={payNotes} onChange={(e) => setPayNotes(e.target.value)} /></ModalField>

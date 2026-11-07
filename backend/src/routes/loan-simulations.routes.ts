@@ -15,6 +15,7 @@ import {
   type ScheduleHistoryItem,
 } from "../lib/consolidated-schedule";
 import { upsertLoanDisbursementTransaction } from "../lib/installment-income-transaction";
+import { calculateLoanPreview, type LoanInterestType } from "../lib/loanCalculator";
 import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
@@ -109,6 +110,51 @@ function splitAmount(total: number, parts: number): number[] {
     const current = base + (index === safeParts - 1 ? remainder : 0);
     return round2(current / 100);
   });
+}
+
+type SimulationPlanRow = {
+  installmentNumber: number;
+  dueDate: string;
+  amount: number;
+  principalAmount: number;
+  interestAmount: number;
+};
+
+export function validatedPlan(raw: unknown, dueDates: string[], principal: number, total: number): SimulationPlanRow[] | null {
+  if (raw === null || raw === undefined) return null; // Simulations created before this field existed.
+  if (!Array.isArray(raw) || raw.length !== dueDates.length) {
+    throw new AppError("Plano de parcelas incompleto.", 400);
+  }
+  const rows = raw.map((value, index) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new AppError("Plano de parcelas invalido.", 400);
+    }
+    const item = value as Record<string, unknown>;
+    const amount = Number(item.amount);
+    const principalAmount = Number(item.principalAmount);
+    const interestAmount = Number(item.interestAmount);
+    if (Number(item.installmentNumber) !== index + 1
+      || String(item.dueDate) !== dueDates[index]
+      || ![amount, principalAmount, interestAmount].every(Number.isFinite)
+      || amount <= 0 || principalAmount < 0 || interestAmount < 0
+      || Math.abs(round2(principalAmount + interestAmount) - round2(amount)) > 0.01) {
+      throw new AppError(`Parcela #${index + 1} invalida.`, 400);
+    }
+    return {
+      installmentNumber: index + 1,
+      dueDate: dueDates[index],
+      amount: round2(amount),
+      principalAmount: round2(principalAmount),
+      interestAmount: round2(interestAmount),
+    };
+  });
+  const sum = (field: "amount" | "principalAmount" | "interestAmount") => round2(rows.reduce((acc, row) => acc + row[field], 0));
+  if (Math.abs(sum("amount") - total) > 0.01
+    || Math.abs(sum("principalAmount") - principal) > 0.01
+    || Math.abs(sum("interestAmount") - round2(total - principal)) > 0.01) {
+    throw new AppError("Totais do plano de parcelas nao conferem.", 400);
+  }
+  return rows;
 }
 
 function resolveInterestTypeForLoan(value: unknown): InterestType {
@@ -347,6 +393,7 @@ function mapRowForResponse(row: LoanSimulationWithRefs) {
     row.dueDates,
     row.installmentsCount,
   );
+  const plan = validatedPlan(row.plan, dueDates, round2(row.principalAmount), round2(row.totalAmount));
   const effectiveStatus = resolveEffectiveSimulationStatus(row);
   const clientName = row.client?.name ?? row.clientName ?? `Cliente #${row.clientId}`;
   const clientPhone = row.client?.phone ?? row.clientPhone ?? null;
@@ -375,7 +422,7 @@ function mapRowForResponse(row: LoanSimulationWithRefs) {
       totalAmount: Number(row.totalAmount),
       installmentAmount: Number(row.installmentAmount),
     },
-    schedule: dueDates.map((dueDate) => ({ dueDate })),
+    schedule: plan?.map(({ dueDate, amount }) => ({ dueDate, amount })) ?? dueDates.map((dueDate) => ({ dueDate })),
     client: {
       id: row.clientId,
       name: clientName,
@@ -550,7 +597,51 @@ router.post("/", async (req, res) => {
     Array.isArray(payload.dueDates) ? payload.dueDates.map((item) => toIsoDateOnly(item, now)) : [firstDueDate],
     Math.max(1, Math.trunc(toNumber(payload.installmentsCount))),
   );
-  const totals = computeTotalsFromPayload(payload);
+  let totals = computeTotalsFromPayload(payload);
+  let plan = validatedPlan(payload.plan, dueDates, round2(payload.principalAmount), totals.totalAmount);
+  if (plan) {
+    const principal = round2(payload.principalAmount);
+    const requestedInterestType = String(payload.interestType ?? "composto").toLowerCase();
+    if (!["composto", "simples", "fixo"].includes(requestedInterestType)) {
+      throw new AppError("Tipo de juros invalido.", 400);
+    }
+    const interestType = requestedInterestType as LoanInterestType;
+    if (principal <= 0 || dueDates.some((dueDate, index) => dueDate <= (index === 0 ? startDate : dueDates[index - 1]))) {
+      throw new AppError("Datas ou valor principal invalidos para a simulacao.", 400);
+    }
+    if (interestType !== "fixo" && round2(payload.interestRate) <= 0) {
+      throw new AppError("Taxa de juros invalida.", 400);
+    }
+    if (interestType === "fixo" && round2(payload.fixedFeeAmount) < 0) {
+      throw new AppError("Acrescimo fixo invalido.", 400);
+    }
+    const calculated = calculateLoanPreview({
+      principal,
+      monthlyRate: payload.interestRate,
+      fixedAddition: payload.fixedFeeAmount,
+      installments: dueDates.length,
+      interestType,
+      startDate,
+      firstDueDate: dueDates[0],
+      dueDates,
+    });
+    const amountFields = ["amount", "principalAmount", "interestAmount"] as const;
+    if (calculated.plan.length !== dueDates.length
+      || calculated.plan.some((row, index) => row.dueDate !== dueDates[index])
+      || Math.abs(calculated.calcResult.totalAmount - totals.totalAmount) > 0.001
+      || plan.some((row, index) => amountFields.some(
+        (field) => Math.abs(row[field] - calculated.plan[index][field]) > 0.001,
+      ))) {
+      throw new AppError("A previa nao confere com a taxa e o plano de parcelas calculados pelo servidor.", 400);
+    }
+    totals = {
+      totalAmount: calculated.calcResult.totalAmount,
+      installmentAmount: round2(calculated.calcResult.installmentAmount),
+      interestRate: round2(payload.interestRate),
+      fixedFeeAmount: interestType === "fixo" ? round2(payload.fixedFeeAmount) : 0,
+    };
+    plan = validatedPlan(calculated.plan, dueDates, principal, totals.totalAmount);
+  }
   const clientId = Math.max(1, Math.trunc(toNumber(payload.clientId)));
   const client = await findClient(ownerUserId, clientId);
   if (!client) {
@@ -572,6 +663,7 @@ router.post("/", async (req, res) => {
       startDate: toDateOnlyUtc(startDate),
       firstDueDate: toDateOnlyUtc(firstDueDate),
       dueDates,
+      plan: plan ?? undefined,
       observations: String(payload.observations ?? "").trim() || null,
       status: LoanSimulationStatus.DRAFT,
       totalAmount: totals.totalAmount,
@@ -626,9 +718,10 @@ router.post("/:id/send", async (req, res) => {
     round2(updatedRow.totalAmount),
     Math.max(1, updatedRow.installmentsCount),
   );
+  const plan = validatedPlan(updatedRow.plan, updatedRow.dueDates, round2(updatedRow.principalAmount), round2(updatedRow.totalAmount));
   const proposalItems = updatedRow.dueDates.map((dueDate, index) => ({
     dueDate,
-    amount: simulationAmounts[index] ?? updatedRow.installmentAmount,
+    amount: plan?.[index]?.amount ?? simulationAmounts[index] ?? updatedRow.installmentAmount,
   }));
   const { proposalSchedule, displaySchedule, totals } = buildSimulationProposalSchedule(proposalItems);
   const whatsappMessage = buildProposalWhatsAppMessage(displaySchedule, totals.total);
@@ -748,9 +841,10 @@ router.post("/:id/approve", async (req, res) => {
         };
 
         const observations = encodeLoanObservations(lockedSimulation.observations, loanMeta);
-        const installmentValues = splitAmount(totalAmount, installmentsCount);
-        const principalValues = splitAmount(principalAmount, installmentsCount);
-        const interestValues = splitAmount(interestAmountTotal, installmentsCount);
+        const plan = validatedPlan(lockedSimulation.plan, dueDates, principalAmount, totalAmount);
+        const installmentValues = plan?.map((row) => row.amount) ?? splitAmount(totalAmount, installmentsCount);
+        const principalValues = plan?.map((row) => row.principalAmount) ?? splitAmount(principalAmount, installmentsCount);
+        const interestValues = plan?.map((row) => row.interestAmount) ?? splitAmount(interestAmountTotal, installmentsCount);
         const todayIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
 
         const [loanMax, installmentMax] = await Promise.all([
