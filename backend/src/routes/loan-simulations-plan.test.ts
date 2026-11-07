@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validatedPlan } from "./loan-simulations.routes";
+import { validatedPlan } from "../lib/simulation-plan";
 
 const dueDates = ["2027-02-01", "2027-03-01", "2027-04-01"];
 const plan = [
