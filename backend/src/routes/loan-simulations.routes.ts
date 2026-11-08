@@ -17,11 +17,10 @@ import {
 import { upsertLoanDisbursementTransaction } from "../lib/installment-income-transaction";
 import { calculateLoanPreview, type LoanInterestType } from "../lib/loanCalculator";
 import { validatedPlan } from "../lib/simulation-plan";
+import { getSimulationDisplayStatusLabel, resolveSimulationDisplayStatus, type SimulationDisplayStatus } from "../lib/simulation-status";
 import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
-
-type SimulationStatus = "DRAFT" | "SENT" | "ACCEPTED" | "EXPIRED" | "CANCELED";
 
 type ClientLite = {
   id: number;
@@ -268,31 +267,18 @@ async function findClient(ownerUserId: number, clientId: number): Promise<Client
   });
 }
 
-function parseStatusFilter(rawStatus: unknown): Set<SimulationStatus> | null {
+function parseStatusFilter(rawStatus: unknown): Set<SimulationDisplayStatus> | null {
   const input = String(rawStatus ?? "").trim().toUpperCase();
   if (!input) return null;
   const statuses = input
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
-    .filter((item): item is SimulationStatus => (
-      item === "DRAFT"
-      || item === "SENT"
-      || item === "ACCEPTED"
-      || item === "EXPIRED"
-      || item === "CANCELED"
+    .filter((item): item is SimulationDisplayStatus => (
+      item === "SIMULATED" || item === "CONVERTED" || item === "DISCARDED"
     ));
 
   return statuses.length > 0 ? new Set(statuses) : null;
-}
-
-function getSimulationStatusLabel(status: SimulationStatus): string {
-  if (status === "DRAFT") return "Rascunho";
-  if (status === "SENT") return "Enviada";
-  if (status === "ACCEPTED") return "Aceita";
-  if (status === "EXPIRED") return "Expirada";
-  if (status === "CANCELED") return "Cancelada";
-  return status;
 }
 
 function computeTotalsFromPayload(payload: Record<string, unknown>) {
@@ -331,18 +317,6 @@ function computeTotalsFromPayload(payload: Record<string, unknown>) {
   };
 }
 
-function resolveEffectiveSimulationStatus(row: {
-  status: LoanSimulationStatus;
-  expiresAt: Date;
-}): SimulationStatus {
-  const nowIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
-  const expiresAtIso = row.expiresAt.toISOString().slice(0, 10);
-  if ((row.status === LoanSimulationStatus.DRAFT || row.status === LoanSimulationStatus.SENT) && expiresAtIso < nowIso) {
-    return "EXPIRED";
-  }
-  return row.status;
-}
-
 function mapRowForResponse(row: LoanSimulationWithRefs) {
   const dueDates = resolveSimulationDueDates(
     row.firstDueDate.toISOString().slice(0, 10),
@@ -350,7 +324,8 @@ function mapRowForResponse(row: LoanSimulationWithRefs) {
     row.installmentsCount,
   );
   const plan = validatedPlan(row.plan, dueDates, round2(row.principalAmount), round2(row.totalAmount));
-  const effectiveStatus = resolveEffectiveSimulationStatus(row);
+  const loanId = row.loan?.id ?? null;
+  const displayStatus = resolveSimulationDisplayStatus(row.status, loanId);
   const clientName = row.client?.name ?? row.clientName ?? `Cliente #${row.clientId}`;
   const clientPhone = row.client?.phone ?? row.clientPhone ?? null;
 
@@ -369,8 +344,8 @@ function mapRowForResponse(row: LoanSimulationWithRefs) {
     firstDueDate: row.firstDueDate.toISOString().slice(0, 10),
     dueDates,
     observations: row.observations ?? "",
-    status: effectiveStatus,
-    loanId: row.loan?.id ?? null,
+    status: displayStatus,
+    loanId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     expiresAt: row.expiresAt.toISOString().slice(0, 10),
@@ -384,7 +359,7 @@ function mapRowForResponse(row: LoanSimulationWithRefs) {
       name: clientName,
       phone: clientPhone,
     },
-    statusLabel: getSimulationStatusLabel(effectiveStatus),
+    statusLabel: getSimulationDisplayStatusLabel(displayStatus),
   };
 }
 
@@ -653,10 +628,10 @@ router.post("/:id/send", async (req, res) => {
   const row = await readSimulation(ownerUserId, id);
   if (!row) return res.status(404).json({ message: "Simulacao nao encontrada" });
   if (row.status === LoanSimulationStatus.CANCELED) {
-    return res.status(409).json({ message: "Simulacao cancelada nao pode ser enviada." });
+    return res.status(409).json({ message: "Simulacao descartada nao pode ser enviada." });
   }
-  if (row.status === LoanSimulationStatus.ACCEPTED || row.loan?.id) {
-    return res.status(409).json({ message: "Simulacao aprovada ja foi convertida em emprestimo." });
+  if (row.loan?.id) {
+    return res.status(409).json({ message: "Simulacao ja foi convertida em emprestimo." });
   }
 
   await prisma.loanSimulation.update({
@@ -702,7 +677,7 @@ router.post("/:id/approve", async (req, res) => {
   const existingSimulation = await readSimulation(ownerUserId, id);
   if (!existingSimulation) return res.status(404).json({ message: "Simulacao nao encontrada" });
   if (existingSimulation.status === LoanSimulationStatus.CANCELED) {
-    return res.status(409).json({ message: "Simulacao cancelada nao pode ser aprovada." });
+    return res.status(409).json({ message: "Simulacao descartada nao pode ser aprovada." });
   }
 
   if (existingSimulation.loan?.id) {
@@ -943,8 +918,8 @@ router.post("/:id/cancel", async (req, res) => {
   const id = String(req.params.id ?? "").trim();
   const row = await readSimulation(ownerUserId, id);
   if (!row) return res.status(404).json({ message: "Simulacao nao encontrada" });
-  if (row.status === LoanSimulationStatus.ACCEPTED || row.loan?.id) {
-    return res.status(409).json({ message: "Simulacao aprovada nao pode ser cancelada." });
+  if (row.loan?.id) {
+    return res.status(409).json({ message: "Simulacao convertida nao pode ser descartada." });
   }
 
   await prisma.loanSimulation.update({

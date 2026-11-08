@@ -342,12 +342,9 @@
         <div>
           <label class="mb-1 block text-sm text-gray-600">Status</label>
           <select id="simulationStatusFilter" class="filter-control">
-            <option value="DRAFT,SENT,EXPIRED">Pendentes</option>
-            <option value="DRAFT">Rascunho</option>
-            <option value="SENT">Enviada</option>
-            <option value="EXPIRED">Expirada</option>
-            <option value="CANCELED">Cancelada</option>
-            <option value="ACCEPTED">Aceita</option>
+            <option value="SIMULATED">Simulada</option>
+            <option value="CONVERTED">Convertida</option>
+            <option value="DISCARDED">Descartada</option>
             <option value="">Todos</option>
           </select>
         </div>
@@ -395,26 +392,17 @@
 
   function getStatusBadgeClass(status) {
     const value = String(status || "").toUpperCase();
-    if (value === "ACCEPTED") return "badge badge-sim-accepted";
-    if (value === "CANCELED") return "badge badge-sim-canceled";
-    if (value === "EXPIRED") return "badge badge-sim-expired";
-    if (value === "SENT") return "badge badge-sim-sent";
-    if (value === "DRAFT") return "badge badge-sim-draft";
+    if (value === "CONVERTED") return "badge badge-sim-accepted";
+    if (value === "DISCARDED") return "badge badge-sim-canceled";
+    if (value === "SIMULATED") return "badge badge-sim-draft";
     return "badge badge-sim-draft";
   }
 
   function getStatusLabel(status) {
     const value = String(status || "").toUpperCase();
-    if (value === "DRAFT") return "Rascunho";
-    if (value === "SENT") return "Enviada";
-    if (value === "ACCEPTED") return "Aceita";
-    if (value === "EXPIRED") return "Expirada";
-    if (value === "CANCELED") return "Cancelada";
-    if (value === "ACEITA") return "Aceita";
-    if (value === "CANCELADA") return "Cancelada";
-    if (value === "ENVIADA") return "Enviada";
-    if (value === "RASCUNHO") return "Rascunho";
-    if (value === "EXPIRADA") return "Expirada";
+    if (value === "SIMULATED") return "Simulada";
+    if (value === "CONVERTED") return "Convertida";
+    if (value === "DISCARDED") return "Descartada";
     return value || "-";
   }
 
@@ -464,14 +452,14 @@
 
   function buildSimulationActionButtons(row) {
     const actions = [];
-    if (row.status !== "ACCEPTED") {
+    if (row.status === "SIMULATED") {
       actions.push(`<button type="button" class="action-btn action-btn-edit rounded-md p-2 transition-colors duration-150 hover:bg-slate-100" data-simulation-action="open" data-id="${row.id}" title="Editar"><i class="fas fa-pen-to-square"></i></button>`);
     }
 
-    if (row.status !== "ACCEPTED" && row.status !== "CANCELED") {
+    if (row.status === "SIMULATED") {
       actions.push(`<button type="button" class="action-btn action-btn-edit rounded-md p-2 transition-colors duration-150 hover:bg-slate-100" data-simulation-action="send" data-id="${row.id}" title="Reenviar WhatsApp"><i class="fab fa-whatsapp"></i></button>`);
       actions.push(`<button type="button" class="action-btn action-btn-edit rounded-md p-2 transition-colors duration-150 hover:bg-slate-100" data-simulation-action="approve" data-id="${row.id}" title="Aprovar"><i class="fas fa-check"></i></button>`);
-      actions.push(`<button type="button" class="action-btn action-btn-delete rounded-md p-2 transition-colors duration-150 hover:bg-slate-100" data-simulation-action="cancel" data-id="${row.id}" title="Cancelar"><i class="fas fa-ban"></i></button>`);
+      actions.push(`<button type="button" class="action-btn action-btn-delete rounded-md p-2 transition-colors duration-150 hover:bg-slate-100" data-simulation-action="cancel" data-id="${row.id}" title="Descartar"><i class="fas fa-ban"></i></button>`);
     }
 
     return actions;
@@ -775,7 +763,10 @@
 
       if (showFeedback) {
         const loanId = response?.data?.loanId;
-        showToast(loanId ? `Simulacao aprovada. Emprestimo #${loanId} criado.` : "Simulacao aprovada.", "success");
+        if (!loanId || response?.data?.status !== "CONVERTED") {
+          throw new Error("A simulacao ainda nao possui um emprestimo vinculado.");
+        }
+        showToast(`Simulacao aprovada. Emprestimo #${loanId} criado.`, "success");
       }
 
       if (simulationState.currentSimulationId === simulationId) {
@@ -807,7 +798,7 @@
       });
 
       if (showFeedback) {
-        showToast("Simulacao cancelada.", "success");
+        showToast("Simulacao descartada.", "success");
       }
 
       if (simulationState.currentSimulationId === simulationId) {
@@ -818,8 +809,8 @@
       await refreshPendingSimulations();
       return true;
     } catch (error) {
-      console.error("Erro ao cancelar simulacao:", error);
-      showToast(error instanceof Error ? error.message : "Falha ao cancelar simulacao.", "error");
+      console.error("Erro ao descartar simulacao:", error);
+      showToast(error instanceof Error ? error.message : "Falha ao descartar simulacao.", "error");
       return false;
     }
   }

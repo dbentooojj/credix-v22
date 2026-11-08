@@ -290,11 +290,9 @@ function translateInterestMode(mode: string) {
 
 function getSimulationStatusBadge(status: string) {
   const normalized = String(status || "").trim().toUpperCase();
-  if (normalized === "DRAFT") return "bg-amber-100 text-amber-800 border-amber-300";
-  if (normalized === "SENT") return "bg-sky-100 text-sky-800 border-sky-300";
-  if (normalized === "ACCEPTED") return "bg-emerald-100 text-emerald-800 border-emerald-300";
-  if (normalized === "EXPIRED") return "bg-violet-100 text-violet-800 border-violet-300";
-  if (normalized === "CANCELED") return "bg-rose-100 text-rose-800 border-rose-300";
+  if (normalized === "SIMULATED") return "bg-sky-100 text-sky-800 border-sky-300";
+  if (normalized === "CONVERTED") return "bg-emerald-100 text-emerald-800 border-emerald-300";
+  if (normalized === "DISCARDED") return "bg-rose-100 text-rose-800 border-rose-300";
   return "bg-slate-200 text-slate-800 border-slate-300";
 }
 
@@ -302,17 +300,15 @@ function getSimulationStatusLabel(simulation: LoanSimulation) {
   if (simulation.statusLabel) return simulation.statusLabel;
 
   const normalized = String(simulation.status || "").trim().toUpperCase();
-  if (normalized === "DRAFT") return "Rascunho";
-  if (normalized === "SENT") return "Enviada";
-  if (normalized === "ACCEPTED") return "Aceita";
-  if (normalized === "EXPIRED") return "Expirada";
-  if (normalized === "CANCELED") return "Cancelada";
+  if (normalized === "SIMULATED") return "Simulada";
+  if (normalized === "CONVERTED") return "Convertida";
+  if (normalized === "DISCARDED") return "Descartada";
   return normalized || "Desconhecido";
 }
 
 function canManageSimulation(status: string) {
   const normalized = String(status || "").trim().toUpperCase();
-  return normalized !== "ACCEPTED" && normalized !== "CANCELED";
+  return normalized === "SIMULATED";
 }
 
 function formatSimulationInterestPrimary(simulation: LoanSimulation) {
@@ -403,7 +399,7 @@ export function EmprestimosClient() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [simulationSearch, setSimulationSearch] = useState("");
-  const [simulationStatusFilter, setSimulationStatusFilter] = useState("PENDENTES");
+  const [simulationStatusFilter, setSimulationStatusFilter] = useState("SIMULATED");
   const [sortBy, setSortBy] = useState("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -954,6 +950,8 @@ export function EmprestimosClient() {
 
       const actionPayload = await readJsonOrThrow<{
         data?: {
+          loanId?: string | number | null;
+          status?: string;
           whatsappNotificationRequired?: boolean;
           whatsappUrl?: string;
         };
@@ -961,8 +959,12 @@ export function EmprestimosClient() {
         response,
         type === "approve"
           ? "Não foi possível aprovar a simulação."
-          : "Não foi possível cancelar a simulação.",
+          : "Não foi possível descartar a simulação.",
       );
+
+      if (type === "approve" && (!actionPayload?.data?.loanId || actionPayload.data.status !== "CONVERTED")) {
+        throw new Error("A simulação ainda não possui um empréstimo vinculado.");
+      }
 
       if (type === "approve" && actionPayload?.data?.whatsappUrl) {
         window.open(actionPayload.data.whatsappUrl, "_blank");
@@ -975,16 +977,16 @@ export function EmprestimosClient() {
           ? actionPayload?.data?.whatsappNotificationRequired
             ? "Simulação aprovada e agenda atualizada pronta no WhatsApp."
             : "Simulação aprovada e convertida em empréstimo."
-          : "Simulação cancelada com sucesso.",
+          : "Simulação descartada com sucesso.",
       );
     } catch (err: any) {
       const message = err instanceof Error
         ? err.message
         : (type === "approve"
           ? "Não foi possível aprovar a simulação."
-          : "Não foi possível cancelar a simulação.");
+          : "Não foi possível descartar a simulação.");
       setError(message);
-      toast.error(message, type === "approve" ? "Falha ao aprovar simulação" : "Falha ao cancelar simulação");
+      toast.error(message, type === "approve" ? "Falha ao aprovar simulação" : "Falha ao descartar simulação");
     } finally {
       setSimulationActionLoadingId(null);
     }
@@ -1001,10 +1003,14 @@ export function EmprestimosClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notifyWhatsApp: true }),
       });
-      const approvePayload = await readJsonOrThrow<{ data?: { whatsappUrl?: string } }>(
+      const approvePayload = await readJsonOrThrow<{ data?: { loanId?: string | number | null; status?: string; whatsappUrl?: string } }>(
         approveResponse,
         "Não foi possível criar o empréstimo.",
       );
+
+      if (!approvePayload?.data?.loanId || approvePayload.data.status !== "CONVERTED") {
+        throw new Error("A simulação ainda não possui um empréstimo vinculado.");
+      }
 
       if (approvePayload?.data?.whatsappUrl) {
         if (whatsappWindow) whatsappWindow.location.href = approvePayload.data.whatsappUrl;
@@ -1287,9 +1293,7 @@ export function EmprestimosClient() {
       });
     }
 
-    if (simulationStatusFilter === "PENDENTES") {
-      result = result.filter((simulation) => canManageSimulation(String(simulation.status || "")));
-    } else if (simulationStatusFilter !== "Todos") {
+    if (simulationStatusFilter !== "Todos") {
       result = result.filter((simulation) => String(simulation.status || "").toUpperCase() === simulationStatusFilter);
     }
 
@@ -1391,7 +1395,7 @@ export function EmprestimosClient() {
           </p>
         </div>
         <p className="max-w-2xl text-xs text-slate-500">
-          Aqui ficam os rascunhos e propostas enviadas antes de virarem empréstimos aprovados.
+          Simulações ficam aqui até serem convertidas em empréstimos ou descartadas.
         </p>
       </div>
 
@@ -1413,13 +1417,10 @@ export function EmprestimosClient() {
             value={simulationStatusFilter}
             onChange={(event) => setSimulationStatusFilter(event.target.value)}
           >
-            <option value="PENDENTES">Pendentes</option>
+            <option value="SIMULATED">Simulada</option>
             <option value="Todos">Todos</option>
-            <option value="DRAFT">Rascunho</option>
-            <option value="SENT">Enviada</option>
-            <option value="ACCEPTED">Aceita</option>
-            <option value="EXPIRED">Expirada</option>
-            <option value="CANCELED">Cancelada</option>
+            <option value="CONVERTED">Convertida</option>
+            <option value="DISCARDED">Descartada</option>
           </select>
         </div>
       </div>
@@ -1521,7 +1522,7 @@ export function EmprestimosClient() {
                               onClick={() => setSimulationConfirmAction({ type: "cancel", simulation })}
                               className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                               disabled={isActionLoading}
-                              title="Cancelar simulação"
+                              title="Descartar simulação"
                             >
                               <Ban className="h-4 w-4" />
                             </button>
@@ -1603,7 +1604,7 @@ export function EmprestimosClient() {
                         onClick={() => setSimulationConfirmAction({ type: "cancel", simulation })}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                         disabled={isActionLoading}
-                        title="Cancelar simulação"
+                        title="Descartar simulação"
                       >
                         <Ban className="h-4 w-4" />
                       </button>
@@ -1708,11 +1709,9 @@ export function EmprestimosClient() {
               onChange={(event) => setSimulationStatusFilter(event.target.value)}
             >
               <option value="Todos">Todos</option>
-              <option value="DRAFT">Rascunho</option>
-              <option value="SENT">Enviada</option>
-              <option value="ACCEPTED">Aceita</option>
-              <option value="EXPIRED">Expirada</option>
-              <option value="CANCELED">Cancelada</option>
+              <option value="SIMULATED">Simulada</option>
+              <option value="CONVERTED">Convertida</option>
+              <option value="DISCARDED">Descartada</option>
             </select>
           </div>
         </div>
@@ -1814,7 +1813,7 @@ export function EmprestimosClient() {
                                 onClick={() => setSimulationConfirmAction({ type: "cancel", simulation })}
                                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                                 disabled={isActionLoading}
-                                title="Cancelar simulação"
+                                title="Descartar simulação"
                               >
                                 <Ban className="h-4 w-4" />
                               </button>
@@ -1896,7 +1895,7 @@ export function EmprestimosClient() {
                           onClick={() => setSimulationConfirmAction({ type: "cancel", simulation })}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
                           disabled={isActionLoading}
-                          title="Cancelar simulação"
+                          title="Descartar simulação"
                         >
                           <Ban className="h-4 w-4" />
                         </button>
@@ -2663,11 +2662,11 @@ export function EmprestimosClient() {
         <ModalBase
           open={Boolean(simulationConfirmAction)}
           onClose={() => setSimulationConfirmAction(null)}
-          title={simulationConfirmAction.type === "approve" ? "Aprovar simulação" : "Cancelar simulação"}
+          title={simulationConfirmAction.type === "approve" ? "Aprovar simulação" : "Descartar simulação"}
           subtitle={
             simulationConfirmAction.type === "approve"
               ? `Deseja transformar a simulação #${String(simulationConfirmAction.simulation.id || "").slice(0, 8)} em empréstimo?`
-              : `Deseja cancelar a simulação #${String(simulationConfirmAction.simulation.id || "").slice(0, 8)}?`
+              : `Deseja descartar a simulação #${String(simulationConfirmAction.simulation.id || "").slice(0, 8)}?`
           }
           footer={(
             <>
@@ -2683,8 +2682,8 @@ export function EmprestimosClient() {
                 disabled={simulationActionLoadingId === String(simulationConfirmAction.simulation.id || "")}
               >
                 {simulationActionLoadingId === String(simulationConfirmAction.simulation.id || "")
-                  ? (simulationConfirmAction.type === "approve" ? "Aprovando..." : "Cancelando...")
-                  : (simulationConfirmAction.type === "approve" ? "Aprovar simulação" : "Cancelar simulação")}
+                  ? (simulationConfirmAction.type === "approve" ? "Aprovando..." : "Descartando...")
+                  : (simulationConfirmAction.type === "approve" ? "Aprovar simulação" : "Descartar simulação")}
               </ModalBtnPrimary>
             </>
           )}
