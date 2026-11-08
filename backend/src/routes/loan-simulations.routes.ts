@@ -168,15 +168,6 @@ function isSimulationLinkUniqueViolation(error: unknown): boolean {
   return target.includes("simulationId");
 }
 
-function formatCurrencyBRL(value: unknown): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(toNumber(value));
-}
-
 function formatCurrencyNumberBRL(value: unknown): string {
   return new Intl.NumberFormat("pt-BR", {
     minimumFractionDigits: 2,
@@ -233,24 +224,21 @@ function formatScheduleLines(displaySchedule: ScheduleHistoryItem[]): string {
 
 function buildProposalWhatsAppMessage(
   displaySchedule: ScheduleHistoryItem[],
-  total: number,
 ): string {
   const scheduleLines = formatScheduleLines(displaySchedule);
 
   if (displaySchedule.length === 0) return "Nenhuma parcela foi informada na simulação.";
-  return `\`\`\`\n${scheduleLines}\n\nTotal:  ${formatCurrencyBRL(total)}\n\`\`\``;
+  return `\`\`\`\n${scheduleLines}\n\`\`\``;
 }
 
 function buildConsolidatedWhatsAppMessage(
   displaySchedule: ScheduleHistoryItem[],
-  totals: { total: number; open: number; paid: number },
 ): string {
   const scheduleLines = formatScheduleLines(displaySchedule);
-  const summaryLine = `Total:  ${formatCurrencyBRL(totals.total)}`;
 
   return displaySchedule.length > 0
-    ? `\`\`\`\n${scheduleLines}\n\n${summaryLine}\n\`\`\``
-    : `Nenhum valor pendente.\n\n\`\`\`\n${summaryLine}\n\`\`\``;
+    ? `\`\`\`\n${scheduleLines}\n\`\`\``
+    : "Nenhum valor pendente.";
 }
 
 async function findClient(ownerUserId: number, clientId: number): Promise<ClientLite | null> {
@@ -458,7 +446,7 @@ async function buildApprovedSchedulePayload(
     })
     : [];
 
-  const { openSchedule: consolidatedSchedule, displaySchedule, totals } = buildScheduleWithPaymentHistory(
+  const { openSchedule: consolidatedSchedule, displaySchedule } = buildScheduleWithPaymentHistory(
     currentInstallments.map((installment) => ({
       dueDate: installment.dueDate.toISOString().slice(0, 10),
       amount: installment.amount,
@@ -468,7 +456,7 @@ async function buildApprovedSchedulePayload(
       amount: installment.amount,
     })),
   );
-  const whatsappMessage = buildConsolidatedWhatsAppMessage(displaySchedule, totals);
+  const whatsappMessage = buildConsolidatedWhatsAppMessage(displaySchedule);
   const clientPhone = simulation.client?.phone ?? simulation.clientPhone ?? null;
 
   return {
@@ -654,8 +642,8 @@ router.post("/:id/send", async (req, res) => {
     dueDate,
     amount: plan?.[index]?.amount ?? simulationAmounts[index] ?? updatedRow.installmentAmount,
   }));
-  const { proposalSchedule, displaySchedule, totals } = buildSimulationProposalSchedule(proposalItems);
-  const whatsappMessage = buildProposalWhatsAppMessage(displaySchedule, totals.total);
+  const { proposalSchedule, displaySchedule } = buildSimulationProposalSchedule(proposalItems);
+  const whatsappMessage = buildProposalWhatsAppMessage(displaySchedule);
   const whatsappUrl = buildWhatsAppUrl(clientPhone, whatsappMessage);
 
   return res.json({
