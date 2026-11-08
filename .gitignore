@@ -10,6 +10,11 @@ yarn-error.log*
 pnpm-debug.log*
 .DS_Store
 coverage
+*.dump
+*.dump.age
+*.key
+ops/backup/smtp.json
+ops/backup/recipient.txt
 certbot/conf/*
 !certbot/conf/.gitkeep
 .next

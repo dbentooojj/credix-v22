@@ -1,0 +1,11 @@
+[Unit]
+Description=Backup diário do Credix às 03:00 em São Paulo
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 America/Sao_Paulo
+Persistent=true
+AccuracySec=1min
+Unit=credix-backup.service
+
+[Install]
+WantedBy=timers.target

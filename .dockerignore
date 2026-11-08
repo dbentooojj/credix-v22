@@ -12,6 +12,11 @@
 **/yarn-debug.log*
 **/pnpm-debug.log*
 **/*.tsbuildinfo
+**/*.dump
+**/*.dump.age
+**/*.key
+**/smtp.json
+**/recipient.txt
 
 .env
 .env.*

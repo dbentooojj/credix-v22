@@ -45,6 +45,8 @@ jobs:
           bash -n ops/bootstrap-vps.sh
           bash -n ops/deploy-production.sh
           bash -n ops/generate-production-env.sh
+          bash -n ops/backup/install.sh
+          python3 -m unittest discover -s ops/backup -p 'test_*.py'
           IMAGE_NAMESPACE=dbentooojj IMAGE_TAG=validation docker compose --env-file ops/production.env.example -f docker-compose.production.yml config --quiet
           docker run --rm -e CADDY_EMAIL=admin@credix.app.br -v "$PWD/ops/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           bash ops/tests/deploy-production.test.sh

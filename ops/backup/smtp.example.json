@@ -1,0 +1,10 @@
+{
+  "host": "smtp.exemplo.com",
+  "port": 587,
+  "security": "starttls",
+  "user": "usuario-smtp",
+  "password": "PREENCHER_SOMENTE_NA_VPS",
+  "from": "Credix <backup@exemplo.com>",
+  "to": "destino@exemplo.com",
+  "max_message_bytes": 18000000
+}
