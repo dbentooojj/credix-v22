@@ -3,6 +3,7 @@
   InstallmentStatus,
   InterestType,
   LoanStatus,
+  PaymentFrequency,
   PaymentMethod,
   Prisma,
 } from "@prisma/client";
@@ -155,6 +156,15 @@ function mapInterestTypeToUi(value: InterestType): string {
   return value === InterestType.SIMPLES ? "simples" : "composto";
 }
 
+function normalizePaymentFrequency(value: unknown): PaymentFrequency | null {
+  const normalized = normalizeAsciiUpper(value);
+  if (normalized === "DAILY") return PaymentFrequency.DAILY;
+  if (normalized === "WEEKLY") return PaymentFrequency.WEEKLY;
+  if (normalized === "BIWEEKLY") return PaymentFrequency.BIWEEKLY;
+  if (normalized === "MONTHLY") return PaymentFrequency.MONTHLY;
+  return null;
+}
+
 function normalizePaymentMethod(value: unknown): PaymentMethod {
   const normalized = normalizeAsciiUpper(value);
 
@@ -283,6 +293,7 @@ export async function getTableData(tableName: TableName, ownerUserId: number) {
       installments_count: row.installmentsCount,
       interest_rate: toSafeNumber(row.interestRate),
       interest_type: mapInterestTypeToUi(row.interestType),
+      payment_frequency: row.paymentFrequency?.toLowerCase() ?? null,
       installment_amount: row.installmentAmount ? toSafeNumber(row.installmentAmount) : null,
       payment_method: mapPaymentMethodToUi(row.paymentMethod),
       observations: row.observations,
@@ -531,6 +542,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
             installmentsCount: Math.max(1, toSafeInteger(row.installments_count ?? row.installmentsCount) ?? 1),
             interestRate: toSafeNumber(row.interest_rate ?? row.interestRate),
             interestType: normalizeInterestType(row.interest_type ?? row.interestType),
+            paymentFrequency: normalizePaymentFrequency(row.payment_frequency ?? row.paymentFrequency),
             installmentAmount: (() => {
               const value = row.installment_amount ?? row.installmentAmount;
               const amount = toSafeNumber(value, Number.NaN);
@@ -586,6 +598,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
             installmentsCount: true,
             interestRate: true,
             interestType: true,
+            paymentFrequency: true,
             installmentAmount: true,
             paymentMethod: true,
             startDate: true,
@@ -604,6 +617,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
             && nextLoan.installmentsCount === persistedLoan.installmentsCount
             && sameMoney(nextLoan.interestRate, persistedLoan.interestRate)
             && nextLoan.interestType === persistedLoan.interestType
+            && nextLoan.paymentFrequency === persistedLoan.paymentFrequency
             && sameNullableMoney(nextLoan.installmentAmount, persistedLoan.installmentAmount)
             && nextLoan.paymentMethod === persistedLoan.paymentMethod
             && sameDateOnly(nextLoan.startDate, persistedLoan.startDate)
@@ -643,6 +657,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
             installmentsCount: row.installmentsCount,
             interestRate: row.interestRate,
             interestType: row.interestType,
+            paymentFrequency: row.paymentFrequency,
             installmentAmount: row.installmentAmount,
             paymentMethod: row.paymentMethod,
             observations: row.observations,
@@ -659,6 +674,7 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
             installmentsCount: row.installmentsCount,
             interestRate: row.interestRate,
             interestType: row.interestType,
+            paymentFrequency: row.paymentFrequency,
             installmentAmount: row.installmentAmount,
             paymentMethod: row.paymentMethod,
             observations: row.observations,

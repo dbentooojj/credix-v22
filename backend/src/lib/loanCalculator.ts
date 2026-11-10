@@ -5,6 +5,7 @@ const MAX_AUTO_INSTALLMENTS = 96;
 const MAX_INSTALLMENT_TOLERANCE = 1;
 
 export type LoanInterestType = "composto" | "simples" | "fixo";
+export type LoanPaymentFrequency = "daily" | "weekly" | "biweekly" | "monthly";
 
 export type LoanCalculatorInput = {
   principal: unknown;
@@ -14,6 +15,7 @@ export type LoanCalculatorInput = {
   maxInstallment?: unknown;
   useMaxInstallment?: boolean;
   interestType: LoanInterestType;
+  paymentFrequency?: unknown;
   startDate: unknown;
   firstDueDate: unknown;
   dueDates?: unknown[];
@@ -40,6 +42,7 @@ export type LoanCalculatorOutput = {
     maxInstallment: number;
     useMaxInstallment: boolean;
     interestType: LoanInterestType;
+    paymentFrequency: LoanPaymentFrequency;
     startDate: string;
     firstDueDate: string;
   };
@@ -67,6 +70,7 @@ type LoanResolvedValues = {
   maxInstallment: number;
   useMaxInstallment: boolean;
   interestType: LoanInterestType;
+  paymentFrequency: LoanPaymentFrequency;
   startDate: string;
   firstDueDate: string;
 };
@@ -149,6 +153,20 @@ function diffDaysDateOnly(fromDate: unknown, toDate: unknown): number {
   return Math.round((endMs - startMs) / MS_PER_DAY);
 }
 
+function normalizePaymentFrequency(value: unknown): LoanPaymentFrequency {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "daily") return "daily";
+  if (normalized === "weekly") return "weekly";
+  if (normalized === "biweekly") return "biweekly";
+  return "monthly";
+}
+
+function addDaysIsoDate(baseIsoDate: unknown, count: unknown): string {
+  const baseMs = isoDateToUtcMillis(baseIsoDate);
+  if (!Number.isFinite(baseMs)) return "";
+  return normalizeIsoDateOnly(new Date(baseMs + (Math.trunc(toNumber(count)) * MS_PER_DAY)));
+}
+
 function addMonthsIsoDate(baseIsoDate: unknown, count: unknown): string {
   const safeIso = normalizeIsoDateOnly(baseIsoDate);
   if (!safeIso) return "";
@@ -184,16 +202,30 @@ function splitAmount(total: number, parts: number): number[] {
   });
 }
 
-function generateDueDates(firstDueDate: string, installments: number): string[] {
+function generateDueDates(
+  firstDueDate: string,
+  installments: number,
+  paymentFrequency: LoanPaymentFrequency,
+): string[] {
   const safeFirstDueDate = normalizeIsoDateOnly(firstDueDate);
   const total = Math.max(0, Math.trunc(toNumber(installments)));
   if (!safeFirstDueDate || total <= 0) return [];
 
-  return Array.from({ length: total }, (_item, index) => addMonthsIsoDate(safeFirstDueDate, index));
+  return Array.from({ length: total }, (_item, index) => {
+    if (paymentFrequency === "daily") return addDaysIsoDate(safeFirstDueDate, index);
+    if (paymentFrequency === "weekly") return addDaysIsoDate(safeFirstDueDate, index * 7);
+    if (paymentFrequency === "biweekly") return addDaysIsoDate(safeFirstDueDate, index * 15);
+    return addMonthsIsoDate(safeFirstDueDate, index);
+  });
 }
 
-function resolveDueDates(firstDueDate: string, installments: number, customDueDates?: unknown[]): string[] {
-  const generatedDueDates = generateDueDates(firstDueDate, installments);
+function resolveDueDates(
+  firstDueDate: string,
+  installments: number,
+  paymentFrequency: LoanPaymentFrequency,
+  customDueDates?: unknown[],
+): string[] {
+  const generatedDueDates = generateDueDates(firstDueDate, installments, paymentFrequency);
   if (!Array.isArray(customDueDates) || customDueDates.length === 0) {
     return generatedDueDates;
   }
@@ -344,16 +376,21 @@ function buildSchedule(
   return schedule;
 }
 
-function calculateSimpleLoanValues(principal: number, monthlyRate: number, installments: number) {
+function calculateSimpleLoanValues(
+  principal: number,
+  monthlyRate: number,
+  startDate: string,
+  dueDates: string[],
+) {
   const p = round2(principal);
   const r = toNumber(monthlyRate) / 100;
-  const n = Math.max(1, Math.trunc(toNumber(installments)));
+  const totalDays = diffDaysDateOnly(startDate, dueDates[dueDates.length - 1]);
 
-  if (p <= 0 || n <= 0 || r < 0) return null;
+  if (p <= 0 || !Number.isFinite(totalDays) || totalDays <= 0 || r < 0) return null;
 
-  const totalInterest = round2(p * r * n);
+  const totalInterest = round2(p * r * (totalDays / 30));
   const totalAmount = round2(p + totalInterest);
-  const installmentAmount = round2(totalAmount / n);
+  const installmentAmount = round2(totalAmount / dueDates.length);
   return { totalAmount, installmentAmount, totalInterest };
 }
 
@@ -520,14 +557,14 @@ function evaluateInstallmentByCount(values: LoanResolvedValues, installmentsCoun
   }
 
   if (values.interestType === "simples") {
-    const calcResult = calculateSimpleLoanValues(values.principal, values.monthlyRate, installments);
+    const dueDates = resolveDueDates(values.firstDueDate, installments, values.paymentFrequency);
+    const calcResult = calculateSimpleLoanValues(values.principal, values.monthlyRate, values.startDate, dueDates);
     if (!calcResult) return null;
-    const dueDates = resolveDueDates(values.firstDueDate, installments);
     const plan = buildSimpleInstallmentPlan(values.principal, calcResult.totalInterest, installments, dueDates);
     return { installmentAmount: getPlanPeakInstallmentAmount(plan), installments };
   }
 
-  const dueDates = resolveDueDates(values.firstDueDate, installments);
+  const dueDates = resolveDueDates(values.firstDueDate, installments, values.paymentFrequency);
   const compound = calculateCompoundLoanByPeriods(
     values.principal,
     values.monthlyRate,
@@ -669,13 +706,14 @@ export function calculateLoanPreview(input: LoanCalculatorInput): LoanCalculator
     maxInstallment: Math.max(0, round2(input.maxInstallment)),
     useMaxInstallment: Boolean(input.useMaxInstallment),
     interestType,
+    paymentFrequency: normalizePaymentFrequency(input.paymentFrequency),
     startDate: normalizeIsoDateOnly(input.startDate),
     firstDueDate: normalizeIsoDateOnly(input.firstDueDate),
   };
 
   const resolution = resolveLoanValuesForCalculation(resolvedRawValues);
   const values = resolution.values;
-  const dueDates = resolveDueDates(values.firstDueDate, values.installments, input.dueDates);
+  const dueDates = resolveDueDates(values.firstDueDate, values.installments, values.paymentFrequency, input.dueDates);
 
   const baseTotalAmount = values.principal;
   const baseInstallmentAmount = values.installments > 0 ? round2(baseTotalAmount / values.installments) : 0;
@@ -698,7 +736,7 @@ export function calculateLoanPreview(input: LoanCalculatorInput): LoanCalculator
         totalInterest: round2(values.fixedAddition),
       };
     } else if (values.interestType === "simples" && values.monthlyRate > 0) {
-      const simple = calculateSimpleLoanValues(values.principal, values.monthlyRate, values.installments);
+      const simple = calculateSimpleLoanValues(values.principal, values.monthlyRate, values.startDate, dueDates);
       if (simple) {
         calcResult = simple;
         plan = buildSimpleInstallmentPlan(values.principal, simple.totalInterest, values.installments, dueDates);

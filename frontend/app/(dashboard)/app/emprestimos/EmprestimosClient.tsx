@@ -26,7 +26,7 @@ import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
 import { useGlobalScrollLock } from "../../../components/useGlobalScrollLock";
 import { fetchDataArray, readJsonOrThrow } from "../../../../utils/apiClient";
-import { calculateLoanPreview } from "../../../../utils/loanCalculator";
+import { calculateLoanPreview, type LoanPaymentFrequency } from "../../../../utils/loanCalculator";
 import { getDateOnlyRelationToToday, getTodayIsoInAppTimeZone } from "../../../../utils/dateOnlyStatus";
 import { formatCurrencyInput, formatCurrencyInputFromNumber, parseCurrencyInput } from "../../../../utils/currencyInput";
 
@@ -56,6 +56,8 @@ type Loan = {
   interestRate?: number | string;
   interest_type?: string;
   interestType?: string;
+  payment_frequency?: string | null;
+  paymentFrequency?: string | null;
   installment_amount?: number | string | null;
   installmentAmount?: number | string | null;
   observations?: string | null;
@@ -95,6 +97,7 @@ type LoanSimulation = {
   clientPhone?: string | null;
   principalAmount?: number | string;
   interestType?: string;
+  paymentFrequency?: string | null;
   interestRate?: number | string;
   fixedFeeAmount?: number | string;
   installmentsCount?: number | string;
@@ -288,6 +291,30 @@ function translateInterestMode(mode: string) {
   return "Juros compostos";
 }
 
+function normalizePaymentFrequency(value: unknown): LoanPaymentFrequency {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "daily") return "daily";
+  if (normalized === "weekly") return "weekly";
+  if (normalized === "biweekly") return "biweekly";
+  return "monthly";
+}
+
+function translatePaymentFrequency(value: unknown) {
+  const frequency = normalizePaymentFrequency(value);
+  if (frequency === "daily") return "Diário";
+  if (frequency === "weekly") return "Semanal";
+  if (frequency === "biweekly") return "Quinzenal";
+  return "Mensal";
+}
+
+function describePaymentFrequency(value: unknown) {
+  const frequency = normalizePaymentFrequency(value);
+  if (frequency === "daily") return "a cada 1 dia";
+  if (frequency === "weekly") return "a cada 7 dias";
+  if (frequency === "biweekly") return "a cada 15 dias";
+  return "a cada mês";
+}
+
 function getSimulationStatusBadge(status: string) {
   const normalized = String(status || "").trim().toUpperCase();
   if (normalized === "SIMULATED") return "bg-sky-100 text-sky-800 border-sky-300";
@@ -426,6 +453,7 @@ export function EmprestimosClient() {
   const [formClientId, setFormClientId] = useState("");
   const [formPrincipal, setFormPrincipal] = useState("");
   const [formInterestType, setFormInterestType] = useState<"composto" | "simples" | "fixo">("composto");
+  const [formPaymentFrequency, setFormPaymentFrequency] = useState<LoanPaymentFrequency>("monthly");
   const [formRate, setFormRate] = useState("");
   const [formFixedAddition, setFormFixedAddition] = useState("");
   const [formInstallments, setFormInstallments] = useState("");
@@ -469,13 +497,36 @@ export function EmprestimosClient() {
     return `${ny}-${String(nm + 1).padStart(2, "0")}-${String(Math.min(d, ld)).padStart(2, "0")}`;
   }
 
+  function addDaysToDate(dateStr: string, days: number) {
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return dateStr;
+    const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  }
+
+  function addPaymentInterval(dateStr: string, intervals: number, frequency: LoanPaymentFrequency) {
+    if (frequency === "daily") return addDaysToDate(dateStr, intervals);
+    if (frequency === "weekly") return addDaysToDate(dateStr, intervals * 7);
+    if (frequency === "biweekly") return addDaysToDate(dateStr, intervals * 15);
+    return addMonths(dateStr, intervals);
+  }
+
+  function getDefaultFirstDueDate(startDate: string, frequency: LoanPaymentFrequency) {
+    return addPaymentInterval(startDate, 1, frequency);
+  }
+
   function isIsoDateString(value: string) {
     return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
   }
 
-  function mergeDueDates(firstDueDate: string, installmentsCount: number, customDueDates: string[]) {
+  function mergeDueDates(
+    firstDueDate: string,
+    installmentsCount: number,
+    customDueDates: string[],
+    paymentFrequency: LoanPaymentFrequency,
+  ) {
     return Array.from({ length: Math.max(0, installmentsCount) }, (_, index) => {
-      const fallbackDate = addMonths(firstDueDate, index);
+      const fallbackDate = addPaymentInterval(firstDueDate, index, paymentFrequency);
       const customDate = customDueDates[index];
       return isIsoDateString(customDate) ? customDate : fallbackDate;
     });
@@ -539,6 +590,7 @@ export function EmprestimosClient() {
       maxInstallment: calculationMaxInstallment,
       useMaxInstallment: formCalcByInstallment,
       interestType: formInterestType,
+      paymentFrequency: formPaymentFrequency,
       startDate: formStartDate,
       firstDueDate: formFirstDue,
     });
@@ -550,18 +602,20 @@ export function EmprestimosClient() {
     calculationMaxInstallment,
     formCalcByInstallment,
     formInterestType,
+    formPaymentFrequency,
     formStartDate,
     formFirstDue,
   ]);
 
   const previewDueDates = useMemo(() => {
     const firstDueDate = baseLoanCalculation.values.firstDueDate || formFirstDue;
-    return mergeDueDates(firstDueDate, baseLoanCalculation.values.installments, formCustomDueDates);
+    return mergeDueDates(firstDueDate, baseLoanCalculation.values.installments, formCustomDueDates, formPaymentFrequency);
   }, [
     baseLoanCalculation.values.firstDueDate,
     baseLoanCalculation.values.installments,
     formCustomDueDates,
     formFirstDue,
+    formPaymentFrequency,
   ]);
 
   const dueDatesValidationMessage = useMemo(() => {
@@ -577,6 +631,7 @@ export function EmprestimosClient() {
       maxInstallment: calculationMaxInstallment,
       useMaxInstallment: formCalcByInstallment,
       interestType: formInterestType,
+      paymentFrequency: formPaymentFrequency,
       startDate: formStartDate,
       firstDueDate: formFirstDue,
       dueDates: previewDueDates,
@@ -605,6 +660,7 @@ export function EmprestimosClient() {
     calculationMaxInstallment,
     formCalcByInstallment,
     formInterestType,
+    formPaymentFrequency,
     formStartDate,
     formFirstDue,
     previewDueDates,
@@ -671,9 +727,12 @@ export function EmprestimosClient() {
 
   function buildLoanSimulationPayload() {
     const safeStartDate = formStartDate || toDateInput(new Date());
-    const safeFirstDueDate = formFirstDue || addMonths(safeStartDate, 1);
+    const safeFirstDueDate = formFirstDue || getDefaultFirstDueDate(safeStartDate, formPaymentFrequency);
     const installmentsCount = Math.max(1, loanSummary.installmentsCount || Math.trunc(Number(formInstallments) || 0));
-    const fallbackDueDates = Array.from({ length: installmentsCount }, (_, index) => addMonths(safeFirstDueDate, index));
+    const fallbackDueDates = Array.from(
+      { length: installmentsCount },
+      (_, index) => addPaymentInterval(safeFirstDueDate, index, formPaymentFrequency),
+    );
     const dueDates = loanSummary.dueDates.length > 0 ? loanSummary.dueDates : fallbackDueDates;
     const firstDueDate = dueDates[0] || safeFirstDueDate;
     const principalAmount = parseCurrencyInput(formPrincipal);
@@ -683,6 +742,7 @@ export function EmprestimosClient() {
       clientId: Number(formClientId),
       principalAmount: Number.isFinite(principalAmount) ? principalAmount : 0,
       interestType: formInterestType,
+      paymentFrequency: formPaymentFrequency,
       interestRate: formInterestType === "fixo" ? 0 : (Number(formRate) || 0),
       fixedFeeAmount: formInterestType === "fixo" && Number.isFinite(fixedFeeAmount) ? fixedFeeAmount : 0,
       installmentsCount,
@@ -758,8 +818,8 @@ export function EmprestimosClient() {
     const today = toDateInput(new Date());
     setFormClientId("");
     setFormPrincipal(""); setFormRate(""); setFormFixedAddition(""); setFormInstallments(""); setFormMaxInstallment("");
-    setFormInterestType("composto"); setFormCalcByInstallment(false);
-    setFormStartDate(today); setFormFirstDue(addMonths(today, 1));
+    setFormInterestType("composto"); setFormPaymentFrequency("monthly"); setFormCalcByInstallment(false);
+    setFormStartDate(today); setFormFirstDue(getDefaultFirstDueDate(today, "monthly"));
     setFormObservations("");
     setFormCustomDueDates([]);
     setFormScheduleView("new");
@@ -786,13 +846,19 @@ export function EmprestimosClient() {
 
     const fixedAddition = Number(loanMeta.meta.fixedAddition ?? 0);
     const maxInstallment = Number(loanMeta.meta.maxInstallment ?? 0);
+    const paymentFrequency = normalizePaymentFrequency(
+      loan.payment_frequency ?? loan.paymentFrequency ?? loanMeta.meta.paymentFrequency,
+    );
     const startDate = String(loan.start_date || "").slice(0, 10) || toDateInput(new Date());
-    const firstDueDate = dueDates[0] || String(loan.first_due_date || "").slice(0, 10) || addMonths(startDate, 1);
+    const firstDueDate = dueDates[0]
+      || String(loan.first_due_date || "").slice(0, 10)
+      || getDefaultFirstDueDate(startDate, paymentFrequency);
 
     setSelectedLoanId(loan.id);
     setFormClientId(String(loan.debtor_id));
     setFormPrincipal(formatCurrencyInputFromNumber(loan.principal || 0));
     setFormInterestType(interestMode);
+    setFormPaymentFrequency(paymentFrequency);
     setFormRate(interestMode === "fixo" ? "" : String(Number(loan.interest_rate ?? 0) || ""));
     setFormFixedAddition(interestMode === "fixo" ? formatCurrencyInputFromNumber(fixedAddition || 0) : "");
     setFormInstallments(String(loan.installments_count || dueDates.length || ""));
@@ -807,6 +873,14 @@ export function EmprestimosClient() {
 
   function clearCustomDueDates() {
     setFormCustomDueDates([]);
+  }
+
+  function applyPaymentFrequency(paymentFrequency: LoanPaymentFrequency) {
+    setFormPaymentFrequency(paymentFrequency);
+    if (formStartDate) {
+      setFormFirstDue(getDefaultFirstDueDate(formStartDate, paymentFrequency));
+    }
+    clearCustomDueDates();
   }
 
   function applyInstallmentDueDate(index: number, value: string) {
@@ -1228,6 +1302,11 @@ export function EmprestimosClient() {
     );
     const fixedAddition = toFiniteNumber(loanMeta.meta.fixedAddition);
     const interestRate = toFiniteNumber(selectedLoan.interest_rate ?? selectedLoan.interestRate);
+    const rawPaymentFrequency = selectedLoan.payment_frequency
+      ?? selectedLoan.paymentFrequency
+      ?? loanMeta.meta.paymentFrequency;
+    const paymentFrequency = normalizePaymentFrequency(rawPaymentFrequency);
+    const hasStoredPaymentFrequency = Boolean(rawPaymentFrequency);
 
     return {
       id: selectedLoan.id,
@@ -1251,6 +1330,12 @@ export function EmprestimosClient() {
       interestTypeLabel: translateInterestMode(interestMode),
       rateLabel: interestMode === "fixo" ? "Acrescimo fixo" : "Taxa mensal",
       rateValue: interestMode === "fixo" ? formatCurrency(fixedAddition) : formatPercent(interestRate),
+      paymentFrequencyLabel: hasStoredPaymentFrequency
+        ? translatePaymentFrequency(paymentFrequency)
+        : "Mensal (contrato anterior)",
+      paymentFrequencyDescription: hasStoredPaymentFrequency
+        ? describePaymentFrequency(paymentFrequency)
+        : "datas existentes preservadas",
       observations: loanMeta.text,
       installments: selectedLoan.installments.map((item) => {
         const statusLabel = isInstallmentPaid(item) ? "Pago" : isInstallmentOverdue(item) ? "Atrasado" : "Pendente";
@@ -2206,6 +2291,11 @@ export function EmprestimosClient() {
                     value={selectedLoanView.installmentAmount > 0 ? formatCurrency(selectedLoanView.installmentAmount) : "-"}
                     hint={selectedLoanView.installmentsCount > 0 ? "Parcela prevista do contrato" : "Sem plano de parcelas"}
                   />
+                  <LoanViewStat
+                    label="Frequência"
+                    value={selectedLoanView.paymentFrequencyLabel}
+                    hint={selectedLoanView.paymentFrequencyDescription}
+                  />
                 </div>
               </section>
 
@@ -2230,6 +2320,7 @@ export function EmprestimosClient() {
                     <LoanViewInfo label="Primeiro vencimento" value={selectedLoanView.firstDueDate} />
                     <LoanViewInfo label="Criado em" value={selectedLoanView.createdAt} />
                     <LoanViewInfo label="Tipo de juros" value={selectedLoanView.interestTypeLabel} />
+                    <LoanViewInfo label="Frequência de pagamento" value={`${selectedLoanView.paymentFrequencyLabel} — ${selectedLoanView.paymentFrequencyDescription}`} />
                   </div>
                 </div>
 
@@ -2428,6 +2519,31 @@ export function EmprestimosClient() {
                       />
                     </div>
                   </div>
+                  <div className="mt-3">
+                    <p className="mb-2 text-xs font-semibold text-slate-400">Frequência de pagamento</p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Frequência de pagamento">
+                      {([
+                        ["daily", "Diário"],
+                        ["weekly", "Semanal"],
+                        ["biweekly", "Quinzenal"],
+                        ["monthly", "Mensal"],
+                      ] as const).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={formPaymentFrequency === value}
+                          onClick={() => applyPaymentFrequency(value)}
+                          className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+                            formPaymentFrequency === value
+                              ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
+                              : "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600 hover:bg-slate-700"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="mt-3 flex items-center gap-3">
                     <button
                       type="button"
@@ -2472,7 +2588,7 @@ export function EmprestimosClient() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">Data de inicio</label>
-                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formStartDate} onChange={(e) => { setFormStartDate(e.target.value); setFormFirstDue(addMonths(e.target.value, 1)); clearCustomDueDates(); }} />
+                      <input className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" type="date" value={formStartDate} onChange={(e) => { setFormStartDate(e.target.value); setFormFirstDue(getDefaultFirstDueDate(e.target.value, formPaymentFrequency)); clearCustomDueDates(); }} />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-400">1o vencimento</label>
@@ -2583,6 +2699,7 @@ export function EmprestimosClient() {
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.totalAmount)}</p></div>
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Valor da parcela</p><p className="text-sm font-bold text-slate-100">{formatCurrency(loanSummary.installmentAmount)}</p></div>
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Parcelas</p><p className="text-sm font-bold text-slate-100">{loanSummary.installments}</p></div>
+                  <div><p className="text-[11px] font-semibold uppercase text-slate-500">Frequência</p><p className="text-sm font-bold text-slate-100">{translatePaymentFrequency(formPaymentFrequency)}</p><p className="text-xs text-slate-400">{describePaymentFrequency(formPaymentFrequency)}</p></div>
                   <hr className="border-slate-800" />
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">Taxa</p><p className="text-sm font-bold text-slate-100">{loanSummary.rateLabel}</p><p className="text-xs text-slate-400">{loanSummary.rateValue}</p></div>
                   <div><p className="text-[11px] font-semibold uppercase text-slate-500">1o vencimento</p><p className="text-sm font-bold text-slate-100">{(loanSummary.dueDates[0] || loanSummary.firstDue) !== "--/--/----" ? new Intl.DateTimeFormat("pt-BR").format(new Date((loanSummary.dueDates[0] || loanSummary.firstDue) + "T12:00:00")) : "--/--/----"}</p></div>

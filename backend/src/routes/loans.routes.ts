@@ -2,6 +2,7 @@ import {
   InstallmentStatus,
   InterestType,
   LoanStatus,
+  PaymentFrequency,
   Prisma,
 } from "@prisma/client";
 import { Router } from "express";
@@ -106,6 +107,14 @@ function resolveInterestTypeForLoan(value: unknown): InterestType {
   return resolveInterestMode(value) === "simples" ? InterestType.SIMPLES : InterestType.COMPOSTO;
 }
 
+function resolvePaymentFrequency(value: unknown): PaymentFrequency {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "daily") return PaymentFrequency.DAILY;
+  if (normalized === "weekly") return PaymentFrequency.WEEKLY;
+  if (normalized === "biweekly") return PaymentFrequency.BIWEEKLY;
+  return PaymentFrequency.MONTHLY;
+}
+
 function resolveLoanStatusFromDueDates(dueDates: string[]): LoanStatus {
   if (dueDates.length === 0) return LoanStatus.PENDENTE;
   const todayIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
@@ -182,6 +191,11 @@ router.patch("/:loanId", async (req, res) => {
   const clientId = readLoanId(payload.clientId);
   const principalAmount = round2(payload.principalAmount);
   const interestMode = resolveInterestMode(payload.interestType);
+  const requestedPaymentFrequency = String(payload.paymentFrequency ?? "monthly").trim().toLowerCase();
+  if (!["daily", "weekly", "biweekly", "monthly"].includes(requestedPaymentFrequency)) {
+    throw new AppError("Frequencia de pagamento invalida.", 400);
+  }
+  const paymentFrequency = resolvePaymentFrequency(payload.paymentFrequency);
   const installmentsCount = Math.max(1, Math.trunc(toNumber(payload.installmentsCount)));
   const startDate = toIsoDateOnly(payload.startDate, new Date());
   const normalizedPlan = buildValidatedPlan(startDate, installmentsCount, Array.isArray(payload.plan) ? payload.plan : []);
@@ -251,6 +265,7 @@ router.patch("/:loanId", async (req, res) => {
       interestMode,
       fixedAddition: fixedFeeAmount,
       maxInstallment: round2(existingMeta.maxInstallment ?? 0),
+      paymentFrequency: paymentFrequency.toLowerCase(),
       simulationId: loan.simulationId ?? existingMeta.simulationId ?? null,
     };
 
@@ -271,6 +286,7 @@ router.patch("/:loanId", async (req, res) => {
         principalAmount,
         interestRate,
         interestType: resolveInterestTypeForLoan(interestMode),
+        paymentFrequency,
         installmentsCount,
         installmentAmount,
         totalAmount,

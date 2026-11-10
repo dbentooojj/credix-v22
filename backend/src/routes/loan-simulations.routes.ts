@@ -4,6 +4,7 @@ import {
   InterestType,
   LoanSimulationStatus,
   LoanStatus,
+  PaymentFrequency,
   PaymentMethod,
   Prisma,
 } from "@prisma/client";
@@ -118,6 +119,14 @@ function resolveInterestTypeForLoan(value: unknown): InterestType {
   return InterestType.COMPOSTO;
 }
 
+function resolvePaymentFrequency(value: unknown): PaymentFrequency {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "daily") return PaymentFrequency.DAILY;
+  if (normalized === "weekly") return PaymentFrequency.WEEKLY;
+  if (normalized === "biweekly") return PaymentFrequency.BIWEEKLY;
+  return PaymentFrequency.MONTHLY;
+}
+
 function resolveLoanStatusFromDueDates(dueDates: string[]): LoanStatus {
   if (dueDates.length === 0) return LoanStatus.PENDENTE;
   const todayIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
@@ -142,15 +151,25 @@ function encodeLoanObservations(userText: unknown, meta: Record<string, unknown>
   return `${cleanText}\n${encodedMeta}`;
 }
 
-function resolveSimulationDueDates(firstDueDate: string, dueDates: string[], count: number): string[] {
+function resolveSimulationDueDates(
+  firstDueDate: string,
+  dueDates: string[],
+  count: number,
+  paymentFrequency: unknown = PaymentFrequency.MONTHLY,
+): string[] {
   const safeCount = Math.max(1, Math.trunc(toNumber(count)));
+  const frequency = resolvePaymentFrequency(paymentFrequency);
   const explicitDueDates = dueDates
     .map((dueDate) => toIsoDateOnly(dueDate, new Date()))
     .filter(Boolean);
 
   const normalizedFirstDueDate = toIsoDateOnly(firstDueDate || explicitDueDates[0], new Date());
   return Array.from({ length: safeCount }, (_item, index) => {
-    return explicitDueDates[index] || addMonthsIsoDate(normalizedFirstDueDate, index);
+    if (explicitDueDates[index]) return explicitDueDates[index];
+    if (frequency === PaymentFrequency.DAILY) return addDays(normalizedFirstDueDate, index);
+    if (frequency === PaymentFrequency.WEEKLY) return addDays(normalizedFirstDueDate, index * 7);
+    if (frequency === PaymentFrequency.BIWEEKLY) return addDays(normalizedFirstDueDate, index * 15);
+    return addMonthsIsoDate(normalizedFirstDueDate, index);
   });
 }
 
@@ -310,6 +329,7 @@ function mapRowForResponse(row: LoanSimulationWithRefs) {
     row.firstDueDate.toISOString().slice(0, 10),
     row.dueDates,
     row.installmentsCount,
+    row.paymentFrequency,
   );
   const plan = validatedPlan(row.plan, dueDates, round2(row.principalAmount), round2(row.totalAmount));
   const loanId = row.loan?.id ?? null;
@@ -325,6 +345,7 @@ function mapRowForResponse(row: LoanSimulationWithRefs) {
     clientPhone,
     principalAmount: Number(row.principalAmount),
     interestType: row.interestType,
+    paymentFrequency: row.paymentFrequency?.toLowerCase() ?? null,
     interestRate: Number(row.interestRate),
     fixedFeeAmount: Number(row.fixedFeeAmount),
     installmentsCount: row.installmentsCount,
@@ -511,10 +532,16 @@ router.post("/", async (req, res) => {
   const now = new Date();
   const startDate = toIsoDateOnly(payload.startDate, now);
   const firstDueDate = toIsoDateOnly(payload.firstDueDate ?? payload.startDate, now);
+  const requestedPaymentFrequency = String(payload.paymentFrequency ?? "monthly").trim().toLowerCase();
+  if (!["daily", "weekly", "biweekly", "monthly"].includes(requestedPaymentFrequency)) {
+    throw new AppError("Frequencia de pagamento invalida.", 400);
+  }
+  const paymentFrequency = resolvePaymentFrequency(payload.paymentFrequency);
   const dueDates = resolveSimulationDueDates(
     firstDueDate,
     Array.isArray(payload.dueDates) ? payload.dueDates.map((item) => toIsoDateOnly(item, now)) : [firstDueDate],
     Math.max(1, Math.trunc(toNumber(payload.installmentsCount))),
+    paymentFrequency,
   );
   let totals = computeTotalsFromPayload(payload);
   let plan = validatedPlan(payload.plan, dueDates, round2(payload.principalAmount), totals.totalAmount);
@@ -540,6 +567,7 @@ router.post("/", async (req, res) => {
       fixedAddition: payload.fixedFeeAmount,
       installments: dueDates.length,
       interestType,
+      paymentFrequency,
       startDate,
       firstDueDate: dueDates[0],
       dueDates,
@@ -576,6 +604,7 @@ router.post("/", async (req, res) => {
       clientPhone: client.phone,
       principalAmount: round2(payload.principalAmount),
       interestType: String(payload.interestType ?? "composto").toLowerCase(),
+      paymentFrequency,
       interestRate: totals.interestRate,
       fixedFeeAmount: totals.fixedFeeAmount,
       installmentsCount: Math.max(1, Math.trunc(toNumber(payload.installmentsCount))),
@@ -740,6 +769,7 @@ router.post("/:id/approve", async (req, res) => {
           lockedSimulation.firstDueDate.toISOString().slice(0, 10),
           lockedSimulation.dueDates,
           lockedSimulation.installmentsCount,
+          lockedSimulation.paymentFrequency,
         );
         const installmentsCount = Math.max(1, Math.trunc(toNumber(lockedSimulation.installmentsCount)));
         const principalAmount = round2(lockedSimulation.principalAmount);
@@ -757,6 +787,7 @@ router.post("/:id/approve", async (req, res) => {
           fixedAddition,
           maxInstallment: 0,
           simulationId: lockedSimulation.id,
+          paymentFrequency: lockedSimulation.paymentFrequency?.toLowerCase() ?? null,
         };
 
         const observations = encodeLoanObservations(lockedSimulation.observations, loanMeta);
@@ -782,6 +813,7 @@ router.post("/:id/approve", async (req, res) => {
             principalAmount,
             interestRate: loanInterestRate,
             interestType,
+            paymentFrequency: lockedSimulation.paymentFrequency,
             installmentsCount,
             installmentAmount,
             totalAmount,
