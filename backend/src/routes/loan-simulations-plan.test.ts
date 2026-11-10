@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { calculateLoanPreview } from "../lib/loanCalculator";
 import { validatedPlan } from "../lib/simulation-plan";
 
 const dueDates = ["2027-02-01", "2027-03-01", "2027-04-01"];
@@ -26,4 +27,34 @@ test("rejeita vencimentos divergentes e plano incompleto", () => {
 
 test("permite que simulacoes antigas sem plano sigam o fluxo legado", () => {
   assert.equal(validatedPlan(null, dueDates, 1000, 1220.74), null);
+});
+
+test("mantem principal, juros fixos e valor alinhados quando ha residuo de centavos", () => {
+  const fixedDueDates = Array.from(
+    { length: 9 },
+    (_item, index) => `2027-${String(index + 1).padStart(2, "0")}-10`,
+  );
+  const calculation = calculateLoanPreview({
+    principal: 7000,
+    monthlyRate: 0,
+    fixedAddition: 2000,
+    installments: 9,
+    interestType: "fixo",
+    startDate: "2026-12-10",
+    firstDueDate: fixedDueDates[0],
+    dueDates: fixedDueDates,
+  });
+
+  assert.deepEqual(
+    calculation.plan.map(({ amount, principalAmount, interestAmount }) => ({
+      amount,
+      principalAmount,
+      interestAmount,
+    })),
+    [
+      ...Array.from({ length: 8 }, () => ({ amount: 1000, principalAmount: 777.78, interestAmount: 222.22 })),
+      { amount: 1000, principalAmount: 777.76, interestAmount: 222.24 },
+    ],
+  );
+  assert.doesNotThrow(() => validatedPlan(calculation.plan, fixedDueDates, 7000, 9000));
 });

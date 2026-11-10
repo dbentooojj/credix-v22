@@ -397,7 +397,6 @@ function buildFixedInstallmentPlan(
   const totalCents = Math.round(totalAmount * 100);
   const baseCents = Math.floor(totalCents / n);
   const remainderCents = totalCents - (baseCents * n);
-  const principalParts = splitAmount(principal, n);
   const fixedParts = splitAmount(fixedAddition, n);
 
   const installmentCents = Array.from({ length: n }, (_item, index) => (
@@ -406,11 +405,13 @@ function buildFixedInstallmentPlan(
 
   return installmentCents.map((amountCents, index) => {
     const dueDate = dueDates[index] || "";
+    const amount = round2(amountCents / 100);
+    const interestAmount = fixedParts[index];
     return {
       installmentNumber: index + 1,
-      amount: round2(amountCents / 100),
-      principalAmount: principalParts[index],
-      interestAmount: fixedParts[index],
+      amount,
+      principalAmount: round2(amount - interestAmount),
+      interestAmount,
       dueDate,
       status: buildInstallmentStatus(dueDate),
       paymentDate: null,
