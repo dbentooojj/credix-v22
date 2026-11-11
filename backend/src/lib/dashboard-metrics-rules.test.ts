@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   applyDashboardAdjustments,
   applyDashboardLedgerTransaction,
+  computeOwnerReturn,
   computePortfolioRates,
   computeOutstandingAmount,
   createDashboardLedgerAccumulator,
@@ -190,6 +191,31 @@ test("ROI usa lucro realizado sobre capital originado", () => {
 
   assert.equal(rates.roiRate, 12.5);
   assert.equal(rates.delinquencyRate, 10);
+});
+
+test("ROI do proprietario considera patrimonio e permanece igual apos retirada", () => {
+  const beforeWithdrawal = computeOwnerReturn({
+    cashBalance: 4_000,
+    capitalExposed: 6_000,
+    cashAdded: 8_000,
+    cashWithdrawn: 1_000,
+  });
+  const afterWithdrawal = computeOwnerReturn({
+    cashBalance: -5_000,
+    capitalExposed: 6_000,
+    cashAdded: 8_000,
+    cashWithdrawn: 10_000,
+  });
+
+  assert.equal(beforeWithdrawal.ownerGain, 3_000);
+  assert.equal(beforeWithdrawal.ownerRoiRate, 37.5);
+  assert.deepEqual(afterWithdrawal, beforeWithdrawal);
+});
+
+test("ROI do proprietario fica zerado sem dinheiro adicionado", () => {
+  const result = computeOwnerReturn({ cashBalance: 500, capitalExposed: 1_000, cashAdded: 0, cashWithdrawn: 0 });
+  assert.equal(result.ownerGain, 1_500);
+  assert.equal(result.ownerRoiRate, 0);
 });
 
 test("taxas financeiras ficam zeradas quando nao existe base", () => {

@@ -17,6 +17,7 @@ import {
 } from "../lib/date-time";
 import {
   applyDashboardLedgerTransaction,
+  computeOwnerReturn,
   computePortfolioRates,
   computeOutstandingAmount,
   createDashboardLedgerAccumulator,
@@ -897,6 +898,12 @@ router.get("/", async (req, res) => {
     totalOutstanding: totalToReceive,
   });
   const cashBalance = ledgerCashBalance;
+  const { ownerGain, ownerRoiRate } = computeOwnerReturn({
+    cashBalance,
+    capitalExposed: totalLoaned,
+    cashAdded: ledgerAccumulator.cashAdded,
+    cashWithdrawn: ledgerAccumulator.cashWithdrawn,
+  });
   const capitalInvested = cashAdjustmentNet;
   const activeLoansCount = activeLoanIds.size;
   const activeClientsCount = activeClientIds.size;
@@ -1537,6 +1544,8 @@ router.get("/", async (req, res) => {
       profitThisMonth: currentMonthProfit,
       profitTotal,
       roiRate,
+      ownerGain,
+      ownerRoiRate,
       delinquencyRate,
     },
     portfolio: {
@@ -1560,6 +1569,8 @@ router.get("/", async (req, res) => {
         profitTotal: portfolioProfitTotal,
         delinquencyRate,
         roiRate: portfolioRoiRate,
+        ownerGain,
+        ownerRoiRate,
       },
       chart: {
         points: portfolioChartPoints,

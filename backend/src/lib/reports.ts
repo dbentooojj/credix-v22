@@ -175,6 +175,7 @@ export type LoansReportExportRow = {
   status: LoanReportStatus;
   principal: number;
   total: number;
+  profit: number;
   received: number;
   open: number;
   overdue: number;
@@ -879,6 +880,7 @@ export function buildLoansReport(
       status: snapshot.status,
       principal: snapshot.principal,
       total: snapshot.total,
+      profit: snapshot.profitToEnd,
       received: snapshot.receivedToEnd,
       open: snapshot.totalOutstandingAtEnd,
       overdue: snapshot.overdueAtEnd,

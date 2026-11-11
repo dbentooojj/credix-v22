@@ -97,6 +97,17 @@ test("resumo e histórico vazios são retornados como zero", async () => {
 test("um empréstimo quitado mostra lucro realizado separado do principal", async () => {
   const result = await get(`tables/debtors/${singleId}/financial-summary`);
   assert.deepEqual(result.body.data, { totalLoaned: 100, totalReceived: 120, realizedProfit: 20, totalOpen: 0, loansCount: 1, settledLoansCount: 1 });
+  const history = await get(`tables/debtors/${singleId}/loans`);
+  assert.equal(history.body.rows[0].returnAmount, 20);
+  assert.equal(history.body.rows[0].returnPercent, 20);
+  assert.equal(history.body.rows[0].returnBasis, "REALIZADO");
+  assert.equal(history.body.rows[0].realizedProfit, 20);
+  assert.equal(history.body.rows[0].remainingProfit, 0);
+  assert.equal(history.body.rows[0].installmentsCount, 1);
+  assert.equal(history.body.rows[0].paidInstallmentsCount, 1);
+  assert.equal(history.body.rows[0].remainingInstallmentsCount, 0);
+  assert.equal(history.body.rows[0].installmentMinAmount, 120);
+  assert.equal(history.body.rows[0].installmentMaxAmount, 120);
 });
 
 test("mais de 100 contratos somam pagamentos parciais e descontos conforme os relatórios", async () => {
@@ -153,6 +164,13 @@ test("estorno remove recebimento e lucro, reabrindo o saldo sem duplicar valores
   assert.deepEqual(result.body.data, { totalLoaned: 100, totalReceived: 0, realizedProfit: 0, totalOpen: 120, loansCount: 1, settledLoansCount: 0 });
   const history = await get(`tables/debtors/${singleId}/loans`);
   assert.equal(history.body.rows[0].status, "ATRASADO");
+  assert.equal(history.body.rows[0].returnAmount, 20);
+  assert.equal(history.body.rows[0].returnPercent, 20);
+  assert.equal(history.body.rows[0].returnBasis, "PREVISTO");
+  assert.equal(history.body.rows[0].realizedProfit, 0);
+  assert.equal(history.body.rows[0].remainingProfit, 20);
+  assert.equal(history.body.rows[0].paidInstallmentsCount, 0);
+  assert.equal(history.body.rows[0].remainingInstallmentsCount, 1);
 });
 
 test("edição e exclusão do cadastro continuam refletidas na lista de clientes", async () => {

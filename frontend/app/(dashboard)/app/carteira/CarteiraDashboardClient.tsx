@@ -78,6 +78,8 @@ type FinancialKpis = {
   profitThisMonth: number;
   profitTotal: number;
   roiRate: number;
+  ownerGain: number;
+  ownerRoiRate: number;
   totalOverdue: number;
   delinquencyRate: number;
   activeLoansCount: number;
@@ -851,8 +853,8 @@ export default function CarteiraDashboardClient() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           icon={<BriefcaseBusiness className="h-5 w-5" />}
-          label="Capital em aberto"
-          note="Principal ainda alocado nos empréstimos ativos."
+          label="Capital exposto"
+          note="Valor do principal que ainda não retornou ao caixa. Não inclui juros futuros."
           value={formatCurrency(kpis.totalLoaned)}
         />
         <MetricCard
@@ -909,18 +911,22 @@ export default function CarteiraDashboardClient() {
         <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <div className="flex items-center gap-2 text-slate-900">
             <TrendingUp className="h-5 w-5 text-emerald-700" />
-            <h2 className="font-bold">ROI da carteira</h2>
-            <InfoHint text={`Lucro realizado ÷ capital total originado (${formatCurrency(kpis.totalOriginated)}). A devolução do principal não entra no lucro.`} />
+            <h2 className="font-bold">ROI do proprietário</h2>
+            <InfoHint text={`(Caixa + capital exposto + retirado − adicionado) ÷ total adicionado (${formatCurrency(data.cashAdjustment?.added ?? 0)}). Não inclui juros futuros.`} />
           </div>
-          <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">{formatPercent(kpis.roiRate)}</p>
+          <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">{formatPercent(kpis.ownerRoiRate)}</p>
           <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-slate-100 pt-4">
             <div>
-              <p className="text-xs text-slate-500">Lucro no mês</p>
-              <p className="mt-1 font-bold text-slate-900">{formatCurrency(kpis.profitThisMonth)}</p>
+              <p className="text-xs text-slate-500">Lucro acumulado</p>
+              <p className="mt-1 font-bold text-slate-900">{formatCurrency(kpis.profitTotal)}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">A receber sem atraso</p>
-              <p className="mt-1 font-bold text-slate-900">{formatCurrency(Math.max(totalToReceive - totalOverdue, 0))}</p>
+              <p className="text-xs text-slate-500">Retorno dos empréstimos</p>
+              <p className="mt-1 font-bold text-slate-900">{formatPercent(kpis.roiRate)}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-xs text-slate-500">Lucro no mês</p>
+              <p className="mt-1 font-bold text-slate-900">{formatCurrency(kpis.profitThisMonth)}</p>
             </div>
           </div>
         </article>

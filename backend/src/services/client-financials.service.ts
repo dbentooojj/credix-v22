@@ -102,7 +102,30 @@ export async function getClientLoansPage(ownerUserId: number, clientId: number, 
       orderBy: [{ startDate: "desc" }, { id: "desc" }], skip: (safePage - 1) * pageSize, take: pageSize });
     const report = buildClientFinancialReport(loans, todayIso());
     const byId = new Map(report.exportRows.map((row) => [row.loanId, row]));
-    return { rows: loans.map((loan) => byId.get(String(loan.id))!),
+    return { rows: loans.map((loan) => {
+      const row = byId.get(String(loan.id))!;
+      const isRealized = row.status === "QUITADO";
+      const projectedProfit = round2(Math.max(row.total - row.principal, 0));
+      const realizedProfit = round2(Math.max(row.profit, 0));
+      const remainingProfit = round2(Math.max(projectedProfit - realizedProfit, 0));
+      const returnAmount = isRealized ? realizedProfit : projectedProfit;
+      const returnPercent = row.principal > 0 ? round2((returnAmount / row.principal) * 100) : 0;
+      const paidByInstallment = new Map<number, number>();
+      loan.payments.forEach((payment) => {
+        if (payment.installmentId === null) return;
+        paidByInstallment.set(payment.installmentId,
+          round2((paidByInstallment.get(payment.installmentId) ?? 0) + Number(payment.amount)));
+      });
+      const installmentAmounts = loan.installments.map((installment) => Number(installment.amount));
+      const paidInstallmentsCount = loan.installments.filter((installment) =>
+        (paidByInstallment.get(installment.id) ?? 0) >= Number(installment.amount) - 0.005).length;
+      const installmentMinAmount = installmentAmounts.length ? round2(Math.min(...installmentAmounts)) : 0;
+      const installmentMaxAmount = installmentAmounts.length ? round2(Math.max(...installmentAmounts)) : 0;
+      return { ...row, returnAmount, returnPercent, returnBasis: isRealized ? "REALIZADO" : "PREVISTO",
+        realizedProfit, remainingProfit, installmentsCount: loan.installmentsCount, paidInstallmentsCount,
+        remainingInstallmentsCount: Math.max(loan.installmentsCount - paidInstallmentsCount, 0),
+        installmentMinAmount, installmentMaxAmount };
+    }),
       pagination: { page: safePage, pageSize, totalItems, totalPages } };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }

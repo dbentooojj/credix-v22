@@ -47,6 +47,11 @@ export type PortfolioRates = {
   delinquencyRate: number;
 };
 
+export type OwnerReturn = {
+  ownerGain: number;
+  ownerRoiRate: number;
+};
+
 const DASHBOARD_TRANSACTION_IMPACT_MAP: Record<DashboardTransactionType, DashboardTransactionImpact> = {
   revenue: {
     isAdjustment: false,
@@ -106,6 +111,24 @@ export function computePortfolioRates(input: {
     delinquencyRate: totalOutstanding > 0
       ? (Math.max(overdueOutstanding, 0) / totalOutstanding) * 100
       : 0,
+  };
+}
+
+export function computeOwnerReturn(input: {
+  cashBalance: number;
+  capitalExposed: number;
+  cashAdded: number;
+  cashWithdrawn: number;
+}): OwnerReturn {
+  const cashBalance = Number.isFinite(input.cashBalance) ? input.cashBalance : 0;
+  const capitalExposed = Number.isFinite(input.capitalExposed) ? input.capitalExposed : 0;
+  const cashAdded = Number.isFinite(input.cashAdded) ? Math.max(input.cashAdded, 0) : 0;
+  const cashWithdrawn = Number.isFinite(input.cashWithdrawn) ? Math.max(input.cashWithdrawn, 0) : 0;
+  const ownerGain = cashBalance + capitalExposed + cashWithdrawn - cashAdded;
+
+  return {
+    ownerGain,
+    ownerRoiRate: cashAdded > 0 ? (ownerGain / cashAdded) * 100 : 0,
   };
 }
 

@@ -5,7 +5,7 @@ import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from "lucide-rea
 
 type Summary = { totalLoaned: number; totalReceived: number; realizedProfit: number; totalOpen: number; loansCount: number; settledLoansCount: number };
 type History = {
-  rows: Array<{ loanId: string; startDate: string; principal: number; received: number; open: number; status: string }>;
+  rows: Array<{ loanId: string; startDate: string; principal: number; received: number; open: number; status: string; returnAmount: number; returnPercent: number; returnBasis: "REALIZADO" | "PREVISTO"; realizedProfit: number; remainingProfit: number; installmentsCount: number; paidInstallmentsCount: number; remainingInstallmentsCount: number; installmentMinAmount: number; installmentMaxAmount: number }>;
   pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
 };
 type Result<T> = { clientId: string; data?: T; error?: string; loading: boolean };
@@ -97,6 +97,8 @@ export function ClientFinancialPanel({ financials, page, pageSize, onPageChange,
               <thead className="text-slate-400"><tr>
                 <th className="px-2 py-2 font-medium">Data do empréstimo</th>
                 <th className="px-2 py-2 text-right font-medium">Valor emprestado</th>
+                <th className="px-2 py-2 text-right font-medium">Parcelas</th>
+                <th className="px-2 py-2 text-right font-medium">Retorno</th>
                 <th className="px-2 py-2 text-right font-medium">Total recebido</th>
                 <th className="px-2 py-2 text-right font-medium">Saldo em aberto</th>
                 <th className="px-2 py-2 font-medium">Status</th>
@@ -104,9 +106,29 @@ export function ClientFinancialPanel({ financials, page, pageSize, onPageChange,
               <tbody className="divide-y divide-slate-800/50">{history.data.rows.map((loan) => <tr key={loan.loanId}>
                 <td className="px-2 py-2">{loan.startDate.split("-").reverse().join("/")}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{money(loan.principal)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">
+                  <div className="font-semibold text-slate-300">{Math.abs(loan.installmentMaxAmount - loan.installmentMinAmount) <= 0.01
+                    ? `${loan.installmentsCount}x de ${money(loan.installmentMaxAmount)}`
+                    : `${loan.installmentsCount} parcelas`}</div>
+                  {Math.abs(loan.installmentMaxAmount - loan.installmentMinAmount) > 0.01 ? <div className="text-[10px] text-slate-400">
+                    {money(loan.installmentMinAmount)} a {money(loan.installmentMaxAmount)}
+                  </div> : null}
+                  <div className="text-[10px] text-slate-500">{loan.remainingInstallmentsCount === 0
+                    ? "Todas pagas"
+                    : loan.paidInstallmentsCount === 0
+                      ? `${loan.remainingInstallmentsCount} restantes`
+                      : `${loan.remainingInstallmentsCount} restantes · ${loan.paidInstallmentsCount} pagas`}</div>
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums">
+                  <div className="font-semibold text-emerald-500">{loan.returnPercent.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</div>
+                  <div className="text-[10px] text-slate-400">{money(loan.returnAmount)} · {loan.returnBasis === "REALIZADO" ? "realizado" : "lucro total"}</div>
+                  {loan.returnBasis === "PREVISTO" ? <div className="text-[10px] text-slate-500">
+                    {money(loan.realizedProfit)} realizado · {money(loan.remainingProfit)} a receber
+                  </div> : null}
+                </td>
                 <td className="px-2 py-2 text-right tabular-nums text-emerald-500">{money(loan.received)}</td>
                 <td className={`px-2 py-2 text-right tabular-nums ${loan.status === "ATRASADO" ? "text-red-400" : ""}`}>{money(loan.open)}</td>
-                <td className={`px-2 py-2 ${loan.status === "ATRASADO" ? "text-red-400" : loan.status === "QUITADO" || loan.status === "EM_DIA" ? "text-emerald-500" : "text-slate-400"}`}>{statuses[loan.status] || loan.status}</td>
+                <td className={`px-2 py-2 ${loan.status === "ATRASADO" ? "text-red-400" : loan.status === "QUITADO" ? "text-emerald-500" : loan.status === "EM_DIA" ? "text-blue-400" : loan.status === "PENDENTE" ? "text-amber-400" : "text-slate-400"}`}>{statuses[loan.status] || loan.status}</td>
               </tr>)}</tbody>
             </table>
           </div>
