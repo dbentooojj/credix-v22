@@ -665,7 +665,7 @@ export function ClientesClient() {
                       className="bg-slate-50"
                     />
                   </div>
-                  {expanded ? <div id={"mobile-client-financials-" + debtor.id} className="-mx-3 mt-2 cursor-auto">{renderFinancialPanel()}</div> : null}
+                  {expanded ? <div id={"mobile-client-financials-" + debtor.id} className="-mx-3 mt-2 w-[calc(100%+1.5rem)] min-w-0 max-w-[calc(100%+1.5rem)] cursor-auto overflow-hidden">{renderFinancialPanel()}</div> : null}
                 </MobileDataCard>
                 </div>
               );

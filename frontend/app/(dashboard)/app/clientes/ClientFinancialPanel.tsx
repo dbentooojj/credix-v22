@@ -58,7 +58,7 @@ export function ClientFinancialPanel({ financials, page, pageSize, onPageChange,
   const pagination = history.data?.pagination;
   const buttonClass = "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-slate-400 hover:bg-slate-800 disabled:opacity-40";
   return (
-    <div data-client-details className="min-w-0 cursor-auto space-y-3 px-3 pb-3 pt-1 sm:px-4 sm:pb-4" aria-label="Resumo financeiro e histórico do cliente">
+    <div data-client-details className="w-full min-w-0 max-w-full cursor-auto space-y-3 overflow-hidden px-3 pb-3 pt-1 sm:px-4 sm:pb-4" aria-label="Resumo financeiro e histórico do cliente">
       {summary.loading ? <p role="status" className="text-sm text-slate-400">Carregando resumo financeiro...</p> : null}
       {summary.error ? <p role="alert" className="text-sm text-red-400">{summary.error} <button onClick={retry} className="underline">Tentar novamente</button></p> : null}
       {values ? (
@@ -90,8 +90,8 @@ export function ClientFinancialPanel({ financials, page, pageSize, onPageChange,
       {history.loading ? <p role="status" className="py-4 text-sm text-slate-400">Carregando empréstimos...</p> : null}
       {history.error ? <p role="alert" className="text-sm text-red-400">{history.error} <button onClick={retry} className="underline">Tentar novamente</button></p> : null}
       {history.data ? <>
-        {history.data.rows.length === 0 ? <p className="py-4 text-sm text-slate-400">Este cliente ainda não possui empréstimos.</p> : (
-          <div className="overflow-x-auto">
+        {history.data.rows.length === 0 ? <p className="py-4 text-sm text-slate-400">Este cliente ainda não possui empréstimos.</p> : (<>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full whitespace-nowrap text-left text-xs text-slate-300">
               <caption className="sr-only">Empréstimos do cliente, do mais recente para o mais antigo</caption>
               <thead className="text-slate-400"><tr>
@@ -132,7 +132,65 @@ export function ClientFinancialPanel({ financials, page, pageSize, onPageChange,
               </tr>)}</tbody>
             </table>
           </div>
-        )}
+          <div className="grid gap-2 md:hidden">
+            {history.data.rows.map((loan) => (
+              <article key={loan.loanId} className="min-w-0 rounded-xl border border-slate-200 bg-white/70 p-3 shadow-sm">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Data do empréstimo</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-700">{loan.startDate.split("-").reverse().join("/")}</div>
+                  </div>
+                  <span className={`shrink-0 text-xs font-semibold ${loan.status === "ATRASADO" ? "text-red-400" : loan.status === "QUITADO" ? "text-emerald-500" : loan.status === "EM_DIA" ? "text-blue-400" : loan.status === "PENDENTE" ? "text-amber-400" : "text-slate-400"}`}>
+                    {statuses[loan.status] || loan.status}
+                  </span>
+                </div>
+
+                <dl className="mt-3 grid min-w-0 grid-cols-2 gap-x-3 gap-y-3 border-t border-slate-200 pt-3">
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Valor emprestado</dt>
+                    <dd className="mt-1 break-words text-sm font-semibold tabular-nums text-slate-700">{money(loan.principal)}</dd>
+                  </div>
+                  <div className="min-w-0 text-right">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Parcelas</dt>
+                    <dd className="mt-1 break-words text-sm font-semibold tabular-nums text-slate-700">
+                      {Math.abs(loan.installmentMaxAmount - loan.installmentMinAmount) <= 0.01
+                        ? `${loan.installmentsCount}x de ${money(loan.installmentMaxAmount)}`
+                        : `${loan.installmentsCount} parcelas`}
+                    </dd>
+                    {Math.abs(loan.installmentMaxAmount - loan.installmentMinAmount) > 0.01 ? (
+                      <div className="mt-0.5 break-words text-[10px] text-slate-400">{money(loan.installmentMinAmount)} a {money(loan.installmentMaxAmount)}</div>
+                    ) : null}
+                    <div className="mt-0.5 break-words text-[10px] text-slate-500">
+                      {loan.remainingInstallmentsCount === 0
+                        ? "Todas pagas"
+                        : loan.paidInstallmentsCount === 0
+                          ? `${loan.remainingInstallmentsCount} restantes`
+                          : `${loan.remainingInstallmentsCount} restantes · ${loan.paidInstallmentsCount} pagas`}
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Retorno</dt>
+                    <dd className="mt-1 text-sm font-semibold tabular-nums text-emerald-500">
+                      {loan.returnPercent.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                    </dd>
+                    <div className="mt-0.5 break-words text-[10px] text-slate-400">{money(loan.returnAmount)} · {loan.returnBasis === "REALIZADO" ? "realizado" : "lucro total"}</div>
+                    {loan.returnBasis === "PREVISTO" ? (
+                      <div className="mt-0.5 break-words text-[10px] text-slate-500">{money(loan.realizedProfit)} realizado · {money(loan.remainingProfit)} a receber</div>
+                    ) : null}
+                  </div>
+                  <div className="min-w-0 text-right">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total recebido</dt>
+                    <dd className="mt-1 break-words text-sm font-semibold tabular-nums text-emerald-500">{money(loan.received)}</dd>
+                  </div>
+                  <div className="col-span-2 min-w-0 border-t border-slate-200 pt-3">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Saldo em aberto</dt>
+                    <dd className={`mt-1 break-words text-sm font-semibold tabular-nums ${loan.status === "ATRASADO" ? "text-red-400" : "text-slate-700"}`}>{money(loan.open)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </>)}
       </> : null}
       {pagination && pagination.totalPages > 1 ? <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-400">
         <nav aria-label="Paginação dos empréstimos" className="flex flex-wrap items-center gap-1">
