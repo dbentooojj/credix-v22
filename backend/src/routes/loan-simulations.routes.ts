@@ -16,6 +16,7 @@ import {
   type ScheduleHistoryItem,
 } from "../lib/consolidated-schedule";
 import { upsertLoanDisbursementTransaction } from "../lib/installment-income-transaction";
+import { assertAvailableBalance, lockFinancialOwner, requireActiveAccount } from "../lib/financial-accounts";
 import { calculateLoanPreview, type LoanInterestType } from "../lib/loanCalculator";
 import { validatedPlan } from "../lib/simulation-plan";
 import { getSimulationDisplayStatusLabel, resolveSimulationDisplayStatus, type SimulationDisplayStatus } from "../lib/simulation-status";
@@ -729,6 +730,9 @@ router.post("/:id/approve", async (req, res) => {
     });
   }
 
+  const selectedAccountId = Number(req.body?.financialAccountId);
+  if (!Number.isInteger(selectedAccountId) || selectedAccountId <= 0) throw new AppError("Selecione a conta de origem.", 400);
+
   const client = await findClient(ownerUserId, existingSimulation.clientId);
   if (!client) {
     return res.status(400).json({ message: "Cliente invalido para aprovar simulacao." });
@@ -739,6 +743,8 @@ router.post("/:id/approve", async (req, res) => {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       createdLoanId = await prisma.$transaction(async (tx) => {
+        await lockFinancialOwner(tx, ownerUserId);
+        await requireActiveAccount(tx, ownerUserId, selectedAccountId);
         const lockedSimulation = await tx.loanSimulation.findFirst({
           where: {
             id,
@@ -781,6 +787,7 @@ router.post("/:id/approve", async (req, res) => {
         const loanInterestRate = round2(normalizedInterestType === "fixo" ? 0 : lockedSimulation.interestRate);
         const interestType = resolveInterestTypeForLoan(normalizedInterestType);
         const loanStatus = resolveLoanStatusFromDueDates(dueDates);
+        if (loanStatus !== LoanStatus.PENDENTE) await assertAvailableBalance(tx, ownerUserId, selectedAccountId, principalAmount);
 
         const loanMeta = {
           interestMode: normalizedInterestType === "simples" ? "simples" : (normalizedInterestType === "fixo" ? "fixo" : "composto"),
@@ -809,6 +816,7 @@ router.post("/:id/approve", async (req, res) => {
           data: {
             id: nextLoanId,
             ownerUserId,
+            financialAccountId: selectedAccountId,
             clientId: lockedSimulation.clientId,
             principalAmount,
             interestRate: loanInterestRate,
@@ -849,6 +857,7 @@ router.post("/:id/approve", async (req, res) => {
         if (loanStatus !== LoanStatus.PENDENTE) {
           await upsertLoanDisbursementTransaction(tx, {
             ownerUserId,
+            financialAccountId: selectedAccountId,
             loanId: loan.id,
             amount: principalAmount,
             date: lockedSimulation.startDate,

@@ -4,6 +4,7 @@ import { replaceTableSchema, tableNameSchema } from "../schemas/tables.schemas";
 import { getTableData, replaceTableData } from "../services/table-sync.service";
 import { z } from "zod";
 import { getClientsOverview, getClientFinancialSummary, getClientLoansPage } from "../services/client-financials.service";
+import { AppError } from "../middleware/error-handler";
 
 const router = Router();
 
@@ -57,6 +58,7 @@ router.put("/:tableName", async (req, res) => {
   if (!Number.isFinite(userId)) return res.status(401).json({ message: "Nao autenticado" });
   const tableName = tableNameSchema.parse(req.params.tableName);
   const { rows } = replaceTableSchema.parse(req.body);
+  if (tableName !== "debtors") throw new AppError("A sincronização em massa de empréstimos e parcelas está indisponível; use as operações individuais com conta financeira.", 409);
 
   const data = await replaceTableData(tableName, rows, userId);
   return res.json({ message: "Tabela atualizada", data });

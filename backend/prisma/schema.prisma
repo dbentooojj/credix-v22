@@ -89,6 +89,27 @@ model User {
   loanSimulations    LoanSimulation[]
   financeCategories   FinanceCategory[]
   financeTransactions FinanceTransaction[]
+  financialAccounts FinancialAccount[]
+}
+
+model FinancialAccount {
+  id Int @id @default(autoincrement())
+  ownerUserId Int
+  ownerUser User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  name String
+  institution String?
+  color String @default("#4f46e5")
+  description String?
+  archived Boolean @default(false)
+  isOriginal Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions FinanceTransaction[]
+  loans Loan[]
+  payments Payment[]
+
+  @@unique([id, ownerUserId])
+  @@index([ownerUserId, archived])
 }
 
 model Client {
@@ -117,6 +138,8 @@ model Loan {
   id                Int            @id @default(autoincrement())
   ownerUserId       Int
   ownerUser         User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  financialAccountId Int?
+  financialAccount FinancialAccount? @relation(fields: [financialAccountId, ownerUserId], references: [id, ownerUserId], onDelete: Restrict)
   clientId          Int
   client            Client         @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   principalAmount   Decimal        @db.Decimal(14, 2)
@@ -225,9 +248,12 @@ model Payment {
   id            Int           @id @default(autoincrement())
   ownerUserId   Int
   ownerUser     User          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  financialAccountId Int?
+  financialAccount FinancialAccount? @relation(fields: [financialAccountId, ownerUserId], references: [id, ownerUserId], onDelete: Restrict)
   loanId        Int
   loan          Loan          @relation(fields: [loanId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  installmentId Int?          @unique
+  installmentId Int?
+  requestKey String? @unique
   installment   Installment?  @relation(fields: [installmentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   amount        Decimal       @db.Decimal(14, 2)
   paymentDate   DateTime      @db.Date
@@ -266,6 +292,13 @@ model FinanceTransaction {
   id          Int                      @id @default(autoincrement())
   ownerUserId Int
   ownerUser   User                     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  financialAccountId Int
+  financialAccount FinancialAccount @relation(fields: [financialAccountId, ownerUserId], references: [id, ownerUserId], onDelete: Restrict)
+  transferId String?
+  requestKey String? @unique
+  reversalOfId Int? @unique
+  reversalOf FinanceTransaction? @relation("TransactionReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy FinanceTransaction? @relation("TransactionReversal")
   categoryId  Int?
   categoryRef FinanceCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   type        FinanceTransactionType
@@ -279,7 +312,10 @@ model FinanceTransaction {
   updatedAt   DateTime                 @updatedAt
 
   @@index([ownerUserId])
+  @@index([financialAccountId, status])
+  @@index([ownerUserId, transferId])
   @@index([categoryId])
   @@index([ownerUserId, type, date])
   @@index([ownerUserId, status])
+  @@index([ownerUserId, status, date, id])
 }

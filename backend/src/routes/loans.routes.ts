@@ -12,6 +12,7 @@ import {
   upsertLoanDisbursementTransaction,
 } from "../lib/installment-income-transaction";
 import { prisma } from "../lib/prisma";
+import { assertAvailableBalance, lockFinancialOwner } from "../lib/financial-accounts";
 import { requireAuthApi } from "../middleware/auth";
 import { AppError } from "../middleware/error-handler";
 
@@ -212,6 +213,7 @@ router.patch("/:loanId", async (req, res) => {
   const fixedFeeAmount = round2(interestMode === "fixo" ? payload.fixedFeeAmount : 0);
 
   const updateLoanInTransaction = () => prisma.$transaction(async (tx) => {
+    await lockFinancialOwner(tx, ownerUserId);
     const loan = await tx.loan.findFirst({
       where: {
         id: loanId,
@@ -270,6 +272,15 @@ router.patch("/:loanId", async (req, res) => {
     };
 
     const status = resolveLoanStatusFromDueDates(normalizedPlan.map((item) => item.dueDate));
+    const selectedAccountId = payload.financialAccountId === undefined ? loan.financialAccountId : Number(payload.financialAccountId);
+    if (!selectedAccountId) throw new AppError("Selecione a conta de origem.", 400);
+    const selectedAccount = await tx.financialAccount.findFirst({ where: { id: selectedAccountId, ownerUserId } });
+    if (!selectedAccount || (selectedAccount.archived && (loan.status === LoanStatus.PENDENTE || principalAmount > Number(loan.principalAmount)))) throw new AppError("Conta de origem indisponível.", 400);
+    if (loan.status !== LoanStatus.PENDENTE && selectedAccountId !== loan.financialAccountId) throw new AppError("A conta de origem de um empréstimo efetivado não pode ser alterada.", 409);
+    if (status !== LoanStatus.PENDENTE) {
+      const extraAmount = loan.status === LoanStatus.PENDENTE ? principalAmount : principalAmount - Number(loan.principalAmount);
+      if (extraAmount > 0) await assertAvailableBalance(tx, ownerUserId, selectedAccountId, extraAmount);
+    }
 
     // Defensive for legacy data: some historical rows can have mismatched ownerUserId.
     // The loan ownership is already validated above, so deleting by loanId is safe here.
@@ -283,6 +294,7 @@ router.patch("/:loanId", async (req, res) => {
       where: { id: loanId },
       data: {
         clientId,
+        financialAccountId: selectedAccountId,
         principalAmount,
         interestRate,
         interestType: resolveInterestTypeForLoan(interestMode),
@@ -308,6 +320,7 @@ router.patch("/:loanId", async (req, res) => {
     await tx.installment.createMany({
       data: normalizedPlan.map((item, index) => ({
         ownerUserId,
+        financialAccountId: selectedAccountId,
         loanId,
         clientId,
         installmentNumber: index + 1,

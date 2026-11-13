@@ -18,6 +18,7 @@ import { ModalBase, ModalBtnGhost, ModalBtnPrimary, ModalField, modalInputClass 
 import { MobileDataCard, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
+import { FinancialAccountSelect, findCashAccountId, useFinancialAccounts } from "../../../components/FinancialAccountSelect";
 import { fetchDataArray, readJsonOrThrow } from "../../../../utils/apiClient";
 import { formatCurrencyInputFromNumber } from "../../../../utils/currencyInput";
 import { getDateOnlyRelationToToday, getTodayIsoInAppTimeZone, toIsoDateOnly } from "../../../../utils/dateOnlyStatus";
@@ -48,7 +49,7 @@ type Installment = {
   paid_at?: string;
 };
 
-type Payment = { id: number; amount: number; paymentDate: string };
+type Payment = { id: number; installmentId: number | null; amount: number; paymentDate: string };
 
 // --- HELPERS ---
 function sameId(a: any, b: any) {
@@ -109,10 +110,6 @@ function isCurrentMonth(date: Date | null) {
   return toIsoDateOnly(date)?.slice(0, 7) === getTodayIsoInAppTimeZone().slice(0, 7);
 }
 
-function toDateInputValue(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 function normalizeStatusFilterParam(value: string | null) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw || raw === "all" || raw === "todos") return null;
@@ -162,9 +159,18 @@ export function ParcelasClient() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedInst, setSelectedInst] = useState<any>(null);
   const [payDate, setPayDate] = useState("");
+  const [payAmount, setPayAmount] = useState("");
+  const [paymentKey, setPaymentKey] = useState("");
+  const { accounts: financialAccounts, refresh: refreshFinancialAccounts } = useFinancialAccounts();
+  const [financialAccountId, setFinancialAccountId] = useState<number | null>(null);
   const [payMethod, setPayMethod] = useState("PIX");
   const [payNotes, setPayNotes] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    if (!showPayModal || payMethod !== "DINHEIRO" || financialAccountId !== null) return;
+    setFinancialAccountId(findCashAccountId(financialAccounts));
+  }, [financialAccountId, financialAccounts, payMethod, showPayModal]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -203,8 +209,13 @@ export function ParcelasClient() {
 
   // --- Modal handlers ---
   function openPayModal(inst: any) {
+    setPaymentKey(crypto.randomUUID());
+    const paid = payments.filter((payment) => Number(payment.installmentId) === Number(inst.id)).reduce((sum, payment) => sum + Number(payment.amount), 0);
+    setPayAmount(String(Math.max(0, Number(inst.amount) - paid).toFixed(2)));
+    setFinancialAccountId(null);
+    void refreshFinancialAccounts();
     setSelectedInst(inst);
-    setPayDate(toDateInputValue(new Date()));
+    setPayDate(getTodayIsoInAppTimeZone());
     setPayMethod("PIX");
     setPayNotes("");
     setShowPayModal(true);
@@ -221,9 +232,13 @@ export function ParcelasClient() {
   }
 
   async function handlePay() {
-    const parsedAmount = Number(selectedInst?.amount);
-    if (!selectedInst || !payDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    const parsedAmount = Number(payAmount);
+    if (!selectedInst || !payDate || !financialAccountId || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       toast.error("Preencha valor e data válidos para registrar o pagamento.", "Dados incompletos");
+      return;
+    }
+    if (payDate > businessDate) {
+      toast.error("A data do pagamento não pode ser futura.", "Data inválida");
       return;
     }
     setActionLoading(true);
@@ -233,8 +248,10 @@ export function ParcelasClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           loanId: Number(selectedInst.loan_id),
+          financialAccountId,
           installmentId: Number(selectedInst.id),
           amount: parsedAmount,
+          idempotencyKey: paymentKey,
           paymentDate: payDate,
           method: payMethod,
           notes: payNotes.trim() || undefined,
@@ -736,11 +753,17 @@ export function ParcelasClient() {
         footer={<><ModalBtnGhost onClick={() => setShowPayModal(false)} disabled={actionLoading}>Cancelar</ModalBtnGhost><ModalBtnPrimary variant="emerald" onClick={handlePay} disabled={actionLoading}>{actionLoading ? "Salvando..." : "Confirmar pagamento"}</ModalBtnPrimary></>}
       >
         <div className="grid grid-cols-2 gap-4">
-          <ModalField label="Valor integral da parcela (R$)"><input className={`${modalInputClass} bg-slate-50`} type="text" value={formatCurrencyInputFromNumber(Number(selectedInst?.amount || 0))} readOnly /></ModalField>
-          <ModalField label="Data do pagamento"><input className={modalInputClass} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></ModalField>
+          <div className="col-span-2"><FinancialAccountSelect accounts={financialAccounts} value={financialAccountId} onChange={setFinancialAccountId} label="Conta de destino" /></div>
+          <ModalField label="Valor recebido (R$)"><input className={modalInputClass} type="number" min="0.01" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} /></ModalField>
+          <ModalField label="Data do pagamento"><input className={modalInputClass} type="date" max={businessDate} value={payDate} onChange={(e) => setPayDate(e.target.value)} /></ModalField>
           <ModalField label="Método de pagamento">
-            <select className={modalInputClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="TRANSFERENCIA">Transferência</option><option value="CARTAO">Cartão</option>
+            <select className={modalInputClass} value={payMethod} onChange={(event) => {
+              const method = event.target.value;
+              setPayMethod(method);
+              const cashAccountId = method === "DINHEIRO" ? findCashAccountId(financialAccounts) : null;
+              if (cashAccountId !== null) setFinancialAccountId(cashAccountId);
+            }}>
+              <option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="TRANSFERENCIA">Transferência</option>
             </select>
           </ModalField>
           <ModalField label="Observações"><input className={modalInputClass} placeholder="Opcional" maxLength={200} value={payNotes} onChange={(e) => setPayNotes(e.target.value)} /></ModalField>

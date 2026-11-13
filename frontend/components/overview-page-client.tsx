@@ -1272,7 +1272,7 @@ export function OverviewPageClient() {
             icon: <WalletIcon className="h-3.5 w-3.5" />,
           }}
           icon={<WalletIcon className="h-5 w-5" />}
-          label="Saldo em caixa"
+          label="Saldo disponível"
           meta={`Ajustes: ${formatCurrency(payload?.cashAdjustment?.net)}`}
           note={overview?.cashBalance?.note || "Disponível agora"}
           tone="cash"

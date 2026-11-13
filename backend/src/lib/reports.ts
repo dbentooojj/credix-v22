@@ -37,6 +37,8 @@ export type FinanceReportSourceRow = {
   date: string;
   description: string;
   status: FinanceReportRowStatus;
+  financialAccountId?: number;
+  financialAccountName?: string;
 };
 
 export type FinanceReportRow = {
@@ -52,6 +54,8 @@ export type FinanceReportRow = {
   isAutomatic: boolean;
   linkedLoanId: string | null;
   linkedInstallmentId: string | null;
+  financialAccountId?: number;
+  financialAccountName?: string;
 };
 
 export type FinanceReportSummary = {
@@ -335,6 +339,8 @@ function normalizeFinanceRow(row: FinanceReportSourceRow): FinanceReportRow {
     isAutomatic: origin !== "manual",
     linkedLoanId: links.linkedLoanId,
     linkedInstallmentId: links.linkedInstallmentId,
+    financialAccountId: row.financialAccountId,
+    financialAccountName: row.financialAccountName,
   };
 }
 
@@ -948,6 +954,8 @@ export function buildFinanceReportCsv(rows: FinanceReportRow[]) {
       "origem",
       "categoria_id",
       "categoria",
+      "conta_id",
+      "conta",
       "automatico",
       "emprestimo_id",
       "parcela_id",
@@ -962,6 +970,8 @@ export function buildFinanceReportCsv(rows: FinanceReportRow[]) {
       row.origin,
       row.categoryId,
       row.categoryName,
+      row.financialAccountId,
+      row.financialAccountName,
       row.isAutomatic ? "true" : "false",
       row.linkedLoanId,
       row.linkedInstallmentId,

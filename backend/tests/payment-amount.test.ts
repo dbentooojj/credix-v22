@@ -1,10 +1,12 @@
 import "express-async-errors";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { after, before, test } from "node:test";
 import type { PrismaClient } from "@prisma/client";
 import cookieParser from "cookie-parser";
 import express from "express";
+import { addDays, DEFAULT_TIME_ZONE, getIsoTodayInTimeZone } from "../src/lib/date-time";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (!testDatabaseUrl || !new URL(testDatabaseUrl).pathname.startsWith("/credix_payment_amount_test_")) {
@@ -20,12 +22,14 @@ let baseUrl: string;
 let cookie: string;
 let loanId: number;
 let installmentId: number;
+let financialAccountId: number;
+const todayIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
 
-async function pay(amount: number) {
+async function pay(amount: number, idempotencyKey = randomUUID()) {
   return fetch(`${baseUrl}/api/payments`, {
     method: "POST",
     headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ loanId, installmentId, amount, paymentDate: "2099-02-01", method: "PIX" }),
+    body: JSON.stringify({ loanId, installmentId, financialAccountId, idempotencyKey, amount, paymentDate: todayIso, method: "PIX" }),
   });
 }
 
@@ -40,6 +44,7 @@ before(async () => {
     data: { name: "Payment test", email: "payment-amount@test.invalid", passwordHash: "test-only" },
   });
   cookie = `${env.COOKIE_NAME}=${signToken({ sub: String(user.id), email: user.email, name: user.name, role: "ADMIN" })}`;
+  financialAccountId = (await prisma.financialAccount.findFirstOrThrow({ where: { ownerUserId: user.id, isOriginal: true } })).id;
   const client = await prisma.client.create({ data: { ownerUserId: user.id, name: "Client", phone: "11999999999" } });
   const loan = await prisma.loan.create({
     data: {
@@ -75,11 +80,11 @@ after(async () => {
   await prisma?.$disconnect();
 });
 
-test("recusa valores divergentes sem criar pagamento ou receita", async () => {
-  for (const amount of [0.01, 100, 100.001, 100.02]) {
+test("recusa valores acima do saldo e precisão inválida", async () => {
+  for (const amount of [100.001, 100.02]) {
     const response = await pay(amount);
     assert.equal(response.status, 400);
-    assert.match((await response.json() as { message: string }).message, /valor integral da parcela/);
+    await response.json();
     assert.equal(await prisma.payment.count(), 0);
     assert.equal(await prisma.financeTransaction.count(), 0);
     const installment = await prisma.installment.findUniqueOrThrow({ where: { id: installmentId } });
@@ -88,19 +93,43 @@ test("recusa valores divergentes sem criar pagamento ou receita", async () => {
   }
 });
 
-test("aceita o valor exato e registra pagamento, parcela e receita", async () => {
-  const response = await pay(100.01);
-  assert.equal(response.status, 201);
-  const payment = await prisma.payment.findUniqueOrThrow({ where: { installmentId } });
-  assert.equal(payment.amount.toString(), "100.01");
-  const installment = await prisma.installment.findUniqueOrThrow({ where: { id: installmentId } });
-  assert.equal(installment.status, "PAGO");
-  assert.equal(await prisma.financeTransaction.count({ where: { ownerUserId: payment.ownerUserId } }), 1);
+test("recusa pagamento com data futura", async () => {
+  const response = await fetch(`${baseUrl}/api/payments`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({
+      loanId,
+      installmentId,
+      financialAccountId,
+      amount: 10,
+      paymentDate: addDays(todayIso, 2),
+      method: "PIX",
+    }),
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).message, "A data do pagamento não pode ser futura.");
+  assert.equal(await prisma.payment.count(), 0);
+  assert.equal(await prisma.financeTransaction.count(), 0);
 });
 
-test("nao altera pagamento ja registrado com valor divergente", async () => {
+test("aceita pagamento parcial e idempotência", async () => {
+  const key = randomUUID();
+  const response = await pay(40, key);
+  assert.equal(response.status, 201);
+  assert.equal((await pay(40, key)).status, 201);
+  const payment = await prisma.payment.findFirstOrThrow({ where: { installmentId } });
+  assert.equal(payment.amount.toString(), "40");
+  const installment = await prisma.installment.findUniqueOrThrow({ where: { id: installmentId } });
+  assert.equal(installment.status, "PENDENTE");
+  assert.equal(await prisma.financeTransaction.count({ where: { ownerUserId: payment.ownerUserId } }), 1);
+  assert.equal(await prisma.payment.count({ where: { installmentId } }), 1);
+});
+
+test("completa a parcela e recusa pagamento excedente", async () => {
+  assert.equal((await pay(60.01)).status, 201);
+  assert.equal((await prisma.installment.findUniqueOrThrow({ where: { id: installmentId } })).status, "PAGO");
+  assert.equal(await prisma.payment.count({ where: { installmentId } }), 2);
+  assert.equal(await prisma.financeTransaction.count(), 2);
   assert.equal((await pay(1)).status, 400);
-  const payment = await prisma.payment.findUniqueOrThrow({ where: { installmentId } });
-  assert.equal(payment.amount.toString(), "100.01");
-  assert.equal(await prisma.financeTransaction.count(), 1);
 });

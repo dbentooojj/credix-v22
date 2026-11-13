@@ -16,6 +16,7 @@ import {
 import { formatCurrencyInput, parseCurrencyInput } from "../../utils/currencyInput";
 import { useToast } from "./ToastProvider";
 import { getTodayIsoInAppTimeZone } from "../../utils/dateOnlyStatus";
+import { FinancialAccountSelect, useFinancialAccounts } from "./FinancialAccountSelect";
 
 const cashAdjustmentInputClass = `${modalInputClass} min-h-[40px] py-2`;
 
@@ -31,6 +32,9 @@ const CashAdjustmentModalContext = createContext<CashAdjustmentModalContextValue
 
 export function CashAdjustmentModalProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
+  const { accounts, refresh: refreshAccounts } = useFinancialAccounts();
+  const [financialAccountId, setFinancialAccountId] = useState<number | null>(null);
+  const [description, setDescription] = useState("");
   const [open, setOpen] = useState(false);
   const [cashType, setCashType] = useState<"income" | "expense">("income");
   const [cashAmount, setCashAmount] = useState("");
@@ -40,6 +44,8 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
   const [onSuccess, setOnSuccess] = useState<(() => void) | null>(null);
 
   function resetForm() {
+    setFinancialAccountId(null);
+    setDescription("");
     setCashType("income");
     setCashAmount("");
     setCashDate(getTodayIsoInAppTimeZone());
@@ -50,6 +56,7 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
     resetForm();
     setOnSuccess(() => options?.onSuccess ?? null);
     setOpen(true);
+    void refreshAccounts();
   }
 
   function closeCashAdjustmentModal() {
@@ -67,6 +74,10 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
       setCashError("Informe uma data válida até hoje.");
       return;
     }
+    if (!financialAccountId || description.trim().length < 3) {
+      setCashError("Selecione uma conta e informe a justificativa.");
+      return;
+    }
 
     setCashSaving(true);
     setCashError(null);
@@ -78,6 +89,8 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
         credentials: "include",
         body: JSON.stringify({
           type: cashType,
+          financialAccountId,
+          description: description.trim(),
           amount: parsedAmount,
           date: cashDate,
         }),
@@ -144,6 +157,8 @@ export function CashAdjustmentModalProvider({ children }: { children: ReactNode 
         title="Alterar caixa"
       >
         <div className="grid grid-cols-1 gap-4">
+          <FinancialAccountSelect accounts={accounts} value={financialAccountId} onChange={setFinancialAccountId} />
+          <ModalField label="Justificativa"><input className={cashAdjustmentInputClass} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={300} placeholder="Motivo do ajuste" /></ModalField>
           <ModalField label="Valor">
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-sm font-semibold text-slate-400">

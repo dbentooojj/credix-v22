@@ -896,9 +896,18 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
       });
 
       if (row.status === InstallmentStatus.PAGO && row.paymentDate) {
-        await tx.payment.upsert({
-          where: { installmentId: row.id },
-          create: {
+        const existingPayment = await tx.payment.findFirst({ where: { installmentId: row.id, ownerUserId } });
+        if (existingPayment) {
+          await tx.payment.update({ where: { id: existingPayment.id }, data: {
+            ownerUserId,
+            loanId: row.loanId,
+            amount: row.amount,
+            paymentDate: row.paymentDate,
+            method: row.paymentMethod ?? row.fallbackLoanMethod ?? PaymentMethod.PIX,
+            notes: row.notes,
+          } });
+        } else {
+          await tx.payment.create({ data: {
             ownerUserId,
             installmentId: row.id,
             loanId: row.loanId,
@@ -906,16 +915,8 @@ export async function replaceTableData(tableName: TableName, rawRows: unknown[],
             paymentDate: row.paymentDate,
             method: row.paymentMethod ?? row.fallbackLoanMethod ?? PaymentMethod.PIX,
             notes: row.notes,
-          },
-          update: {
-            ownerUserId,
-            loanId: row.loanId,
-            amount: row.amount,
-            paymentDate: row.paymentDate,
-            method: row.paymentMethod ?? row.fallbackLoanMethod ?? PaymentMethod.PIX,
-            notes: row.notes,
-          },
-        });
+          } });
+        }
 
         await upsertInstallmentIncomeTransaction(tx, {
           ownerUserId,

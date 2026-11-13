@@ -9,11 +9,12 @@ import {
   deleteInstallmentIncomeTransaction,
   upsertInstallmentIncomeTransaction,
 } from "../lib/installment-income-transaction";
-import { isDateBeforeTodayInTimeZone } from "../lib/date-time";
+import { DEFAULT_TIME_ZONE, getIsoTodayInTimeZone, isDateBeforeTodayInTimeZone } from "../lib/date-time";
 import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { createPaymentSchema } from "../schemas/payments.schemas";
+import { assertAvailableBalance, lockFinancialOwner, requireActiveAccount } from "../lib/financial-accounts";
 
 const router = Router();
 
@@ -142,9 +143,23 @@ router.post("/", async (req, res) => {
   }
 
   const payload = createPaymentSchema.parse(req.body);
+  if (payload.paymentDate > getIsoTodayInTimeZone(DEFAULT_TIME_ZONE)) {
+    throw new AppError("A data do pagamento não pode ser futura.", 400);
+  }
   const paymentDate = toDateOnly(payload.paymentDate);
 
   const persistPaymentInTransaction = () => prisma.$transaction(async (tx) => {
+    await lockFinancialOwner(tx, userId);
+    if (payload.idempotencyKey) {
+      const repeated = await tx.payment.findUnique({ where: { requestKey: payload.idempotencyKey } });
+      if (repeated) {
+        if (repeated.ownerUserId !== userId || repeated.loanId !== payload.loanId || repeated.installmentId !== (payload.installmentId ?? null) || Number(repeated.amount) !== payload.amount || repeated.financialAccountId !== payload.financialAccountId || repeated.paymentDate.toISOString().slice(0, 10) !== paymentDate.toISOString().slice(0, 10) || repeated.method !== payload.method) throw new AppError("Chave de pagamento já utilizada.", 409);
+        return repeated;
+      }
+      const oldReceipt = await tx.financeTransaction.findUnique({ where: { requestKey: payload.idempotencyKey } });
+      if (oldReceipt) throw new AppError("Pagamento desta chave já foi estornado.", 409);
+    }
+    await requireActiveAccount(tx, userId, payload.financialAccountId);
     const loan = await tx.loan.findFirst({
       where: {
         id: payload.loanId,
@@ -156,6 +171,7 @@ router.post("/", async (req, res) => {
     }
 
     if (payload.installmentId) {
+      const existingPayments = await tx.payment.findMany({ where: { installmentId: payload.installmentId, ownerUserId: userId } });
       const installment = await tx.installment.findFirst({
         where: {
           id: payload.installmentId,
@@ -166,35 +182,18 @@ router.post("/", async (req, res) => {
       if (!installment || installment.loanId !== payload.loanId) {
         throw new AppError("Parcela nao encontrada para este emprestimo", 404);
       }
-      if (!new Prisma.Decimal(payload.amount).equals(installment.amount)) {
-        throw new AppError("O valor pago deve ser igual ao valor integral da parcela", 400);
-      }
+      const paidCents = existingPayments.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
+      const dueCents = Math.round(Number(installment.amount) * 100);
+      const incomingCents = Math.round(payload.amount * 100);
+      if (incomingCents <= 0 || incomingCents > dueCents - paidCents) throw new AppError("Valor acima do saldo restante da parcela.", 400);
+      if (incomingCents < dueCents - paidCents && !payload.idempotencyKey) throw new AppError("Informe a chave de idempotência para pagamento parcial.", 400);
     }
 
-    const payment = payload.installmentId
-      ? await tx.payment.upsert({
-          where: { installmentId: payload.installmentId },
-          create: {
-            ownerUserId: userId,
-            loanId: payload.loanId,
-            installmentId: payload.installmentId,
-            amount: payload.amount,
-            paymentDate,
-            method: payload.method as PaymentMethod,
-            notes: payload.notes?.trim() || null,
-          },
-          update: {
-            ownerUserId: userId,
-            loanId: payload.loanId,
-            amount: payload.amount,
-            paymentDate,
-            method: payload.method as PaymentMethod,
-            notes: payload.notes?.trim() || null,
-          },
-        })
-      : await tx.payment.create({
+    const payment = await tx.payment.create({
           data: {
             ownerUserId: userId,
+            financialAccountId: payload.financialAccountId,
+            requestKey: payload.idempotencyKey,
             loanId: payload.loanId,
             installmentId: payload.installmentId,
             amount: payload.amount,
@@ -205,14 +204,18 @@ router.post("/", async (req, res) => {
         });
 
     if (payload.installmentId) {
+      const installment = await tx.installment.findUniqueOrThrow({ where: { id: payload.installmentId } });
+      const payments = await tx.payment.findMany({ where: { installmentId: payload.installmentId, ownerUserId: userId } });
+      const totalPaidCents = payments.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
+      const fullyPaid = totalPaidCents >= Math.round(Number(installment.amount) * 100);
       await tx.installment.updateMany({
         where: {
           id: payload.installmentId,
           ownerUserId: userId,
         },
         data: {
-          status: InstallmentStatus.PAGO,
-          paymentDate,
+          status: fullyPaid ? InstallmentStatus.PAGO : (isDateBeforeTodayInTimeZone(installment.dueDate) ? InstallmentStatus.ATRASADO : InstallmentStatus.PENDENTE),
+          paymentDate: fullyPaid ? paymentDate : null,
           paymentMethod: payload.method as PaymentMethod,
           notes: payload.notes?.trim() || null,
         },
@@ -220,7 +223,10 @@ router.post("/", async (req, res) => {
 
       await upsertInstallmentIncomeTransaction(tx, {
         ownerUserId: userId,
+        financialAccountId: payload.financialAccountId,
         installmentId: payload.installmentId,
+        paymentId: payment.id,
+        requestKey: payload.idempotencyKey,
         loanId: payload.loanId,
         amount: payload.amount,
         date: paymentDate,
@@ -263,6 +269,7 @@ router.post("/installments/:installmentId/revert", async (req, res) => {
   const installmentId = readInstallmentId(req.params.installmentId);
 
   const result = await prisma.$transaction(async (tx) => {
+    await lockFinancialOwner(tx, userId);
     const installment = await tx.installment.findFirst({
       where: {
         id: installmentId,
@@ -278,6 +285,13 @@ router.post("/installments/:installmentId/revert", async (req, res) => {
     if (!installment) {
       throw new AppError("Parcela nao encontrada", 404);
     }
+
+    const paymentsToRevert = await tx.payment.findMany({ where: { ownerUserId: userId, installmentId } });
+    const byAccount = new Map<number, number>();
+    for (const payment of paymentsToRevert) {
+      if (payment.financialAccountId) byAccount.set(payment.financialAccountId, (byAccount.get(payment.financialAccountId) ?? 0) + Number(payment.amount));
+    }
+    for (const [accountId, amount] of byAccount) await assertAvailableBalance(tx, userId, accountId, amount);
 
     await tx.payment.deleteMany({
       where: {

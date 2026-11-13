@@ -31,6 +31,8 @@ import {
 import { Bar, Line } from 'react-chartjs-2';
 
 import { useCashAdjustmentModal } from '../../../components/CashAdjustmentModalProvider';
+import { FinancialAccountSelect, findCashAccountId, useFinancialAccounts } from '../../../components/FinancialAccountSelect';
+import { FinancialAccountsPanel, FinancialStatementPanel } from '../../../components/FinancialAccountsPanel';
 import {
   ModalBase,
   ModalBtnGhost,
@@ -41,6 +43,7 @@ import {
 import { PageHeader } from '../../../components/PageHeader';
 import { useToast } from '../../../components/ToastProvider';
 import { AppSelect } from '../../../components/AppSelect';
+import { getTodayIsoInAppTimeZone } from '../../../../utils/dateOnlyStatus';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip);
 
@@ -195,11 +198,7 @@ function InfoHint({ text }: { text: string }) {
 }
 
 function todayInputValue() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getTodayIsoInAppTimeZone();
 }
 
 function MetricCard({
@@ -465,10 +464,20 @@ export default function CarteiraDashboardClient() {
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [overduePage, setOverduePage] = useState(1);
   const [paymentItem, setPaymentItem] = useState<QueueItem | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentKey, setPaymentKey] = useState("");
+  const { accounts: financialAccounts, refresh: refreshFinancialAccounts } = useFinancialAccounts();
+  const [financialAccountId, setFinancialAccountId] = useState<number | null>(null);
   const [paymentDate, setPaymentDate] = useState(todayInputValue);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+  const [financialStatementVersion, setFinancialStatementVersion] = useState(0);
+
+  useEffect(() => {
+    if (!paymentItem || paymentMethod !== 'DINHEIRO' || financialAccountId !== null) return;
+    setFinancialAccountId(findCashAccountId(financialAccounts));
+  }, [financialAccountId, financialAccounts, paymentItem, paymentMethod]);
 
   useEffect(() => {
     let active = true;
@@ -720,6 +729,10 @@ export default function CarteiraDashboardClient() {
   }
 
   function openPaymentModal(item: QueueItem) {
+    setPaymentKey(crypto.randomUUID());
+    setPaymentAmount(String(item.amount));
+    setFinancialAccountId(null);
+    void refreshFinancialAccounts();
     setPaymentItem(item);
     setPaymentDate(todayInputValue());
     setPaymentMethod((['PIX', 'DINHEIRO', 'TRANSFERENCIA', 'CARTAO'].includes(item.paymentMethod)
@@ -735,8 +748,12 @@ export default function CarteiraDashboardClient() {
   }
 
   async function handleMarkPaid() {
-    if (!paymentItem || !paymentDate) {
-      setPaymentError('Informe a data do recebimento.');
+    if (!paymentItem || !paymentDate || !financialAccountId || Number(paymentAmount) <= 0) {
+      setPaymentError('Informe o valor, a data e a conta de destino.');
+      return;
+    }
+    if (paymentDate > todayInputValue()) {
+      setPaymentError('A data do pagamento não pode ser futura.');
       return;
     }
 
@@ -750,8 +767,10 @@ export default function CarteiraDashboardClient() {
         credentials: 'include',
         body: JSON.stringify({
           loanId: paymentItem.loanId,
+          financialAccountId,
           installmentId: paymentItem.installmentId,
-          amount: paymentItem.amount,
+          amount: Number(paymentAmount),
+          idempotencyKey: paymentKey,
           paymentDate,
           method: paymentMethod,
           notes: 'Recebimento registrado pela Carteira',
@@ -815,7 +834,7 @@ export default function CarteiraDashboardClient() {
               <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
                 <Landmark className="h-4 w-4" />
               </span>
-              Saldo em caixa
+              Saldo disponível
             </div>
             <p className={cn(
               'mt-4 break-words text-4xl font-bold tracking-[-0.04em] sm:text-5xl',
@@ -849,6 +868,8 @@ export default function CarteiraDashboardClient() {
           </div>
         </div>
       </section>
+
+      <FinancialAccountsPanel key={kpis.cashBalance} onMovementsChanged={() => setFinancialStatementVersion((current) => current + 1)} />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -1085,6 +1106,8 @@ export default function CarteiraDashboardClient() {
         />
       </section>
 
+      <FinancialStatementPanel key={`${kpis.cashBalance}-${financialStatementVersion}`} />
+
       <ModalBase
         footer={(
           <>
@@ -1113,15 +1136,21 @@ export default function CarteiraDashboardClient() {
             </div>
 
             <ModalField label="Data do recebimento">
-              <input className={modalInputClass} disabled={paymentSaving} onChange={(event) => setPaymentDate(event.target.value)} type="date" value={paymentDate} />
+              <input className={modalInputClass} disabled={paymentSaving} max={todayInputValue()} onChange={(event) => setPaymentDate(event.target.value)} type="date" value={paymentDate} />
             </ModalField>
+            <ModalField label="Valor recebido (R$)"><input className={modalInputClass} type="number" min="0.01" step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></ModalField>
+            <FinancialAccountSelect accounts={financialAccounts} value={financialAccountId} onChange={setFinancialAccountId} label="Conta de destino" />
 
             <ModalField label="Forma de pagamento">
-              <select className={modalInputClass} disabled={paymentSaving} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)} value={paymentMethod}>
+              <select className={modalInputClass} disabled={paymentSaving} onChange={(event) => {
+                const method = event.target.value as PaymentMethod;
+                setPaymentMethod(method);
+                const cashAccountId = method === 'DINHEIRO' ? findCashAccountId(financialAccounts) : null;
+                if (cashAccountId !== null) setFinancialAccountId(cashAccountId);
+              }} value={paymentMethod}>
                 <option value="PIX">PIX</option>
                 <option value="DINHEIRO">Dinheiro</option>
                 <option value="TRANSFERENCIA">Transferência</option>
-                <option value="CARTAO">Cartão</option>
               </select>
             </ModalField>
 

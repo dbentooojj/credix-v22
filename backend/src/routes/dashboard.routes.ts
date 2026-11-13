@@ -36,6 +36,7 @@ import { requireAuthApi } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { buildPortfolioCapitalEvolution, type PortfolioCapitalMovement } from "../lib/portfolio-capital-evolution";
 import { cashAdjustmentCreateSchema } from "../schemas/cash-adjustment.schemas";
+import { assertAvailableBalance, INTERNAL_TRANSFER_CATEGORY, lockFinancialOwner, requireActiveAccount, TRANSFER_REVERSAL_CATEGORY } from "../lib/financial-accounts";
 
 const router = Router();
 
@@ -165,7 +166,7 @@ function isFinanceStorageUnavailableError(error: unknown): boolean {
 
 async function readCompletedFinanceTransactions(ownerUserId: number) {
   try {
-    return await prisma.financeTransaction.findMany({
+    const rows = await prisma.financeTransaction.findMany({
       where: {
         ownerUserId,
         status: FinanceTransactionStatus.COMPLETED,
@@ -177,9 +178,12 @@ async function readCompletedFinanceTransactions(ownerUserId: number) {
         date: true,
         category: true,
         description: true,
+        reversalOfId: true,
       },
       orderBy: [{ date: "asc" }, { id: "asc" }],
     });
+    const reversedIds = new Set(rows.map((row) => row.reversalOfId).filter((id): id is number => id !== null));
+    return rows.filter((row) => row.reversalOfId === null && !reversedIds.has(row.id));
   } catch (error) {
     if (isFinanceStorageUnavailableError(error)) {
       return [];
@@ -580,7 +584,7 @@ router.get("/", async (req, res) => {
     // O empréstimo é a fonte de verdade do desembolso. Lançamentos financeiros
     // antigos podem estar ausentes ou duplicados, então o caixa é calculado a
     // partir dos contratos e esses espelhos contábeis são ignorados aqui.
-    if (transaction.category === LOAN_DISBURSEMENT_CATEGORY) {
+    if (transaction.category === LOAN_DISBURSEMENT_CATEGORY || transaction.category === INTERNAL_TRANSFER_CATEGORY || transaction.category === TRANSFER_REVERSAL_CATEGORY) {
       return;
     }
 
@@ -646,8 +650,8 @@ router.get("/", async (req, res) => {
         monthKey: paymentMonthKey,
       });
 
-      const expectedDescription = buildInstallmentIncomeDescription(payment.installmentId, payment.loanId);
-      processedInstallmentIncomeDescriptions.add(expectedDescription);
+      processedInstallmentIncomeDescriptions.add(buildInstallmentIncomeDescription(payment.installmentId, payment.loanId));
+      processedInstallmentIncomeDescriptions.add(buildInstallmentIncomeDescription(payment.installmentId, payment.loanId, payment.id));
 
       const installment = installmentById.get(payment.installmentId);
       if (!installment) {
@@ -1704,16 +1708,22 @@ router.post("/cash-adjustments", async (req, res) => {
 
   let created;
   try {
-    created = await prisma.financeTransaction.create({
+    created = await prisma.$transaction(async (tx) => {
+      await lockFinancialOwner(tx, userId);
+      await requireActiveAccount(tx, userId, payload.financialAccountId);
+      if (adjustmentType === FinanceTransactionType.EXPENSE) await assertAvailableBalance(tx, userId, payload.financialAccountId, payload.amount);
+      return tx.financeTransaction.create({
       data: {
         ownerUserId: userId,
+        financialAccountId: payload.financialAccountId,
         type: adjustmentType,
         amount: payload.amount,
         category: CASH_ADJUSTMENT_CATEGORY,
         date: parseDateOnly(dateIso),
-        description: payload.description?.trim() || "Ajuste manual de caixa",
+        description: payload.description.trim(),
         status: FinanceTransactionStatus.COMPLETED,
       },
+      });
     });
   } catch (error) {
     if (isFinanceStorageUnavailableError(error)) {

@@ -5,6 +5,7 @@ import { after, before, test } from "node:test";
 import type { PrismaClient } from "@prisma/client";
 import cookieParser from "cookie-parser";
 import express from "express";
+import { DEFAULT_TIME_ZONE, getIsoTodayInTimeZone } from "../src/lib/date-time";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (!testDatabaseUrl || !new URL(testDatabaseUrl).pathname.startsWith("/credix_payment_status_test_")) {
@@ -21,6 +22,8 @@ let cookie: string;
 let loanId: number;
 let firstInstallmentId: number;
 let secondInstallmentId: number;
+let financialAccountId: number;
+const todayIso = getIsoTodayInTimeZone(DEFAULT_TIME_ZONE);
 
 async function blockStatusUpdates() {
   await prisma.$executeRawUnsafe(`
@@ -44,7 +47,7 @@ function pay(installmentId: number) {
   return fetch(`${baseUrl}/api/payments`, {
     method: "POST",
     headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ loanId, installmentId, amount: 100, paymentDate: "2099-02-01", method: "PIX" }),
+    body: JSON.stringify({ loanId, installmentId, financialAccountId, amount: 100, paymentDate: todayIso, method: "PIX" }),
   });
 }
 
@@ -71,6 +74,8 @@ before(async () => {
     data: { name: "Payment test", email: "payment-status@test.invalid", passwordHash: "test-only" },
   });
   cookie = `${env.COOKIE_NAME}=${signToken({ sub: String(user.id), email: user.email, name: user.name, role: "ADMIN" })}`;
+  financialAccountId = (await prisma.financialAccount.findFirstOrThrow({ where: { ownerUserId: user.id, isOriginal: true } })).id;
+  await prisma.financeTransaction.create({ data: { ownerUserId: user.id, financialAccountId, type: "INCOME", amount: 200, category: "Ajuste de caixa", date: new Date("2099-01-01"), description: "Capital de teste", status: "COMPLETED" } });
   const client = await prisma.client.create({ data: { ownerUserId: user.id, name: "Client", phone: "11999999999" } });
   const loan = await prisma.loan.create({
     data: {
@@ -111,19 +116,19 @@ test("registro, estorno e exclusao revertem tudo se o status nao puder ser atual
   await blockStatusUpdates();
   assert.equal((await pay(firstInstallmentId)).status, 500);
   assert.equal(await prisma.payment.count(), 0);
-  assert.equal(await prisma.financeTransaction.count(), 0);
+  assert.equal(await prisma.financeTransaction.count({ where: { category: "Recebimento de parcela" } }), 0);
   assert.equal((await prisma.installment.findUniqueOrThrow({ where: { id: firstInstallmentId } })).status, "PENDENTE");
   assert.equal((await prisma.loan.findUniqueOrThrow({ where: { id: loanId } })).status, "EM_DIA");
   await allowStatusUpdates();
 
   assert.equal((await pay(firstInstallmentId)).status, 201);
   assert.equal(await prisma.payment.count(), 1);
-  assert.equal(await prisma.financeTransaction.count(), 1);
+  assert.equal(await prisma.financeTransaction.count({ where: { category: "Recebimento de parcela" } }), 1);
 
   await blockStatusUpdates();
   assert.equal((await revert(firstInstallmentId)).status, 500);
   assert.equal(await prisma.payment.count(), 1);
-  assert.equal(await prisma.financeTransaction.count(), 1);
+  assert.equal(await prisma.financeTransaction.count({ where: { category: "Recebimento de parcela" } }), 1);
   assert.equal((await prisma.installment.findUniqueOrThrow({ where: { id: firstInstallmentId } })).status, "PAGO");
   await allowStatusUpdates();
 

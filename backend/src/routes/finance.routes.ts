@@ -10,6 +10,11 @@ import {
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
+import { INSTALLMENT_PAYMENT_CATEGORY, LOAN_DISBURSEMENT_CATEGORY } from "../lib/installment-income-transaction";
+import { getDateOnlyTodayInTimeZone } from "../lib/date-time";
+import { assertAvailableBalance, FINANCIAL_REVERSAL_CATEGORY, INTERNAL_TRANSFER_CATEGORY, lockFinancialOwner, requireActiveAccount, TRANSFER_REVERSAL_CATEGORY } from "../lib/financial-accounts";
+import { renderFinancialStatementPdf } from "../services/financial-statement-pdf.service";
+import { statementDisplayDescriptions } from "../services/statement-description.service";
 
 const router = Router();
 
@@ -24,8 +29,9 @@ const categoryPayloadFieldsSchema = z.object({
 });
 
 const transactionBaseFieldsSchema = z.object({
+  financialAccountId: z.number().int().positive(),
   type: transactionTypeSchema,
-  amount: z.number().positive(),
+  amount: z.number().positive().refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, "Use no máximo duas casas decimais."),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   description: z.string().trim().min(1).max(300),
   notes: z.string().trim().max(1000).optional(),
@@ -59,6 +65,7 @@ const updateTransactionSchema = transactionBaseFieldsSchema
     || payload.description !== undefined
     || payload.notes !== undefined
     || payload.status !== undefined
+    || payload.financialAccountId !== undefined
   );
 }, { message: "Nenhum campo para atualizar." });
 
@@ -98,6 +105,23 @@ const financeCategoryApiSelect = {
 
 const batchCompleteSchema = z.object({
   ids: z.array(z.union([z.number().int().positive(), z.string().trim().min(1)])).min(1).max(500),
+});
+
+const statementDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, "Data inválida.");
+const statementPdfQuerySchema = z.object({
+  startDate: statementDateSchema,
+  endDate: statementDateSchema,
+  accountId: z.coerce.number().int().positive().optional(),
+});
+
+const transactionListQuerySchema = z.object({
+  accountId: z.coerce.number().int().positive().optional(),
+  status: transactionStatusSchema.optional(),
+  page: z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 function toPrismaType(type: "income" | "expense"): FinanceTransactionType {
@@ -223,9 +247,11 @@ function toApiTransaction(row: {
   category: string;
   categoryId: number | null;
   date: Date;
+  createdAt: Date;
   description: string;
   notes?: string | null;
   status: FinanceTransactionStatus;
+  financialAccountId: number;
   categoryRef?: {
     id: number;
     name: string;
@@ -234,7 +260,7 @@ function toApiTransaction(row: {
     active: boolean;
     isPreset: boolean;
   } | null;
-}) {
+}, displayDescription?: string) {
   return {
     id: String(row.id),
     type: toApiType(row.type),
@@ -243,9 +269,12 @@ function toApiTransaction(row: {
     category: row.category,
     categoryMeta: toApiCategory(row.categoryRef),
     date: toDateOnlyIso(row.date),
+    createdAt: row.createdAt.toISOString(),
     description: row.description,
+    ...(displayDescription ? { displayDescription } : {}),
     notes: row.notes || null,
     status: toApiStatus(row.status),
+    financialAccountId: row.financialAccountId,
   };
 }
 
@@ -416,6 +445,51 @@ router.patch("/categories/:id/archive", async (req, res) => {
   return res.json({ data: toApiCategory(updated) });
 });
 
+router.get("/transactions/export.pdf", async (req, res) => {
+  const userId = readUserId(req);
+  if (!Number.isFinite(userId)) return res.status(401).json({ message: "Não autenticado." });
+
+  const query = statementPdfQuerySchema.parse(req.query);
+  if (query.startDate > query.endDate) throw new AppError("A data inicial deve ser anterior à data final.", 400);
+
+  const account = query.accountId
+    ? await prisma.financialAccount.findFirst({ where: { id: query.accountId, ownerUserId: userId }, select: { name: true } })
+    : null;
+  if (query.accountId && !account) throw new AppError("Conta não encontrada.", 404);
+
+  const rows = await prisma.financeTransaction.findMany({
+    where: {
+      ownerUserId: userId,
+      status: FinanceTransactionStatus.COMPLETED,
+      date: { gte: new Date(`${query.startDate}T00:00:00Z`), lte: new Date(`${query.endDate}T00:00:00Z`) },
+      ...(query.accountId ? { financialAccountId: query.accountId } : {}),
+    },
+    include: { financialAccount: { select: { name: true } } },
+    orderBy: [{ date: "desc" }, { id: "desc" }],
+  });
+  if (rows.length === 0) throw new AppError("Nenhuma movimentação concluída no período selecionado.", 404);
+  const displayDescriptions = await statementDisplayDescriptions(prisma, userId, rows);
+
+  const document = renderFinancialStatementPdf({
+    startDate: query.startDate,
+    endDate: query.endDate,
+    accountName: account?.name ?? "Consolidado",
+    issuedAt: new Date(),
+    movements: rows.map((row) => ({
+      date: row.date,
+      createdAt: row.createdAt,
+      description: displayDescriptions.get(row.id) ?? row.description,
+      accountName: row.financialAccount.name,
+      type: toApiType(row.type),
+      amount: Number(row.amount),
+    })),
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="extrato-${query.startDate}-${query.endDate}.pdf"`);
+  document.on("error", (error) => res.destroy(error));
+  document.pipe(res);
+});
+
 router.get("/transactions", async (req, res) => {
   const userId = readUserId(req);
   if (!Number.isFinite(userId)) {
@@ -424,16 +498,40 @@ router.get("/transactions", async (req, res) => {
 
   await ensureFinanceCategoryCatalogForUser(prisma, userId);
 
-  const rows = await prisma.financeTransaction.findMany({
-    where: { ownerUserId: userId },
-    include: {
-      categoryRef: { select: financeCategoryApiSelect },
-    },
-    orderBy: [{ date: "desc" }, { id: "desc" }],
-  });
+  const query = transactionListQuerySchema.parse(req.query);
+  const paginated = query.page !== undefined || query.pageSize !== undefined;
+  const page = query.page ?? 1;
+  const pageSize = query.pageSize ?? 20;
+  const where: Prisma.FinanceTransactionWhereInput = {
+    ownerUserId: userId,
+    ...(query.accountId ? { financialAccountId: query.accountId } : {}),
+    ...(query.status ? { status: toPrismaStatus(query.status) } : {}),
+  };
+
+  const [rows, total] = await Promise.all([
+    prisma.financeTransaction.findMany({
+      where,
+      include: {
+        categoryRef: { select: financeCategoryApiSelect },
+        financialAccount: { select: { name: true } },
+      },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
+      ...(paginated ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
+    }),
+    paginated ? prisma.financeTransaction.count({ where }) : Promise.resolve(0),
+  ]);
+  const displayDescriptions = await statementDisplayDescriptions(prisma, userId, rows);
 
   return res.json({
-    data: rows.map((row) => toApiTransaction(row)),
+    data: rows.map((row) => toApiTransaction(row, displayDescriptions.get(row.id))),
+    ...(paginated ? {
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    } : {}),
   });
 });
 
@@ -444,6 +542,7 @@ router.post("/transactions", async (req, res) => {
   }
 
   const payload = createTransactionSchema.parse(req.body);
+  await prisma.$transaction((tx) => requireActiveAccount(tx, userId, payload.financialAccountId));
   await ensureFinanceCategoryCatalogForUser(prisma, userId);
 
   const parsedInstallmentCount = Math.max(1, Math.trunc(payload.installmentCount ?? 1));
@@ -468,12 +567,17 @@ router.post("/transactions", async (req, res) => {
   }
 
   if (creationMode === "single") {
-    const created = await prisma.financeTransaction.create({
+    const created = await prisma.$transaction(async (tx) => {
+      await lockFinancialOwner(tx, userId);
+      await requireActiveAccount(tx, userId, payload.financialAccountId);
+      if (status === FinanceTransactionStatus.COMPLETED && type === FinanceTransactionType.EXPENSE) await assertAvailableBalance(tx, userId, payload.financialAccountId, payload.amount);
+      return tx.financeTransaction.create({
       include: {
         categoryRef: { select: financeCategoryApiSelect },
       },
       data: {
         ownerUserId: userId,
+        financialAccountId: payload.financialAccountId,
         type,
         amount: payload.amount,
         categoryId: resolvedCategory.id,
@@ -483,6 +587,7 @@ router.post("/transactions", async (req, res) => {
         notes: payload.notes?.trim() || null,
         status,
       },
+      });
     });
 
     return res.status(201).json({
@@ -508,12 +613,16 @@ router.post("/transactions", async (req, res) => {
     const installmentDueDates = resolveInstallmentDueDates(baseDate, installmentCount, payload.dueDates);
 
     const createdIds = await prisma.$transaction(async (tx) => {
+      await lockFinancialOwner(tx, userId);
+      await requireActiveAccount(tx, userId, payload.financialAccountId);
+      if (status === FinanceTransactionStatus.COMPLETED && type === FinanceTransactionType.EXPENSE) await assertAvailableBalance(tx, userId, payload.financialAccountId, installmentAmounts.reduce((a, b) => a + b, 0));
       const ids: number[] = [];
       for (let index = 0; index < installmentCount; index += 1) {
         const created = await tx.financeTransaction.create({
           select: { id: true },
           data: {
             ownerUserId: userId,
+            financialAccountId: payload.financialAccountId,
             type,
             amount: installmentAmounts[index] ?? 0,
             categoryId: resolvedCategory.id,
@@ -547,12 +656,16 @@ router.post("/transactions", async (req, res) => {
 
   const recurringAmount = centsToMoney(toMoneyCents(payload.amount));
   const createdIds = await prisma.$transaction(async (tx) => {
+    await lockFinancialOwner(tx, userId);
+    await requireActiveAccount(tx, userId, payload.financialAccountId);
+    if (status === FinanceTransactionStatus.COMPLETED && type === FinanceTransactionType.EXPENSE) await assertAvailableBalance(tx, userId, payload.financialAccountId, recurringAmount * recurringMonths);
     const ids: number[] = [];
     for (let index = 0; index < recurringMonths; index += 1) {
       const created = await tx.financeTransaction.create({
         select: { id: true },
         data: {
           ownerUserId: userId,
+          financialAccountId: payload.financialAccountId,
           type,
           amount: recurringAmount,
           categoryId: resolvedCategory.id,
@@ -621,7 +734,16 @@ router.post("/transactions/batch-complete", async (req, res) => {
   });
 
   if (updatableIds.length > 0) {
-    await prisma.financeTransaction.updateMany({
+    await prisma.$transaction(async (tx) => {
+      await lockFinancialOwner(tx, userId);
+      const pendingExpenses = await tx.financeTransaction.findMany({ where: { ownerUserId: userId, id: { in: updatableIds }, type: FinanceTransactionType.EXPENSE } });
+      const byAccount = new Map<number, number>();
+      for (const row of pendingExpenses) byAccount.set(row.financialAccountId, (byAccount.get(row.financialAccountId) ?? 0) + Number(row.amount));
+      for (const [accountId, amount] of byAccount) {
+        await requireActiveAccount(tx, userId, accountId);
+        await assertAvailableBalance(tx, userId, accountId, amount);
+      }
+      await tx.financeTransaction.updateMany({
       where: {
         ownerUserId: userId,
         id: { in: updatableIds },
@@ -629,6 +751,7 @@ router.post("/transactions/batch-complete", async (req, res) => {
       data: {
         status: FinanceTransactionStatus.COMPLETED,
       },
+    });
     });
   }
 
@@ -673,6 +796,7 @@ router.patch("/transactions/:id", async (req, res) => {
   if (existing.status === FinanceTransactionStatus.COMPLETED) {
     return res.status(409).json({ message: "Lancamentos confirmados nao podem ser editados." });
   }
+  if (payload.financialAccountId !== undefined) await prisma.$transaction((tx) => requireActiveAccount(tx, userId, payload.financialAccountId));
 
   const nextType = payload.type ? toPrismaType(payload.type) : existing.type;
   let nextCategoryId: number | null | undefined;
@@ -696,21 +820,31 @@ router.patch("/transactions/:id", async (req, res) => {
     throw new AppError("Ao alterar o tipo do lancamento, selecione uma categoria compativel.", 400);
   }
 
-  const updated = await prisma.financeTransaction.update({
-    where: { id: transactionId },
-    include: {
-      categoryRef: { select: financeCategoryApiSelect },
-    },
-    data: {
-      type: payload.type ? nextType : undefined,
-      amount: payload.amount,
-      categoryId: nextCategoryId,
-      category: nextCategoryName,
-      date: payload.date ? parseDateOnly(payload.date) : undefined,
-      description: payload.description,
-      notes: payload.notes !== undefined ? (payload.notes?.trim() || null) : undefined,
-      status: payload.status ? toPrismaStatus(payload.status) : undefined,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    await lockFinancialOwner(tx, userId);
+    const current = await tx.financeTransaction.findFirst({ where: { id: transactionId, ownerUserId: userId } });
+    if (!current || current.status === FinanceTransactionStatus.COMPLETED) throw new AppError("Lançamento indisponível para edição.", 409);
+    const nextAccountId = payload.financialAccountId ?? current.financialAccountId;
+    const nextStatus = payload.status ? toPrismaStatus(payload.status) : current.status;
+    await requireActiveAccount(tx, userId, nextAccountId);
+    if (nextStatus === FinanceTransactionStatus.COMPLETED && nextType === FinanceTransactionType.EXPENSE) {
+      await assertAvailableBalance(tx, userId, nextAccountId, payload.amount ?? Number(current.amount));
+    }
+    return tx.financeTransaction.update({
+      where: { id: transactionId },
+      include: { categoryRef: { select: financeCategoryApiSelect } },
+      data: {
+        type: payload.type ? nextType : undefined,
+        financialAccountId: payload.financialAccountId,
+        amount: payload.amount,
+        categoryId: nextCategoryId,
+        category: nextCategoryName,
+        date: payload.date ? parseDateOnly(payload.date) : undefined,
+        description: payload.description,
+        notes: payload.notes !== undefined ? (payload.notes?.trim() || null) : undefined,
+        status: payload.status ? toPrismaStatus(payload.status) : undefined,
+      },
+    });
   });
 
   return res.json({
@@ -729,14 +863,27 @@ router.delete("/transactions/:id", async (req, res) => {
     return res.status(400).json({ message: "Identificador invalido." });
   }
 
-  const result = await prisma.financeTransaction.deleteMany({
-    where: { id: transactionId, ownerUserId: userId },
+  await prisma.$transaction(async (tx) => {
+    await lockFinancialOwner(tx, userId);
+    const row = await tx.financeTransaction.findFirst({ where: { id: transactionId, ownerUserId: userId } });
+    if (!row) throw new AppError("Transação não encontrada.", 404);
+    if (row.transferId || [INTERNAL_TRANSFER_CATEGORY, TRANSFER_REVERSAL_CATEGORY].includes(row.category)) throw new AppError("Use o estorno de transferência.", 409);
+    if ([INSTALLMENT_PAYMENT_CATEGORY, LOAN_DISBURSEMENT_CATEGORY].includes(row.category)) throw new AppError("Use o estorno do pagamento ou cancelamento do empréstimo.", 409);
+    if (row.reversalOfId) throw new AppError("Estorno não pode ser excluído.", 409);
+    if (row.status !== FinanceTransactionStatus.COMPLETED) {
+      await tx.financeTransaction.delete({ where: { id: row.id } });
+      return;
+    }
+    const prior = await tx.financeTransaction.findUnique({ where: { reversalOfId: row.id } });
+    if (prior) return;
+    if (row.type === FinanceTransactionType.INCOME) await assertAvailableBalance(tx, userId, row.financialAccountId, Number(row.amount));
+    await tx.financeTransaction.create({ data: {
+      ownerUserId: userId, financialAccountId: row.financialAccountId, reversalOfId: row.id,
+      type: row.type === FinanceTransactionType.INCOME ? FinanceTransactionType.EXPENSE : FinanceTransactionType.INCOME,
+      amount: row.amount, category: FINANCIAL_REVERSAL_CATEGORY, date: getDateOnlyTodayInTimeZone(),
+      description: `Estorno do lançamento #${row.id}`, status: FinanceTransactionStatus.COMPLETED,
+    } });
   });
-
-  if (result.count === 0) {
-    return res.status(404).json({ message: "Transacao nao encontrada." });
-  }
-
   return res.status(204).send();
 });
 

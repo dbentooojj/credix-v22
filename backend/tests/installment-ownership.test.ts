@@ -113,8 +113,8 @@ for (const field of ["debtor_id", "client_id", "clientId"]) {
     rows[0].amount = 999; // An earlier valid row must not be partially saved.
     rows[1][field] = clientB;
     const response = await saveRows(rows);
-    assert.equal(response.status, 400);
-    assert.match((await response.json() as { message: string }).message, /mesmo do emprestimo/);
+    assert.equal(response.status, 409);
+    assert.match((await response.json() as { message: string }).message, /sincroniza.*massa/i);
     assert.deepEqual(await readRows(), beforeA);
     assert.deepEqual(await readRows(cookieB), beforeB);
   });
@@ -124,7 +124,7 @@ test("rejeita outro cliente do mesmo usuario", async () => {
   const before = await readRows();
   const rows = structuredClone(before);
   rows[0].debtor_id = otherClientA;
-  assert.equal((await saveRows(rows)).status, 400);
+  assert.equal((await saveRows(rows)).status, 409);
   assert.deepEqual(await readRows(), before);
 });
 
@@ -135,14 +135,14 @@ test("rejeita emprestimo alheio ou inexistente com a mesma resposta", async () =
     const rows = structuredClone(before);
     rows[0].loan_id = loanId;
     const response = await saveRows(rows);
-    assert.equal(response.status, 400);
+    assert.equal(response.status, 409);
     errors.push(await response.json());
     assert.deepEqual(await readRows(), before);
   }
   assert.deepEqual(errors[0], errors[1]);
 });
 
-test("aceita cliente correto e o deriva do emprestimo quando omitido", async () => {
+test("bloqueia a escrita em massa mesmo com cliente correto", async () => {
   for (const field of ["debtor_id", "client_id", "clientId", null]) {
     const rows = await readRows();
     for (const row of rows) {
@@ -150,7 +150,7 @@ test("aceita cliente correto e o deriva do emprestimo quando omitido", async () 
       if (field) row[field] = String(clientA);
     }
     const response = await saveRows(rows);
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 409);
     assert.ok((await readRows()).every((row) => row.debtor_id === clientA));
   }
 });

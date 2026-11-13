@@ -1,10 +1,11 @@
-import { ClientStatus, InstallmentStatus, Prisma } from "@prisma/client";
+import { ClientStatus, InstallmentStatus, LoanStatus, Prisma } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { deleteLoanDisbursementTransaction } from "../lib/installment-income-transaction";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
+import { lockFinancialOwner } from "../lib/financial-accounts";
 
 const router = Router();
 router.use(requireAuthApi);
@@ -113,10 +114,13 @@ router.delete("/loans/:id", async (req, res) => {
   const userId = ownerId(req);
   const id = recordId(req.params.id);
   await prisma.$transaction(async (tx) => {
+    await lockFinancialOwner(tx, userId);
     const loan = await tx.$queryRaw<Array<{ id: number }>>`
       SELECT id FROM "Loan" WHERE id = ${id} AND "ownerUserId" = ${userId} FOR UPDATE
     `;
     if (loan.length === 0) throw new AppError("Emprestimo nao encontrado.", 404);
+    const loanRecord = await tx.loan.findFirstOrThrow({ where: { id, ownerUserId: userId }, select: { status: true } });
+    if (loanRecord.status !== LoanStatus.PENDENTE && req.body?.fundsReturned !== true) throw new AppError("Confirme a devolução efetiva do capital antes de cancelar o empréstimo.", 409);
     const [paidInstallment, payment] = await Promise.all([
       tx.installment.findFirst({ where: { loanId: id, status: InstallmentStatus.PAGO }, select: { id: true } }),
       tx.payment.findFirst({ where: { loanId: id }, select: { id: true } }),

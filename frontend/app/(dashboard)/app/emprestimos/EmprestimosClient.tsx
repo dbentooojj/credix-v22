@@ -24,6 +24,7 @@ import { ModalBase, ModalBtnGhost, ModalBtnPrimary, useModalFocus } from "../../
 import { MobileDataCard, MobileDataCardActions, MobileDataCardRow } from "../../../components/MobileDataCard";
 import { PageHeader } from "../../../components/PageHeader";
 import { useToast } from "../../../components/ToastProvider";
+import { FinancialAccountSelect, useFinancialAccounts } from "../../../components/FinancialAccountSelect";
 import { useGlobalScrollLock } from "../../../components/useGlobalScrollLock";
 import { fetchDataArray, readJsonOrThrow } from "../../../../utils/apiClient";
 import { calculateLoanPreview, type LoanPaymentFrequency } from "../../../../utils/loanCalculator";
@@ -441,6 +442,7 @@ export function EmprestimosClient() {
   const [selectedLoanId, setSelectedLoanId] = useState<string | number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingLoan, setDeletingLoan] = useState<EnrichedLoan | null>(null);
+  const [fundsReturned, setFundsReturned] = useState(false);
   const [showLoanCreateConfirm, setShowLoanCreateConfirm] = useState(false);
   const [simulationActionLoadingId, setSimulationActionLoadingId] = useState<string | null>(null);
   const [simulationConfirmAction, setSimulationConfirmAction] = useState<{
@@ -448,6 +450,8 @@ export function EmprestimosClient() {
     simulation: LoanSimulation;
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  const { accounts: financialAccounts, refresh: refreshFinancialAccounts } = useFinancialAccounts();
+  const [financialAccountId, setFinancialAccountId] = useState<number | null>(null);
 
   // Form fields
   const [formClientId, setFormClientId] = useState("");
@@ -898,6 +902,8 @@ export function EmprestimosClient() {
   }
 
   function openLoanModal() {
+    setFinancialAccountId(null);
+    void refreshFinancialAccounts();
     resetForm();
     setSelectedLoanId(null);
     setLoanModalMode("loan");
@@ -910,6 +916,13 @@ export function EmprestimosClient() {
     setLoanModalMode("simulation");
     setShowLoanModal(true);
   }
+
+  useEffect(() => {
+    if (simulationConfirmAction?.type === "approve") {
+      setFinancialAccountId(null);
+      void refreshFinancialAccounts();
+    }
+  }, [simulationConfirmAction?.simulation.id]);
 
   function openViewModal(loan: EnrichedLoan) {
     setSelectedLoanId(loan.id);
@@ -924,6 +937,7 @@ export function EmprestimosClient() {
   }
 
   function openDeleteModal(loan: EnrichedLoan) {
+    setFundsReturned(false);
     if (loan.hasPaidInstallments) {
       const message = "Não é permitido excluir empréstimo com parcela paga.";
       setError(message);
@@ -1010,6 +1024,7 @@ export function EmprestimosClient() {
 
   async function handleConfirmSimulationAction() {
     if (!simulationConfirmAction) return;
+    if (simulationConfirmAction.type === "approve" && !financialAccountId) { toast.error("Selecione a conta de origem."); return; }
 
     const { simulation, type } = simulationConfirmAction;
     const simulationId = String(simulation.id || "").trim();
@@ -1019,7 +1034,7 @@ export function EmprestimosClient() {
     try {
       const response = await fetch(
         `/api/loan-simulations/${simulationId}/${type === "approve" ? "approve" : "cancel"}`,
-        { method: "POST" },
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ financialAccountId }) },
       );
 
       const actionPayload = await readJsonOrThrow<{
@@ -1068,6 +1083,7 @@ export function EmprestimosClient() {
 
   async function handleSaveLoan() {
     if (!canSubmitLoan) return;
+    if (!financialAccountId) { toast.error("Selecione a conta de origem."); return; }
     const whatsappWindow = window.open("about:blank", "_blank");
     setSaving(true);
     try {
@@ -1075,7 +1091,7 @@ export function EmprestimosClient() {
       const approveResponse = await fetch(`/api/loan-simulations/${simulation.id}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notifyWhatsApp: true }),
+        body: JSON.stringify({ notifyWhatsApp: true, financialAccountId }),
       });
       const approvePayload = await readJsonOrThrow<{ data?: { loanId?: string | number | null; status?: string; whatsappUrl?: string } }>(
         approveResponse,
@@ -1193,7 +1209,7 @@ export function EmprestimosClient() {
 
     setSaving(true);
     try {
-      const putResponse = await fetch(`/api/records/loans/${deletingLoan.id}`, { method: "DELETE" });
+      const putResponse = await fetch(`/api/records/loans/${deletingLoan.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fundsReturned }) });
 
       await readJsonOrThrow(putResponse, "Não foi possível excluir o empréstimo.");
       setShowDeleteModal(false);
@@ -2767,6 +2783,8 @@ export function EmprestimosClient() {
             </>
           )}
         >
+          <FinancialAccountSelect accounts={financialAccounts} value={financialAccountId} onChange={setFinancialAccountId} label="Conta de origem" />
+          {financialAccountId && <p className="mt-2 text-sm text-slate-500">Saldo após empréstimo: {((financialAccounts.find((account) => account.id === financialAccountId)?.balance ?? 0) - parseCurrencyInput(formPrincipal)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>}
           <p className="text-sm text-slate-500">
             {hasExistingPendingSchedule
               ? "Novo empréstimo: a agenda atualizada será aberta no WhatsApp."
@@ -2805,6 +2823,7 @@ export function EmprestimosClient() {
             </>
           )}
         >
+          {simulationConfirmAction.type === "approve" && <FinancialAccountSelect accounts={financialAccounts} value={financialAccountId} onChange={setFinancialAccountId} label="Conta de origem" />}
           <p className="text-sm text-slate-400">
             {simulationConfirmAction.type === "approve"
               ? approvalWillOpenWhatsApp
@@ -2828,12 +2847,13 @@ export function EmprestimosClient() {
           }}
         >
           <div ref={deleteModalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="delete-loan-dialog-title" className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {deletingLoan?.status !== "PENDENTE" && <label className="mb-3 flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={fundsReturned} onChange={(event) => setFundsReturned(event.target.checked)} />Confirmo que o capital foi devolvido à conta de origem.</label>}
             <h2 id="delete-loan-dialog-title" className="text-lg font-bold text-slate-100">Confirmar exclusão</h2>
             <p className="mt-1 text-sm text-slate-400">Deseja excluir o empréstimo #{deletingLoan?.id}?</p>
             <p className="mt-3 text-sm text-slate-400">Esta ação não pode ser desfeita. O empréstimo e suas parcelas serão removidos permanentemente.</p>
             <div className="mt-5 flex justify-end gap-3">
               <button onClick={() => setShowDeleteModal(false)} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-5 text-sm font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-50">Cancelar</button>
-              <button onClick={handleDeleteLoan} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">{saving ? "Excluindo..." : "Excluir empréstimo"}</button>
+              <button onClick={handleDeleteLoan} disabled={saving || (deletingLoan?.status !== "PENDENTE" && !fundsReturned)} className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">{saving ? "Excluindo..." : "Excluir empréstimo"}</button>
             </div>
           </div>
         </div>

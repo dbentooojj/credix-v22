@@ -16,6 +16,7 @@ import {
   type LoansReportFilters,
 } from "../lib/reports";
 import { prisma } from "../lib/prisma";
+import { INTERNAL_TRANSFER_CATEGORY, TRANSFER_REVERSAL_CATEGORY } from "../lib/financial-accounts";
 import { requireAuthApi } from "../middleware/auth";
 import { AppError } from "../middleware/error-handler";
 
@@ -249,9 +250,11 @@ router.get("/finance", async (req, res) => {
 
   const [transactions, categories, loans, installments] = await Promise.all([
     prisma.financeTransaction.findMany({
-      where: { ownerUserId: userId },
+      where: { ownerUserId: userId, category: { notIn: [INTERNAL_TRANSFER_CATEGORY, TRANSFER_REVERSAL_CATEGORY] }, reversalOfId: null, reversedBy: null },
       select: {
         id: true,
+        financialAccountId: true,
+        financialAccount: { select: { name: true } },
         type: true,
         amount: true,
         category: true,
@@ -293,6 +296,8 @@ router.get("/finance", async (req, res) => {
   const report = buildFinanceReport(
     scopedTransactions.map((row) => ({
       id: row.id,
+      financialAccountId: row.financialAccountId,
+      financialAccountName: row.financialAccount.name,
       type: toApiFinanceType(row.type),
       amount: Number(row.amount),
       category: row.category,
@@ -346,9 +351,11 @@ router.get("/finance/export.csv", async (req, res) => {
 
   const [transactions, loans, installments] = await Promise.all([
     prisma.financeTransaction.findMany({
-      where: { ownerUserId: userId },
+      where: { ownerUserId: userId, category: { notIn: [INTERNAL_TRANSFER_CATEGORY, TRANSFER_REVERSAL_CATEGORY] }, reversalOfId: null, reversedBy: null },
       select: {
         id: true,
+        financialAccountId: true,
+        financialAccount: { select: { name: true } },
         type: true,
         amount: true,
         category: true,
@@ -379,6 +386,8 @@ router.get("/finance/export.csv", async (req, res) => {
   const report = buildFinanceReport(
     scopedTransactions.map((row) => ({
       id: row.id,
+      financialAccountId: row.financialAccountId,
+      financialAccountName: row.financialAccount.name,
       type: toApiFinanceType(row.type),
       amount: Number(row.amount),
       category: row.category,

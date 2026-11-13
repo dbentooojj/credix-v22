@@ -43,7 +43,7 @@ export function addDays(isoDate: string, days: number): string {
   return dateToIso(date);
 }
 
-export function getIsoTodayInTimeZone(timeZone: string): string {
+export function getIsoTodayInTimeZone(timeZone: string, referenceDate = new Date()): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -51,11 +51,20 @@ export function getIsoTodayInTimeZone(timeZone: string): string {
     day: "2-digit",
   });
 
-  const parts = formatter.formatToParts(new Date());
+  const parts = formatter.formatToParts(referenceDate);
   const year = parts.find((item) => item.type === "year")?.value ?? "1970";
   const month = parts.find((item) => item.type === "month")?.value ?? "01";
   const day = parts.find((item) => item.type === "day")?.value ?? "01";
   return `${year}-${month}-${day}`;
+}
+
+export function getDateOnlyTodayInTimeZone(timeZone = DEFAULT_TIME_ZONE, referenceDate = new Date()): Date {
+  const [year, month, day] = getIsoTodayInTimeZone(
+    normalizeTimeZone(timeZone, DEFAULT_TIME_ZONE),
+    referenceDate,
+  ).split("-").map(Number);
+
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
 export function compareIsoDateOnly(left: string, right: string): number {
