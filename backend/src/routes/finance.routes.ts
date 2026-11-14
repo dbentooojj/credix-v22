@@ -11,7 +11,7 @@ import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error-handler";
 import { requireAuthApi } from "../middleware/auth";
 import { INSTALLMENT_PAYMENT_CATEGORY, LOAN_DISBURSEMENT_CATEGORY } from "../lib/installment-income-transaction";
-import { getDateOnlyTodayInTimeZone } from "../lib/date-time";
+import { dateToIso, getDateOnlyTodayInTimeZone } from "../lib/date-time";
 import { assertAvailableBalance, FINANCIAL_REVERSAL_CATEGORY, INTERNAL_TRANSFER_CATEGORY, lockFinancialOwner, requireActiveAccount, TRANSFER_REVERSAL_CATEGORY } from "../lib/financial-accounts";
 import { renderFinancialStatementPdf } from "../services/financial-statement-pdf.service";
 import { statementDisplayDescriptions } from "../services/statement-description.service";
@@ -112,17 +112,25 @@ const statementDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((valu
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }, "Data inválida.");
 const statementPdfQuerySchema = z.object({
-  startDate: statementDateSchema,
-  endDate: statementDateSchema,
+  startDate: statementDateSchema.optional(),
+  endDate: statementDateSchema.optional(),
   accountId: z.coerce.number().int().positive().optional(),
-});
+  type: transactionTypeSchema.optional(),
+  category: z.string().trim().max(120).optional(),
+  search: z.string().trim().max(120).optional(),
+}).refine((query) => !query.startDate || !query.endDate || query.startDate <= query.endDate, { message: "Período inválido." });
 
 const transactionListQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
   status: transactionStatusSchema.optional(),
+  type: transactionTypeSchema.optional(),
+  startDate: statementDateSchema.optional(),
+  endDate: statementDateSchema.optional(),
+  search: z.string().trim().max(120).optional(),
+  category: z.string().trim().max(120).optional(),
   page: z.coerce.number().int().positive().optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
-});
+}).refine((query) => !query.startDate || !query.endDate || query.startDate <= query.endDate, { message: "Período inválido." });
 
 function toPrismaType(type: "income" | "expense"): FinanceTransactionType {
   return type === "income" ? FinanceTransactionType.INCOME : FinanceTransactionType.EXPENSE;
@@ -450,7 +458,6 @@ router.get("/transactions/export.pdf", async (req, res) => {
   if (!Number.isFinite(userId)) return res.status(401).json({ message: "Não autenticado." });
 
   const query = statementPdfQuerySchema.parse(req.query);
-  if (query.startDate > query.endDate) throw new AppError("A data inicial deve ser anterior à data final.", 400);
 
   const account = query.accountId
     ? await prisma.financialAccount.findFirst({ where: { id: query.accountId, ownerUserId: userId }, select: { name: true } })
@@ -461,18 +468,30 @@ router.get("/transactions/export.pdf", async (req, res) => {
     where: {
       ownerUserId: userId,
       status: FinanceTransactionStatus.COMPLETED,
-      date: { gte: new Date(`${query.startDate}T00:00:00Z`), lte: new Date(`${query.endDate}T00:00:00Z`) },
+      date: {
+        ...(query.startDate ? { gte: parseDateOnly(query.startDate) } : {}),
+        lte: query.endDate ? parseDateOnly(query.endDate) : getDateOnlyTodayInTimeZone(),
+      },
       ...(query.accountId ? { financialAccountId: query.accountId } : {}),
+      ...(query.type ? { type: toPrismaType(query.type) } : {}),
+      ...(query.category ? { category: { contains: query.category, mode: "insensitive" } } : {}),
+      ...(query.search ? { OR: [
+        { description: { contains: query.search, mode: "insensitive" } },
+        { category: { contains: query.search, mode: "insensitive" } },
+        { notes: { contains: query.search, mode: "insensitive" } },
+      ] } : {}),
     },
     include: { financialAccount: { select: { name: true } } },
     orderBy: [{ date: "desc" }, { id: "desc" }],
   });
   if (rows.length === 0) throw new AppError("Nenhuma movimentação concluída no período selecionado.", 404);
   const displayDescriptions = await statementDisplayDescriptions(prisma, userId, rows);
+  const effectiveStartDate = query.startDate ?? dateToIso(rows[rows.length - 1].date);
+  const effectiveEndDate = query.endDate ?? dateToIso(getDateOnlyTodayInTimeZone());
 
   const document = renderFinancialStatementPdf({
-    startDate: query.startDate,
-    endDate: query.endDate,
+    startDate: effectiveStartDate,
+    endDate: effectiveEndDate,
     accountName: account?.name ?? "Consolidado",
     issuedAt: new Date(),
     movements: rows.map((row) => ({
@@ -485,7 +504,7 @@ router.get("/transactions/export.pdf", async (req, res) => {
     })),
   });
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="extrato-${query.startDate}-${query.endDate}.pdf"`);
+  res.setHeader("Content-Disposition", `attachment; filename="extrato-${effectiveStartDate}-${effectiveEndDate}.pdf"`);
   document.on("error", (error) => res.destroy(error));
   document.pipe(res);
 });
@@ -506,9 +525,20 @@ router.get("/transactions", async (req, res) => {
     ownerUserId: userId,
     ...(query.accountId ? { financialAccountId: query.accountId } : {}),
     ...(query.status ? { status: toPrismaStatus(query.status) } : {}),
+    ...(query.type ? { type: toPrismaType(query.type) } : {}),
+    ...(query.startDate || query.endDate ? { date: {
+      ...(query.startDate ? { gte: parseDateOnly(query.startDate) } : {}),
+      ...(query.endDate ? { lte: parseDateOnly(query.endDate) } : {}),
+    } } : {}),
+    ...(query.category ? { category: { contains: query.category, mode: "insensitive" } } : {}),
+    ...(query.search ? { OR: [
+      { description: { contains: query.search, mode: "insensitive" } },
+      { category: { contains: query.search, mode: "insensitive" } },
+      { notes: { contains: query.search, mode: "insensitive" } },
+    ] } : {}),
   };
 
-  const [rows, total] = await Promise.all([
+  const [rows, total, totals] = await Promise.all([
     prisma.financeTransaction.findMany({
       where,
       include: {
@@ -519,12 +549,17 @@ router.get("/transactions", async (req, res) => {
       ...(paginated ? { skip: (page - 1) * pageSize, take: pageSize } : {}),
     }),
     paginated ? prisma.financeTransaction.count({ where }) : Promise.resolve(0),
+    paginated ? prisma.financeTransaction.groupBy({ by: ["type"], where, _sum: { amount: true } }) : Promise.resolve([]),
   ]);
   const displayDescriptions = await statementDisplayDescriptions(prisma, userId, rows);
 
   return res.json({
     data: rows.map((row) => toApiTransaction(row, displayDescriptions.get(row.id))),
     ...(paginated ? {
+      summary: {
+        income: Number(totals.find((row) => row.type === FinanceTransactionType.INCOME)?._sum.amount ?? 0),
+        expense: Number(totals.find((row) => row.type === FinanceTransactionType.EXPENSE)?._sum.amount ?? 0),
+      },
       pagination: {
         page,
         pageSize,

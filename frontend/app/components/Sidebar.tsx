@@ -6,6 +6,7 @@ import {
   BarChart3,
   Briefcase,
   CreditCard,
+  ScrollText,
   Users,
 } from "lucide-react";
 
@@ -74,6 +75,10 @@ export function Sidebar({
               <Link className={linkClass("/app/parcelas")} href="/app/parcelas" onClick={onClose}>
                 <BarChart3 className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/parcelas")}`} />
                 <span className="truncate">Parcelas</span>
+              </Link>
+              <Link className={linkClass("/app/extrato")} href="/app/extrato" onClick={onClose}>
+                <ScrollText className={`h-[18px] w-[18px] shrink-0 transition-colors duration-200 ${iconClass("/app/extrato")}`} />
+                <span className="truncate">Extrato</span>
               </Link>
             </div>
           </section>

@@ -863,7 +863,6 @@ export default function CarteiraDashboardClient() {
               <p className={cn('mt-1 break-words text-lg font-bold tracking-tight', cashAdjustmentNet < 0 ? 'text-rose-600' : 'text-slate-950')}>
                 {formatCurrency(cashAdjustmentNet)}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">Adicionado − retirado</p>
             </div>
           </div>
         </div>
@@ -1106,7 +1105,7 @@ export default function CarteiraDashboardClient() {
         />
       </section>
 
-      <FinancialStatementPanel key={`${kpis.cashBalance}-${financialStatementVersion}`} />
+      <FinancialStatementPanel compact key={`${kpis.cashBalance}-${financialStatementVersion}`} />
 
       <ModalBase
         footer={(

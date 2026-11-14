@@ -124,6 +124,14 @@ try {
     }
   }
   assert.equal((await call(users[1], "/api/financial-accounts/transfers", "POST", { ...transfer, sourceAccountId: original.id, idempotencyKey: randomUUID() })).status, 400);
+
+  const futureDate = new Date();
+  futureDate.setUTCFullYear(futureDate.getUTCFullYear() + 1);
+  assert.equal((await call(user, "/api/financial-accounts/transfers", "POST", {
+    ...transfer,
+    date: futureDate.toISOString().slice(0, 10),
+    idempotencyKey: randomUUID(),
+  })).status, 400);
   assert.equal((await call(user, `/api/financial-accounts/${otherId}/archive`, "PATCH", { archived: true })).status, 200);
   assert.equal((await call(user, "/api/financial-accounts")).body.data.find((row: { id: number }) => row.id === otherId).archived, true);
   const newUser = await prisma.user.create({ data: { name: "Validação de conta", email: `mfa-${randomUUID()}@test.invalid`, passwordHash: "test-only" } });

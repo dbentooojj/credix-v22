@@ -98,6 +98,7 @@ router.post("/transfers", async (req, res) => {
   if (payload.sourceAccountId === payload.destinationAccountId) throw new AppError("Selecione contas diferentes.", 400);
   const date = new Date(`${payload.date}T00:00:00Z`);
   if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== payload.date) throw new AppError("Data inválida.", 400);
+  if (date > getDateOnlyTodayInTimeZone()) throw new AppError("A data da transferência não pode ser futura.", 400);
   const result = await prisma.$transaction(async (tx) => {
     await lockFinancialOwner(tx, userId);
     const existing = await tx.financeTransaction.findMany({ where: { ownerUserId: userId, transferId: payload.idempotencyKey } });
